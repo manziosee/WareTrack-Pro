@@ -1,26 +1,52 @@
-import { useState } from 'react'
-import './App.css'
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from './context/AuthContext';
+import MainLayout from './components/layout/MainLayout';
+import Landing from './pages/Landing';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Users from './pages/Users';
+import Inventory from './pages/Inventory';
+import Orders from './pages/Orders';
+import Vehicles from './pages/Vehicles';
+import Tracking from './pages/Tracking';
+import Reports from './pages/Reports';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-lg text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">WareTrack Pro</h1>
-        <p className="text-gray-600 mb-6">Warehouse Delivery & Dispatch Tracking System</p>
-        <button
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-        <p className="text-sm text-gray-500 mt-4">
-          Built with Vite + React + TypeScript + Tailwind CSS
-        </p>
-      </div>
-    </div>
-  )
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <BrowserRouter>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          
+          {/* Protected Routes */}
+          <Route path="/dashboard" element={<MainLayout><Dashboard /></MainLayout>} />
+          <Route path="/users" element={<MainLayout><Users /></MainLayout>} />
+          <Route path="/inventory" element={<MainLayout><Inventory /></MainLayout>} />
+          <Route path="/orders" element={<MainLayout><Orders /></MainLayout>} />
+          <Route path="/dispatch" element={<MainLayout><Orders /></MainLayout>} />
+          <Route path="/vehicles" element={<MainLayout><Vehicles /></MainLayout>} />
+          <Route path="/tracking" element={<MainLayout><Tracking /></MainLayout>} />
+          <Route path="/reports" element={<MainLayout><Reports /></MainLayout>} />
+        </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
 }
 
-export default App
+export default App;
