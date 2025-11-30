@@ -31,7 +31,7 @@
     "yup": "^1.4.0"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "dev": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
@@ -66,11 +66,7 @@
   "overrides": {
     "ajv": "^8.12.0",
     "ajv-keywords": "^5.1.0",
-    "schema-utils": "^4.2.0",
-    "fork-ts-checker-webpack-plugin": {
-      "ajv": "^8.12.0",
-      "ajv-keywords": "^5.1.0",
-      "schema-utils": "^4.2.0"
-    }
+    "schema-utils": "^3.3.0",
+    "fork-ts-checker-webpack-plugin": "^6.5.3"
   }
 }
