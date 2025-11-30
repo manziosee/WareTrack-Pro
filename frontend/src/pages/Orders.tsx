@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { Plus, Eye, Edit, Search } from 'lucide-react';
-import Card from '@/components/ui/Card';
-import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
-import { mockOrders } from '@/data/mockData';
-import { formatOrderNumber, formatDate } from '@/utils/formatters';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
+import CreateOrderForm from '../components/forms/CreateOrderForm';
+import { mockOrders } from '../data/mockData';
+import { formatOrderNumber, formatDate } from '../utils/formatters';
 
 export default function Orders() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const orders = mockOrders;
 
   const filteredOrders = orders.filter(order =>
@@ -43,7 +46,7 @@ export default function Orders() {
           <h1 className="font-heading text-3xl font-bold text-gray-900">Delivery Orders</h1>
           <p className="text-gray-600 mt-1">Create and manage delivery orders</p>
         </div>
-        <Button variant="primary" onClick={() => {}}>
+        <Button variant="primary" onClick={() => setShowCreateModal(true)}>
           <Plus className="w-5 h-5 mr-2" />
           Create Order
         </Button>
@@ -153,6 +156,10 @@ export default function Orders() {
           </table>
         </div>
       </Card>
+
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create New Order">
+        <CreateOrderForm onClose={() => setShowCreateModal(false)} />
+      </Modal>
     </div>
   );
 }

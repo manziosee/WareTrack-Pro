@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { Plus, Edit, Trash2, Search, AlertTriangle } from 'lucide-react';
-import Card from '@/components/ui/Card';
-import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
-import { mockInventory } from '@/data/mockData';
-import { formatDate, formatStockLevel } from '@/utils/formatters';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
+import AddInventoryForm from '../components/forms/AddInventoryForm';
+import { mockInventory } from '../data/mockData';
+import { formatDate, formatStockLevel } from '../utils/formatters';
 
 export default function Inventory() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
   const inventory = mockInventory;
 
   const filteredInventory = inventory.filter(item =>
@@ -30,7 +33,7 @@ export default function Inventory() {
           <h1 className="font-heading text-3xl font-bold text-gray-900">Inventory Management</h1>
           <p className="text-gray-600 mt-1">Track and manage warehouse stock levels</p>
         </div>
-        <Button variant="primary" onClick={() => {}}>
+        <Button variant="primary" onClick={() => setShowAddModal(true)}>
           <Plus className="w-5 h-5 mr-2" />
           Add Item
         </Button>
@@ -137,6 +140,10 @@ export default function Inventory() {
           </table>
         </div>
       </Card>
+
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Inventory Item">
+        <AddInventoryForm onClose={() => setShowAddModal(false)} />
+      </Modal>
     </div>
   );
 }

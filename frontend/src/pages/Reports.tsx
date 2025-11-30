@@ -1,10 +1,15 @@
+import { useState } from 'react';
 import { Download, Calendar } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
+import ExportReportForm from '@/components/forms/ExportReportForm';
 import { mockDeliveryTrends, mockOrders, mockInventory } from '@/data/mockData';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function Reports() {
+  const [showExportModal, setShowExportModal] = useState(false);
+  
   const deliveryStatusData = [
     { name: 'Delivered', value: mockOrders.filter(o => o.status === 'delivered').length, color: '#10B981' },
     { name: 'In Transit', value: mockOrders.filter(o => o.status === 'in_transit').length, color: '#FF8C42' },
@@ -30,7 +35,7 @@ export default function Reports() {
             <Calendar className="w-5 h-5 mr-2" />
             Date Range
           </Button>
-          <Button variant="primary">
+          <Button variant="primary" onClick={() => setShowExportModal(true)}>
             <Download className="w-5 h-5 mr-2" />
             Export Report
           </Button>
@@ -155,6 +160,10 @@ export default function Reports() {
           </div>
         </Card>
       </div>
+
+      <Modal isOpen={showExportModal} onClose={() => setShowExportModal(false)} title="Export Report">
+        <ExportReportForm onClose={() => setShowExportModal(false)} />
+      </Modal>
     </div>
   );
 }

@@ -1,17 +1,26 @@
-import { Truck, Clock, MapPin, Calendar, Users } from 'lucide-react';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
-import Button from '@/components/ui/Button';
-import { mockOrders, mockDrivers, mockVehicles } from '@/data/mockData';
-import { formatOrderNumber, formatDate } from '@/utils/formatters';
+import { useState } from 'react';
+import { Truck, Clock, MapPin, Calendar, Users, Package } from 'lucide-react';
+import Card from '../../components/ui/Card';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
+import ScheduleDispatchForm from '../../components/forms/ScheduleDispatchForm';
+import CreateOrderForm from '../../components/forms/CreateOrderForm';
+import AddVehicleForm from '../../components/forms/AddVehicleForm';
+import { mockOrders, mockDrivers, mockVehicles } from '../../data/mockData';
+import { formatOrderNumber, formatDate } from '../../utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function DispatchDashboard() {
+  const [activeModal, setActiveModal] = useState<string | null>(null);
   const pendingOrders = mockOrders.filter(o => o.status === 'pending');
   const dispatchedOrders = mockOrders.filter(o => o.status === 'dispatched');
   const inTransitOrders = mockOrders.filter(o => o.status === 'in_transit');
   const availableDrivers = mockDrivers.filter(d => d.status === 'available');
   const availableVehicles = mockVehicles.filter(v => v.status === 'available');
+
+  const openModal = (modalType: string) => setActiveModal(modalType);
+  const closeModal = () => setActiveModal(null);
 
   const dailyDispatch = [
     { day: 'Mon', count: 12 },
@@ -31,10 +40,20 @@ export default function DispatchDashboard() {
           <h1 className="font-heading text-3xl font-bold text-gray-900">Dispatch Dashboard</h1>
           <p className="text-gray-600 mt-1">Manage deliveries and coordinate fleet operations</p>
         </div>
-        <Button variant="primary">
-          <Calendar className="w-5 h-5 mr-2" />
-          Schedule Dispatch
-        </Button>
+        <div className="flex gap-3">
+          <Button onClick={() => openModal('dispatch')} variant="primary">
+            <Calendar className="w-5 h-5 mr-2" />
+            Schedule Dispatch
+          </Button>
+          <Button onClick={() => openModal('order')} variant="secondary">
+            <Package className="w-5 h-5 mr-2" />
+            Create Order
+          </Button>
+          <Button onClick={() => openModal('vehicle')} variant="secondary">
+            <Truck className="w-5 h-5 mr-2" />
+            Create Vehicle
+          </Button>
+        </div>
       </div>
 
       {/* Key Metrics */}
@@ -222,6 +241,19 @@ export default function DispatchDashboard() {
           ))}
         </div>
       </Card>
+
+      {/* Modals */}
+      <Modal isOpen={activeModal === 'dispatch'} onClose={closeModal} title="Schedule Dispatch">
+        <ScheduleDispatchForm onClose={closeModal} />
+      </Modal>
+
+      <Modal isOpen={activeModal === 'order'} onClose={closeModal} title="Create Order">
+        <CreateOrderForm onClose={closeModal} />
+      </Modal>
+
+      <Modal isOpen={activeModal === 'vehicle'} onClose={closeModal} title="Create Vehicle">
+        <AddVehicleForm onClose={closeModal} />
+      </Modal>
     </div>
   );
 }

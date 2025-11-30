@@ -12,6 +12,8 @@ import Orders from './pages/Orders';
 import Vehicles from './pages/Vehicles';
 import Tracking from './pages/Tracking';
 import Reports from './pages/Reports';
+import Dispatch from './pages/Dispatch';
+import Settings from './pages/Settings';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,10 +40,12 @@ function App() {
           <Route path="/users" element={<MainLayout><Users /></MainLayout>} />
           <Route path="/inventory" element={<MainLayout><Inventory /></MainLayout>} />
           <Route path="/orders" element={<MainLayout><Orders /></MainLayout>} />
-          <Route path="/dispatch" element={<MainLayout><Orders /></MainLayout>} />
+          <Route path="/dispatch" element={<MainLayout><Dispatch /></MainLayout>} />
           <Route path="/vehicles" element={<MainLayout><Vehicles /></MainLayout>} />
           <Route path="/tracking" element={<MainLayout><Tracking /></MainLayout>} />
           <Route path="/reports" element={<MainLayout><Reports /></MainLayout>} />
+          <Route path="/settings" element={<MainLayout><Settings /></MainLayout>} />
+
         </Routes>
         </BrowserRouter>
       </AuthProvider>

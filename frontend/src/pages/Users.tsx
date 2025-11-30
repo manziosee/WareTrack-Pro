@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
-import Card from '@/components/ui/Card';
-import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
-import { mockUsers } from '@/data/mockData';
-import { formatDate } from '@/utils/formatters';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
+import AddUserForm from '../components/forms/AddUserForm';
+import { mockUsers } from '../data/mockData';
+import { formatDate } from '../utils/formatters';
 
 export default function Users() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
   const users = mockUsers;
 
   const filteredUsers = users.filter(user =>
@@ -33,7 +36,7 @@ export default function Users() {
           <h1 className="font-heading text-3xl font-bold text-gray-900">User Management</h1>
           <p className="text-gray-600 mt-1">Manage users, roles, and permissions</p>
         </div>
-        <Button variant="primary" onClick={() => {}}>
+        <Button variant="primary" onClick={() => setShowAddModal(true)}>
           <Plus className="w-5 h-5 mr-2" />
           Add User
         </Button>
@@ -114,6 +117,10 @@ export default function Users() {
           </table>
         </div>
       </Card>
+
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New User">
+        <AddUserForm onClose={() => setShowAddModal(false)} />
+      </Modal>
     </div>
   );
 }

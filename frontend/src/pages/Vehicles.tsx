@@ -1,13 +1,34 @@
+import { useState } from 'react';
 import { Plus, Edit, Wrench } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
+import AddVehicleForm from '@/components/forms/AddVehicleForm';
+import AddDriverForm from '@/components/forms/AddDriverForm';
+import EditVehicleForm from '@/components/forms/EditVehicleForm';
+import ScheduleMaintenanceForm from '@/components/forms/ScheduleMaintenanceForm';
 import { mockVehicles, mockDrivers } from '@/data/mockData';
 import { formatDate } from '@/utils/formatters';
 
 export default function Vehicles() {
+  const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
+  const [showAddDriverModal, setShowAddDriverModal] = useState(false);
+  const [showEditVehicleModal, setShowEditVehicleModal] = useState(false);
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
   const vehicles = mockVehicles;
   const drivers = mockDrivers;
+
+  const handleEditVehicle = (vehicle: any) => {
+    setSelectedVehicle(vehicle);
+    setShowEditVehicleModal(true);
+  };
+
+  const handleScheduleMaintenance = (vehicle: any) => {
+    setSelectedVehicle(vehicle);
+    setShowMaintenanceModal(true);
+  };
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -28,11 +49,11 @@ export default function Vehicles() {
           <p className="text-gray-600 mt-1">Manage fleet and driver assignments</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary">
+          <Button variant="secondary" onClick={() => setShowAddDriverModal(true)}>
             <Plus className="w-5 h-5 mr-2" />
             Add Driver
           </Button>
-          <Button variant="primary">
+          <Button variant="primary" onClick={() => setShowAddVehicleModal(true)}>
             <Plus className="w-5 h-5 mr-2" />
             Add Vehicle
           </Button>
@@ -71,11 +92,21 @@ export default function Vehicles() {
                 )}
               </div>
               <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-                <Button variant="secondary" size="sm" className="flex-1">
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => handleEditVehicle(vehicle)}
+                >
                   <Edit className="w-4 h-4 mr-1" />
                   Edit
                 </Button>
-                <Button variant="warning" size="sm" className="flex-1">
+                <Button 
+                  variant="warning" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => handleScheduleMaintenance(vehicle)}
+                >
                   <Wrench className="w-4 h-4 mr-1" />
                   Maintain
                 </Button>
@@ -136,6 +167,52 @@ export default function Vehicles() {
           </div>
         </Card>
       </div>
+
+      <Modal isOpen={showAddVehicleModal} onClose={() => setShowAddVehicleModal(false)} title="Add New Vehicle">
+        <AddVehicleForm onClose={() => setShowAddVehicleModal(false)} />
+      </Modal>
+
+      <Modal isOpen={showAddDriverModal} onClose={() => setShowAddDriverModal(false)} title="Add New Driver">
+        <AddDriverForm onClose={() => setShowAddDriverModal(false)} />
+      </Modal>
+
+      {selectedVehicle && (
+        <>
+          <Modal 
+            isOpen={showEditVehicleModal} 
+            onClose={() => {
+              setShowEditVehicleModal(false);
+              setSelectedVehicle(null);
+            }} 
+            title="Edit Vehicle"
+          >
+            <EditVehicleForm 
+              vehicle={selectedVehicle} 
+              onClose={() => {
+                setShowEditVehicleModal(false);
+                setSelectedVehicle(null);
+              }} 
+            />
+          </Modal>
+
+          <Modal 
+            isOpen={showMaintenanceModal} 
+            onClose={() => {
+              setShowMaintenanceModal(false);
+              setSelectedVehicle(null);
+            }} 
+            title="Schedule Maintenance"
+          >
+            <ScheduleMaintenanceForm 
+              vehicle={selectedVehicle} 
+              onClose={() => {
+                setShowMaintenanceModal(false);
+                setSelectedVehicle(null);
+              }} 
+            />
+          </Modal>
+        </>
+      )}
     </div>
   );
 }
