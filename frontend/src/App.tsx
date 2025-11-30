@@ -1,85 +1,26 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './contexts/AuthContext';
-import Layout from './components/common/Layout';
-import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
-import Inventory from './pages/Inventory';
-import Orders from './pages/Orders';
-import Dispatch from './pages/Dispatch';
-import Vehicles from './pages/Vehicles';
-import Drivers from './pages/Drivers';
-import Reports from './pages/Reports';
-import ProtectedRoute from './components/common/ProtectedRoute';
-
-const queryClient = new QueryClient();
+import { useState } from 'react'
+import './App.css'
 
 function App() {
+  const [count, setCount] = useState(0)
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router>
-          <div className="App">
-            <Toaster position="top-right" />
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/inventory" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Inventory />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/orders" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Orders />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/dispatch" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Dispatch />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/vehicles" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Vehicles />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/drivers" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Drivers />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/reports" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Reports />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-            </Routes>
-          </div>
-        </Router>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">WareTrack Pro</h1>
+        <p className="text-gray-600 mb-6">Warehouse Delivery & Dispatch Tracking System</p>
+        <button
+          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          onClick={() => setCount((count) => count + 1)}
+        >
+          Count is {count}
+        </button>
+        <p className="text-sm text-gray-500 mt-4">
+          Built with Vite + React + TypeScript + Tailwind CSS
+        </p>
+      </div>
+    </div>
+  )
 }
 
-export default App;
+export default App
