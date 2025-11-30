@@ -1,11 +1,22 @@
-import { CheckCircle, Clock, Truck, Package } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle, Clock, Truck, Package, Edit } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
+import UpdateOrderStatusForm from '@/components/forms/UpdateOrderStatusForm';
 import { mockOrders } from '@/data/mockData';
 import { formatOrderNumber, formatDateTime } from '@/utils/formatters';
 
 export default function Tracking() {
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const activeOrders = mockOrders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
+
+  const handleUpdateStatus = (orderId: string) => {
+    setSelectedOrder(orderId);
+    setShowUpdateModal(true);
+  };
 
   const getStageIcon = (stage: string) => {
     switch (stage) {
@@ -57,8 +68,19 @@ export default function Tracking() {
                   <p className="text-sm text-gray-600">{order.deliveryAddress}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-600">Created</p>
-                  <p className="text-sm font-medium text-gray-900">{formatDateTime(order.createdAt)}</p>
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={() => handleUpdateStatus(order.id)}
+                    className="mb-2"
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    Update Status
+                  </Button>
+                  <div>
+                    <p className="text-sm text-gray-600">Created</p>
+                    <p className="text-sm font-medium text-gray-900">{formatDateTime(order.createdAt)}</p>
+                  </div>
                 </div>
               </div>
 
@@ -130,6 +152,26 @@ export default function Tracking() {
           );
         })}
       </div>
+
+      {selectedOrder && (
+        <Modal 
+          isOpen={showUpdateModal} 
+          onClose={() => {
+            setShowUpdateModal(false);
+            setSelectedOrder(null);
+          }} 
+          title="Update Order Status"
+        >
+          <UpdateOrderStatusForm 
+            orderId={selectedOrder}
+            currentStatus={activeOrders.find(o => o.id === selectedOrder)?.status || 'pending'}
+            onClose={() => {
+              setShowUpdateModal(false);
+              setSelectedOrder(null);
+            }} 
+          />
+        </Modal>
+      )}
     </div>
   );
 }

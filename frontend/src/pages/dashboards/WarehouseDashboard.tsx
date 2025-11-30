@@ -1,16 +1,24 @@
-import { Package, AlertTriangle, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
-import Button from '@/components/ui/Button';
-import { mockInventory, mockOrders } from '@/data/mockData';
+import { useState } from 'react';
+import { Package, AlertTriangle, TrendingUp, TrendingDown, ArrowRight, Plus } from 'lucide-react';
+import Card from '../../components/ui/Card';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
+import AddInventoryForm from '../../components/forms/AddInventoryForm';
+import CreateOrderForm from '../../components/forms/CreateOrderForm';
+import { mockInventory, mockOrders } from '../../data/mockData';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { formatDate } from '@/utils/formatters';
+import { formatDate } from '../../utils/formatters';
 
 export default function WarehouseDashboard() {
+  const [activeModal, setActiveModal] = useState<string | null>(null);
   const lowStockItems = mockInventory.filter(item => item.quantity < item.minQuantity);
   const criticalStock = mockInventory.filter(item => item.quantity < item.minQuantity * 0.5);
   const totalStock = mockInventory.reduce((sum, item) => sum + item.quantity, 0);
   const pendingOrders = mockOrders.filter(o => o.status === 'pending');
+
+  const openModal = (modalType: string) => setActiveModal(modalType);
+  const closeModal = () => setActiveModal(null);
 
   const categoryData = [
     { category: 'Electronics', stock: mockInventory.filter(i => i.category === 'Electronics').reduce((sum, i) => sum + i.quantity, 0) },
@@ -27,10 +35,20 @@ export default function WarehouseDashboard() {
           <h1 className="font-heading text-3xl font-bold text-gray-900">Warehouse Dashboard</h1>
           <p className="text-gray-600 mt-1">Inventory management and stock monitoring</p>
         </div>
-        <Button variant="primary">
-          <Package className="w-5 h-5 mr-2" />
-          Add New Item
-        </Button>
+        <div className="flex gap-3">
+          <Button onClick={() => openModal('item')} variant="primary">
+            <Package className="w-5 h-5 mr-2" />
+            Add New Item
+          </Button>
+          <Button onClick={() => openModal('stock')} variant="secondary">
+            <Plus className="w-5 h-5 mr-2" />
+            Add Stock
+          </Button>
+          <Button onClick={() => openModal('order')} variant="secondary">
+            <Package className="w-5 h-5 mr-2" />
+            Add Order
+          </Button>
+        </div>
       </div>
 
       {/* Key Metrics */}
@@ -178,28 +196,41 @@ export default function WarehouseDashboard() {
       <Card>
         <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <button className="p-4 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors text-left">
+          <button onClick={() => openModal('stock')} className="p-4 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors text-left">
             <Package className="w-8 h-8 text-primary-600 mb-2" />
             <p className="font-medium text-gray-900">Add Stock</p>
             <p className="text-xs text-gray-600 mt-1">Update inventory</p>
           </button>
-          <button className="p-4 bg-accent-50 hover:bg-accent-100 rounded-lg transition-colors text-left">
+          <button onClick={() => window.location.href = '/inventory'} className="p-4 bg-accent-50 hover:bg-accent-100 rounded-lg transition-colors text-left">
             <AlertTriangle className="w-8 h-8 text-accent-600 mb-2" />
             <p className="font-medium text-gray-900">View Alerts</p>
             <p className="text-xs text-gray-600 mt-1">Check low stock</p>
           </button>
-          <button className="p-4 bg-success-50 hover:bg-success-100 rounded-lg transition-colors text-left">
+          <button onClick={() => window.location.href = '/reports'} className="p-4 bg-success-50 hover:bg-success-100 rounded-lg transition-colors text-left">
             <TrendingUp className="w-8 h-8 text-success-600 mb-2" />
             <p className="font-medium text-gray-900">Stock Report</p>
             <p className="text-xs text-gray-600 mt-1">Generate report</p>
           </button>
-          <button className="p-4 bg-warning-50 hover:bg-warning-100 rounded-lg transition-colors text-left">
+          <button onClick={() => window.location.href = '/orders'} className="p-4 bg-warning-50 hover:bg-warning-100 rounded-lg transition-colors text-left">
             <Package className="w-8 h-8 text-warning-600 mb-2" />
             <p className="font-medium text-gray-900">Prepare Orders</p>
             <p className="text-xs text-gray-600 mt-1">View pending</p>
           </button>
         </div>
       </Card>
+
+      {/* Modals */}
+      <Modal isOpen={activeModal === 'item'} onClose={closeModal} title="Add New Item">
+        <AddInventoryForm onClose={closeModal} />
+      </Modal>
+
+      <Modal isOpen={activeModal === 'stock'} onClose={closeModal} title="Add Stock">
+        <AddInventoryForm onClose={closeModal} />
+      </Modal>
+
+      <Modal isOpen={activeModal === 'order'} onClose={closeModal} title="Create Order">
+        <CreateOrderForm onClose={closeModal} />
+      </Modal>
     </div>
   );
 }

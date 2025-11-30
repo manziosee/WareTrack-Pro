@@ -1,17 +1,32 @@
+import { useState } from 'react';
 import { MapPin, Package, CheckCircle, Clock, Navigation, Phone } from 'lucide-react';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
-import Button from '@/components/ui/Button';
-import { mockOrders } from '@/data/mockData';
-import { formatOrderNumber, formatDateTime } from '@/utils/formatters';
+import Card from '../../components/ui/Card';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import { mockOrders } from '../../data/mockData';
+import { formatOrderNumber, formatDateTime } from '../../utils/formatters';
 
 export default function DriverDashboard() {
+  const [deliveryStatus, setDeliveryStatus] = useState<string>('in_transit');
   // Simulate driver's assigned orders
   const myOrders = mockOrders.filter(o => o.driverId === 4);
   const todayDeliveries = myOrders.filter(o => o.status !== 'delivered');
   const completedToday = myOrders.filter(o => o.status === 'delivered');
   const currentDelivery = myOrders.find(o => o.status === 'in_transit');
   const upcomingDeliveries = myOrders.filter(o => o.status === 'dispatched');
+
+  const handleNavigate = () => {
+    window.open(`https://maps.google.com/maps?q=${encodeURIComponent(currentDelivery?.deliveryAddress || '')}`, '_blank');
+  };
+
+  const handleCallCustomer = () => {
+    window.open(`tel:${currentDelivery?.contactNumber}`, '_self');
+  };
+
+  const handleMarkDelivered = () => {
+    setDeliveryStatus('delivered');
+    alert('Order marked as delivered!');
+  };
 
   return (
     <div className="space-y-6">
@@ -105,15 +120,15 @@ export default function DriverDashboard() {
           </div>
 
           <div className="flex gap-3">
-            <Button variant="primary" size="lg" className="flex-1">
+            <Button onClick={handleNavigate} variant="primary" size="lg" className="flex-1">
               <Navigation className="w-5 h-5 mr-2" />
               Navigate
             </Button>
-            <Button variant="secondary" size="lg" className="flex-1">
+            <Button onClick={handleCallCustomer} variant="secondary" size="lg" className="flex-1">
               <Phone className="w-5 h-5 mr-2" />
               Call Customer
             </Button>
-            <Button variant="success" size="lg" className="flex-1">
+            <Button onClick={handleMarkDelivered} variant="success" size="lg" className="flex-1">
               <CheckCircle className="w-5 h-5 mr-2" />
               Mark Delivered
             </Button>
