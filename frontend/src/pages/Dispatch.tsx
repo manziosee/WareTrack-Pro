@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import { Plus, Truck, Calendar, Package } from 'lucide-react';
+import { Truck, Calendar, Package } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ScheduleDispatchForm from '../components/forms/ScheduleDispatchForm';
 import CreateOrderForm from '../components/forms/CreateOrderForm';
 import AddVehicleForm from '../components/forms/AddVehicleForm';
-import { useAuth } from '../context/AuthContext';
 
 const Dispatch = () => {
-  const { user } = useAuth();
   const [activeModal, setActiveModal] = useState<string | null>(null);
 
   const openModal = (modalType: string) => setActiveModal(modalType);

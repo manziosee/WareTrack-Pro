@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Package, Truck, Clock, CheckCircle, AlertTriangle, Users as UsersIcon, TrendingUp } from 'lucide-react';
+import { Package, Truck, Clock, CheckCircle, AlertTriangle, Users as UsersIcon } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import AddUserForm from '../../components/forms/AddUserForm';
 import AddInventoryForm from '../../components/forms/AddInventoryForm';

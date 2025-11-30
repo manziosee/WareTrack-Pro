@@ -13,8 +13,8 @@ export default function Tracking() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const activeOrders = mockOrders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
 
-  const handleUpdateStatus = (orderId: string) => {
-    setSelectedOrder(orderId);
+  const handleUpdateStatus = (orderId: number) => {
+    setSelectedOrder(orderId.toString());
     setShowUpdateModal(true);
   };
 
@@ -164,7 +164,7 @@ export default function Tracking() {
         >
           <UpdateOrderStatusForm 
             orderId={selectedOrder}
-            currentStatus={activeOrders.find(o => o.id === selectedOrder)?.status || 'pending'}
+            currentStatus={activeOrders.find(o => o.id.toString() === selectedOrder)?.status || 'pending'}
             onClose={() => {
               setShowUpdateModal(false);
               setSelectedOrder(null);
