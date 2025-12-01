@@ -10,7 +10,6 @@ if (process.env.REDIS_URL) {
       url: process.env.REDIS_URL,
       socket: {
         connectTimeout: 5000,
-        lazyConnect: true,
         reconnectStrategy: (retries) => {
           if (retries > 3) {
             console.log('❌ Redis max retries reached, disabling Redis');
