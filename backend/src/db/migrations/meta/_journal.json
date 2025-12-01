@@ -1,0 +1,27 @@
+{
+  "version": "5",
+  "dialect": "pg",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1764587165458,
+      "tag": "0000_spicy_stellaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1764601571948,
+      "tag": "0001_real_doctor_octopus",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1764601607711,
+      "tag": "0002_mighty_omega_flight",
+      "breakpoints": true
+    }
+  ]
+}

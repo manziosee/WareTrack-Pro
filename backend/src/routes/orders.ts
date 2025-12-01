@@ -1,12 +1,16 @@
-import express from 'express';
-const router = express.Router();
+import { Router } from 'express';
+import { OrdersController } from '../controllers/ordersController';
+import { auth } from '../middleware/auth';
 
-router.get('/', (req, res) => {
-  res.json({ message: 'Get orders endpoint' });
-});
+const router = Router();
 
-router.post('/', (req, res) => {
-  res.json({ message: 'Create order endpoint' });
-});
+router.get('/', auth, OrdersController.getOrders);
+router.get('/status', auth, OrdersController.getStatuses);
+router.get('/customer/:id', auth, OrdersController.getOrdersByCustomer);
+router.get('/:id', auth, OrdersController.getOrderById);
+router.post('/', auth, OrdersController.createOrder);
+router.post('/:id/status', auth, OrdersController.updateOrderStatus);
+router.put('/:id', auth, OrdersController.updateOrder);
+router.delete('/:id', auth, OrdersController.cancelOrder);
 
 export default router;

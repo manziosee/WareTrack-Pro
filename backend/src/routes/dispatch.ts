@@ -1,12 +1,14 @@
-import express from 'express';
-const router = express.Router();
+import { Router } from 'express';
+import { DispatchController } from '../controllers/dispatchController';
+import { auth } from '../middleware/auth';
 
-router.get('/', (req, res) => {
-  res.json({ message: 'Get dispatch schedules endpoint' });
-});
+const router = Router();
 
-router.post('/', (req, res) => {
-  res.json({ message: 'Create dispatch endpoint' });
-});
+router.get('/', auth, DispatchController.getDispatches);
+router.get('/active', auth, DispatchController.getActiveDispatches);
+router.get('/driver/:id', auth, DispatchController.getDriverDispatch);
+router.post('/', auth, DispatchController.createDispatch);
+router.post('/:id/status', auth, DispatchController.updateDispatchStatus);
+router.put('/:id', auth, DispatchController.updateDispatch);
 
 export default router;
