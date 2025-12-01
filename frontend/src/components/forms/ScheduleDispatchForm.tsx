@@ -117,7 +117,7 @@ const ScheduleDispatchForm = ({ onClose }: ScheduleDispatchFormProps) => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Allowance ($)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Allowance (RWF)</label>
           <input
             type="number"
             step="0.01"

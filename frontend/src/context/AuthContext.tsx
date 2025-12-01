@@ -7,6 +7,7 @@ interface AuthUser {
   name: string;
   email: string;
   role: UserRole;
+  phone: string;
 }
 
 interface AuthContextType {
@@ -30,15 +31,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mockUser: AuthUser;
     
     if (email === 'admin@waretrack.com') {
-      mockUser = { id: 1, name: 'John Admin', email, role: 'admin' };
+      mockUser = { id: 1, name: 'John Admin', email, role: 'admin', phone: '+250 788 123 456' };
     } else if (email === 'warehouse@waretrack.com') {
-      mockUser = { id: 2, name: 'Sarah Wilson', email, role: 'warehouse_staff' };
+      mockUser = { id: 2, name: 'Sarah Wilson', email, role: 'warehouse_staff', phone: '+250 788 234 567' };
     } else if (email === 'dispatch@waretrack.com') {
-      mockUser = { id: 3, name: 'Mike Johnson', email, role: 'dispatch_officer' };
+      mockUser = { id: 3, name: 'Mike Johnson', email, role: 'dispatch_officer', phone: '+250 788 345 678' };
     } else if (email === 'driver@waretrack.com') {
-      mockUser = { id: 4, name: 'David Brown', email, role: 'driver' };
+      mockUser = { id: 4, name: 'David Brown', email, role: 'driver', phone: '+250 788 456 789' };
     } else {
-      mockUser = { id: 1, name: 'John Admin', email, role: 'admin' };
+      mockUser = { id: 1, name: 'John Admin', email, role: 'admin', phone: '+250 788 123 456' };
     }
 
     setUser(mockUser);

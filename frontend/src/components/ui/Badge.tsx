@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 interface BadgeProps {
   children: ReactNode;
   variant?: 'primary' | 'success' | 'warning' | 'error' | 'info' | 'gray';
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 
@@ -22,6 +22,7 @@ export default function Badge({ children, variant = 'primary', size = 'md', clas
   const sizeStyles = {
     sm: 'px-2 py-0.5 text-xs',
     md: 'px-2.5 py-1 text-sm',
+    lg: 'px-3 py-1.5 text-base',
   };
 
   return (

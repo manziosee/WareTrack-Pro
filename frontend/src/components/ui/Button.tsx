@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 interface ButtonProps {
   children: ReactNode;
-  variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'ghost' | 'outline';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   onClick?: () => void;
@@ -28,6 +28,7 @@ export default function Button({
     warning: 'bg-warning-500 text-white hover:bg-warning-600 focus:ring-warning-500 data-[disabled]:bg-warning-300',
     error: 'bg-error-500 text-white hover:bg-error-600 focus:ring-error-500 data-[disabled]:bg-error-300',
     ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-400',
+    outline: 'border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-400',
   };
   
   const sizeStyles = {
