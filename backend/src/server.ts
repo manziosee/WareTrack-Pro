@@ -4,7 +4,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { connectRedis } from './config/redis';
+// Redis disabled in production
+// import { connectRedis } from './config/redis';
 import { specs, swaggerUi } from './config/swagger';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -170,12 +171,8 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Redis disabled in production to avoid connection limits
-if (process.env.NODE_ENV !== 'production' && process.env.REDIS_URL) {
-  connectRedis();
-} else {
-  console.log('⚠️  Redis disabled in production - running without caching');
-}
+// Redis completely disabled to prevent connection issues
+console.log('⚠️  Redis disabled - running without caching and queues');
 
 // Start inventory alerts scheduler
 InventoryAlerts.startScheduledCheck();
