@@ -35,7 +35,7 @@ export default function Register() {
             </div>
           </div>
           <h2 className="font-heading text-3xl font-bold text-white mb-2">Create Your Account</h2>
-          <p className="text-accent-200">Start your 14-day free trial today</p>
+          <p className="text-accent-200">Free to use it</p>
         </div>
 
         {/* Registration Form */}
@@ -181,8 +181,8 @@ export default function Register() {
         {/* Features */}
         <div className="mt-6 grid grid-cols-3 gap-4 text-center">
           <div className="bg-accent-800/50 backdrop-blur-sm rounded-lg p-4 border border-accent-600/30">
-            <p className="text-2xl font-bold text-white mb-1">14 Days</p>
-            <p className="text-xs text-accent-200">Free Trial</p>
+            <p className="text-2xl font-bold text-white mb-1">Free</p>
+            <p className="text-xs text-accent-200">Of Charge</p>
           </div>
           <div className="bg-accent-800/50 backdrop-blur-sm rounded-lg p-4 border border-accent-600/30">
             <p className="text-2xl font-bold text-white mb-1">No Card</p>

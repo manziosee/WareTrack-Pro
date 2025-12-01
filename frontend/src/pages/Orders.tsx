@@ -5,13 +5,33 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import CreateOrderForm from '../components/forms/CreateOrderForm';
+import EditOrderForm from '../components/forms/EditOrderForm';
+import ViewOrderModal from '../components/forms/ViewOrderModal';
 import { mockOrders } from '../data/mockData';
 import { formatOrderNumber, formatDate } from '../utils/formatters';
 
 export default function Orders() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const orders = mockOrders;
+
+  const handleView = (order: any) => {
+    setSelectedOrder(order);
+    setShowViewModal(true);
+  };
+
+  const handleEdit = (order: any) => {
+    setSelectedOrder(order);
+    setShowEditModal(true);
+  };
+
+  const handleSaveOrder = (orderData: any) => {
+    console.log('Saving order data:', orderData);
+    // Here you would typically call an API to update the order
+  };
 
   const filteredOrders = orders.filter(order =>
     order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -142,10 +162,18 @@ export default function Orders() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center gap-2">
-                      <button className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors">
+                      <button 
+                        onClick={() => handleView(order)}
+                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        title="View order details"
+                      >
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors">
+                      <button 
+                        onClick={() => handleEdit(order)}
+                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        title="Edit order"
+                      >
                         <Edit className="w-4 h-4" />
                       </button>
                     </div>
@@ -159,6 +187,20 @@ export default function Orders() {
 
       <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create New Order">
         <CreateOrderForm onClose={() => setShowCreateModal(false)} />
+      </Modal>
+
+      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Order Details" size="lg">
+        {selectedOrder && <ViewOrderModal order={selectedOrder} />}
+      </Modal>
+
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Order" size="lg">
+        {selectedOrder && (
+          <EditOrderForm 
+            order={selectedOrder} 
+            onClose={() => setShowEditModal(false)}
+            onSave={handleSaveOrder}
+          />
+        )}
       </Modal>
     </div>
   );

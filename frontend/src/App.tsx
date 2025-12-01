@@ -14,6 +14,11 @@ import Tracking from './pages/Tracking';
 import Reports from './pages/Reports';
 import Dispatch from './pages/Dispatch';
 import Settings from './pages/Settings';
+import Profile from './pages/Profile';
+import EditInventory from './pages/EditInventory';
+import ViewOrder from './pages/ViewOrder';
+import EditOrder from './pages/EditOrder';
+import About from './pages/About';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +37,7 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<Landing />} />
+          <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           
@@ -45,6 +51,10 @@ function App() {
           <Route path="/tracking" element={<MainLayout><Tracking /></MainLayout>} />
           <Route path="/reports" element={<MainLayout><Reports /></MainLayout>} />
           <Route path="/settings" element={<MainLayout><Settings /></MainLayout>} />
+          <Route path="/profile" element={<MainLayout><Profile /></MainLayout>} />
+          <Route path="/inventory/:id/edit" element={<MainLayout><EditInventory /></MainLayout>} />
+          <Route path="/orders/:id" element={<MainLayout><ViewOrder /></MainLayout>} />
+          <Route path="/orders/:id/edit" element={<MainLayout><EditOrder /></MainLayout>} />
 
         </Routes>
         </BrowserRouter>

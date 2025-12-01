@@ -9,6 +9,18 @@ import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Cart
 
 export default function Reports() {
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showDateRangeModal, setShowDateRangeModal] = useState(false);
+  const [dateRange, setDateRange] = useState({
+    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  });
+
+  const handleDateRangeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('Date range selected:', dateRange);
+    setShowDateRangeModal(false);
+    // Here you would filter the data based on the selected date range
+  };
   
   const deliveryStatusData = [
     { name: 'Delivered', value: mockOrders.filter(o => o.status === 'delivered').length, color: '#10B981' },
@@ -31,7 +43,7 @@ export default function Reports() {
           <p className="text-gray-600 mt-1">Comprehensive insights and data analysis</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary">
+          <Button variant="secondary" onClick={() => setShowDateRangeModal(true)}>
             <Calendar className="w-5 h-5 mr-2" />
             Date Range
           </Button>
@@ -163,6 +175,78 @@ export default function Reports() {
 
       <Modal isOpen={showExportModal} onClose={() => setShowExportModal(false)} title="Export Report">
         <ExportReportForm onClose={() => setShowExportModal(false)} />
+      </Modal>
+
+      <Modal isOpen={showDateRangeModal} onClose={() => setShowDateRangeModal(false)} title="Select Date Range">
+        <form onSubmit={handleDateRangeSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+              <input
+                type="date"
+                value={dateRange.startDate}
+                onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+              <input
+                type="date"
+                value={dateRange.endDate}
+                onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              />
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <p className="text-sm text-gray-600 mb-2">Quick Select:</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setDateRange({
+                  startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                  endDate: new Date().toISOString().split('T')[0]
+                })}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Last 7 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateRange({
+                  startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                  endDate: new Date().toISOString().split('T')[0]
+                })}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Last 30 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateRange({
+                  startDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                  endDate: new Date().toISOString().split('T')[0]
+                })}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Last 3 Months
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" type="button" onClick={() => setShowDateRangeModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit">
+              Apply Date Range
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

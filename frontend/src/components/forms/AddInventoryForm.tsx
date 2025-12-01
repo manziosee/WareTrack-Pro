@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { unitCategories } from '@/utils/units';
 
 interface AddInventoryFormProps {
   onClose: () => void;
@@ -14,8 +15,17 @@ const AddInventoryForm = ({ onClose }: AddInventoryFormProps) => {
     unitPrice: '',
     location: '',
     supplier: '',
-    description: ''
+    description: '',
+    unitCategory: 'basic',
+    unit: 'pcs',
+    status: 'active',
+    barcode: ''
   });
+
+  const handleUnitCategoryChange = (category: string) => {
+    const firstUnit = unitCategories[category as keyof typeof unitCategories]?.units[0]?.value || 'pcs';
+    setFormData({ ...formData, unitCategory: category, unit: firstUnit });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,15 +73,43 @@ const AddInventoryForm = ({ onClose }: AddInventoryFormProps) => {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-          <input
-            type="text"
-            required
-            value={formData.supplier}
-            onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <select
+            value={formData.status}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            placeholder="Supplier name"
-          />
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="discontinued">Discontinued</option>
+          </select>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Unit Category</label>
+          <select
+            value={formData.unitCategory}
+            onChange={(e) => handleUnitCategoryChange(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            {Object.entries(unitCategories).map(([key, category]) => (
+              <option key={key} value={key}>{category.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+          <select
+            value={formData.unit}
+            onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            {unitCategories[formData.unitCategory as keyof typeof unitCategories]?.units.map((unit) => (
+              <option key={unit.value} value={unit.value}>{unit.label}</option>
+            ))}
+          </select>
         </div>
       </div>
       
@@ -97,7 +135,7 @@ const AddInventoryForm = ({ onClose }: AddInventoryFormProps) => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price (RWF)</label>
           <input
             type="number"
             step="0.01"
@@ -109,15 +147,39 @@ const AddInventoryForm = ({ onClose }: AddInventoryFormProps) => {
         </div>
       </div>
       
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+          <input
+            type="text"
+            required
+            value={formData.location}
+            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="e.g., Warehouse A, Shelf 1"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+          <input
+            type="text"
+            required
+            value={formData.supplier}
+            onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="Supplier name"
+          />
+        </div>
+      </div>
+      
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
         <input
           type="text"
-          required
-          value={formData.location}
-          onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+          value={formData.barcode}
+          onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="e.g., Warehouse A, Shelf 1"
+          placeholder="Item barcode (optional)"
         />
       </div>
       

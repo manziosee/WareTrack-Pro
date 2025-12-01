@@ -5,13 +5,33 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import AddUserForm from '../components/forms/AddUserForm';
+import EditUserForm from '../components/forms/EditUserForm';
 import { mockUsers } from '../data/mockData';
 import { formatDate } from '../utils/formatters';
 
 export default function Users() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
   const users = mockUsers;
+
+  const handleEdit = (user: any) => {
+    setSelectedUser(user);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = (userId: number) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      console.log('Deleting user:', userId);
+      // Here you would typically call an API to delete the user
+    }
+  };
+
+  const handleSaveUser = (userData: any) => {
+    console.log('Saving user data:', userData);
+    // Here you would typically call an API to update the user
+  };
 
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -103,10 +123,18 @@ export default function Users() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center gap-2">
-                      <button className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors">
+                      <button 
+                        onClick={() => handleEdit(user)}
+                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        title="Edit user"
+                      >
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors">
+                      <button 
+                        onClick={() => handleDelete(user.id)}
+                        className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors"
+                        title="Delete user"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -120,6 +148,16 @@ export default function Users() {
 
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New User">
         <AddUserForm onClose={() => setShowAddModal(false)} />
+      </Modal>
+
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit User">
+        {selectedUser && (
+          <EditUserForm 
+            user={selectedUser} 
+            onClose={() => setShowEditModal(false)}
+            onSave={handleSaveUser}
+          />
+        )}
       </Modal>
     </div>
   );

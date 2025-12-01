@@ -91,34 +91,32 @@ export default function Landing() {
             <div className="flex flex-wrap gap-4">
               <Link to="/register">
                 <Button variant="primary" size="lg" className="shadow-lg shadow-primary-500/30">
-                  Start Free Trial
+                  Get Started Free
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
-              <Button variant="secondary" size="lg">
-                Watch Demo
-              </Button>
+              <Link to="/about">
+                <Button variant="secondary" size="lg">
+                  Learn More
+                </Button>
+              </Link>
             </div>
             <div className="mt-8 flex items-center gap-6 text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-5 h-5 text-success-500" />
-                No credit card required
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-success-500" />
-                14-day free trial
+                Free of charge
               </div>
             </div>
           </div>
           
           {/* Hero Image/Illustration */}
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary-500/20 to-accent-500/20 rounded-3xl blur-3xl"></div>
-            <div className="relative bg-white rounded-2xl shadow-2xl p-8 border border-gray-200">
+          <div className="relative group">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary-500/20 to-accent-500/20 rounded-3xl blur-3xl group-hover:blur-2xl transition-all duration-500"></div>
+            <div className="relative bg-white rounded-2xl shadow-2xl p-8 border border-gray-200 group-hover:shadow-3xl group-hover:-translate-y-1 transition-all duration-300">
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary-50 to-accent-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary-50 to-accent-50 rounded-lg hover:scale-105 transition-transform duration-200">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center hover:rotate-12 transition-transform duration-300">
                       <Package className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -128,9 +126,9 @@ export default function Landing() {
                   </div>
                   <div className="text-success-600 text-sm font-medium">+12%</div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-accent-50 to-warning-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-accent-50 to-warning-50 rounded-lg hover:scale-105 transition-transform duration-200">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-accent-500 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-accent-500 rounded-lg flex items-center justify-center hover:rotate-12 transition-transform duration-300">
                       <Truck className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -140,9 +138,9 @@ export default function Landing() {
                   </div>
                   <div className="text-success-600 text-sm font-medium">+8%</div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-success-50 to-primary-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-success-50 to-primary-50 rounded-lg hover:scale-105 transition-transform duration-200">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-success-500 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-success-500 rounded-lg flex items-center justify-center hover:rotate-12 transition-transform duration-300">
                       <CheckCircle className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -173,9 +171,9 @@ export default function Landing() {
           {features.map((feature, index) => (
             <div
               key={index}
-              className="bg-white p-8 rounded-xl border border-gray-200 hover:shadow-lg hover:border-primary-200 transition-all group"
+              className="bg-white p-8 rounded-xl border border-gray-200 hover:shadow-lg hover:border-primary-200 hover:-translate-y-2 transition-all duration-300 group"
             >
-              <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-accent-500 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-accent-500 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                 <feature.icon className="w-7 h-7 text-white" />
               </div>
               <h3 className="font-heading text-xl font-semibold text-gray-900 mb-3">
@@ -239,7 +237,7 @@ export default function Landing() {
             Ready to Transform Your Logistics?
           </h2>
           <p className="text-xl text-primary-50 mb-8 max-w-2xl mx-auto">
-            Start your free 14-day trial today. No credit card required.
+            Free to use it.
           </p>
           <Link to="/register">
             <Button variant="secondary" size="lg" className="bg-white text-primary-700 hover:bg-gray-100">

@@ -5,13 +5,33 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import AddInventoryForm from '../components/forms/AddInventoryForm';
+import EditInventoryForm from '../components/forms/EditInventoryForm';
 import { mockInventory } from '../data/mockData';
 import { formatDate, formatStockLevel } from '../utils/formatters';
 
 export default function Inventory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
   const inventory = mockInventory;
+
+  const handleEdit = (item: any) => {
+    setSelectedItem(item);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = (itemId: number) => {
+    if (window.confirm('Are you sure you want to delete this item?')) {
+      console.log('Deleting item:', itemId);
+      // Here you would typically call an API to delete the item
+    }
+  };
+
+  const handleSaveItem = (itemData: any) => {
+    console.log('Saving item data:', itemData);
+    // Here you would typically call an API to update the item
+  };
 
   const filteredInventory = inventory.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -126,10 +146,18 @@ export default function Inventory() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center gap-2">
-                      <button className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors">
+                      <button 
+                        onClick={() => handleEdit(item)}
+                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        title="Edit item"
+                      >
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors">
+                      <button 
+                        onClick={() => handleDelete(item.id)}
+                        className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors"
+                        title="Delete item"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -143,6 +171,16 @@ export default function Inventory() {
 
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Inventory Item">
         <AddInventoryForm onClose={() => setShowAddModal(false)} />
+      </Modal>
+
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Inventory Item">
+        {selectedItem && (
+          <EditInventoryForm 
+            item={selectedItem} 
+            onClose={() => setShowEditModal(false)}
+            onSave={handleSaveItem}
+          />
+        )}
       </Modal>
     </div>
   );

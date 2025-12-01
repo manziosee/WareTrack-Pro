@@ -28,6 +28,15 @@ export interface User {
   lastLogin?: Date;
 }
 
+// Auth User Types
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  phone: string;
+}
+
 // Inventory Types
 export interface InventoryItem {
   id: number;
@@ -40,6 +49,10 @@ export interface InventoryItem {
   location: string;
   barcode?: string;
   lastUpdated: Date;
+  unitPrice?: number;
+  status?: 'active' | 'inactive' | 'discontinued';
+  supplier?: string;
+  description?: string;
 }
 
 // Order Types
@@ -58,6 +71,9 @@ export interface DeliveryOrder {
   createdAt: Date;
   scheduledDate?: Date;
   deliveredAt?: Date;
+  deliveryInstructions?: string;
+  orderType?: string;
+  paymentMethod?: string;
 }
 
 export interface OrderItem {
