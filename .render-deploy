@@ -1,0 +1,7 @@
+# Render deployment trigger
+# This file ensures Render recognizes the backend directory structure
+
+Backend directory: /backend
+Frontend directory: /frontend
+
+Deployment timestamp: 2024-12-19
