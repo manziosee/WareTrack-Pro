@@ -1,22 +1,66 @@
 import { Package, Truck, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
-import { mockDashboardStats, mockDeliveryTrends, mockOrders, mockInventory } from '@/data/mockData';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import Badge from '@/components/ui/Badge';
 import { formatOrderNumber } from '@/utils/formatters';
+import { dashboardService } from '@/services/dashboardService';
+import { ordersService } from '@/services/ordersService';
+import { inventoryService } from '@/services/inventoryService';
 
 export default function Dashboard() {
-  const stats = mockDashboardStats;
-  const trends = mockDeliveryTrends;
-  const recentOrders = mockOrders.slice(0, 5);
-  const lowStockItems = mockInventory.filter(item => item.quantity < item.minQuantity);
+  const [stats, setStats] = useState<any>(null);
+  const [trends, setTrends] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [dashboardStats, dashboardTrends, ordersData, lowStock] = await Promise.all([
+          dashboardService.getStats(),
+          dashboardService.getTrends(),
+          ordersService.getOrders({ limit: 5 }),
+          inventoryService.getLowStock()
+        ]);
+
+        setStats(dashboardStats);
+        setTrends(dashboardTrends);
+        setRecentOrders(ordersData.data || []);
+        setLowStockItems(lowStock || []);
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">Failed to load dashboard data</p>
+      </div>
+    );
+  }
 
   const statCards = [
-    { label: 'Total Inventory', value: stats.totalInventory, icon: Package, color: 'bg-primary-500', change: '+12%' },
-    { label: 'Deliveries Today', value: stats.deliveriesToday, icon: CheckCircle, color: 'bg-success-500', change: '+5%' },
-    { label: 'Pending Dispatches', value: stats.pendingDispatches, icon: Clock, color: 'bg-warning-500', change: '-2%' },
-    { label: 'In Transit', value: stats.inTransit, icon: Truck, color: 'bg-accent-500', change: '+8%' },
-    { label: 'Low Stock Alerts', value: stats.lowStockItems, icon: AlertTriangle, color: 'bg-error-500', change: '+1' },
+    { label: 'Total Inventory', value: stats.totalInventory || 0, icon: Package, color: 'bg-primary-500', change: '+12%' },
+    { label: 'Deliveries Today', value: stats.deliveriesToday || 0, icon: CheckCircle, color: 'bg-success-500', change: '+5%' },
+    { label: 'Pending Dispatches', value: stats.pendingDispatches || 0, icon: Clock, color: 'bg-warning-500', change: '-2%' },
+    { label: 'In Transit', value: stats.inTransit || 0, icon: Truck, color: 'bg-accent-500', change: '+8%' },
+    { label: 'Low Stock Alerts', value: lowStockItems.length, icon: AlertTriangle, color: 'bg-error-500', change: '+1' },
   ];
 
   return (

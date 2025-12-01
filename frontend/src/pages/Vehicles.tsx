@@ -8,7 +8,7 @@ import AddVehicleForm from '@/components/forms/AddVehicleForm';
 import AddDriverForm from '@/components/forms/AddDriverForm';
 import EditVehicleForm from '@/components/forms/EditVehicleForm';
 import ScheduleMaintenanceForm from '@/components/forms/ScheduleMaintenanceForm';
-import { mockVehicles, mockDrivers } from '@/data/mockData';
+
 import { formatDate } from '@/utils/formatters';
 
 export default function Vehicles() {
@@ -17,8 +17,19 @@ export default function Vehicles() {
   const [showEditVehicleModal, setShowEditVehicleModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
-  const vehicles = mockVehicles;
-  const drivers = mockDrivers;
+  
+  // Sample data - replace with API calls
+  const vehicles = [
+    { id: 1, plateNumber: 'RAB 123A', type: 'Truck', capacity: 5000, status: 'available', lastMaintenance: '2024-01-15' },
+    { id: 2, plateNumber: 'RAB 456B', type: 'Van', capacity: 2000, status: 'in_use', lastMaintenance: '2024-01-10' }
+  ];
+  
+  const drivers = [
+    { id: 1, name: 'John Doe', licenseNumber: 'DL123456', phone: '+250788123456', status: 'available', currentVehicleId: null },
+    { id: 2, name: 'Jane Smith', licenseNumber: 'DL789012', phone: '+250788789012', status: 'on_duty', currentVehicleId: 2 }
+  ];
+  
+  
 
   const handleEditVehicle = (vehicle: any) => {
     setSelectedVehicle(vehicle);
@@ -64,7 +75,7 @@ export default function Vehicles() {
       <div>
         <h2 className="font-heading text-xl font-semibold text-gray-900 mb-4">Vehicles</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {vehicles.map((vehicle) => (
+          {vehicles.map((vehicle: any) => (
             <Card key={vehicle.id} className="hover:shadow-lg transition-shadow">
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -133,12 +144,12 @@ export default function Vehicles() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {drivers.map((driver) => (
+                {drivers.map((driver: any) => (
                   <tr key={driver.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-medium mr-3">
-                          {driver.name.split(' ').map(n => n[0]).join('')}
+                          {driver.name.split(' ').map((n: string) => n[0]).join('')}
                         </div>
                         <div className="text-sm font-medium text-gray-900">{driver.name}</div>
                       </div>
@@ -153,7 +164,7 @@ export default function Vehicles() {
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {driver.currentVehicleId ? vehicles.find(v => v.id === driver.currentVehicleId)?.plateNumber : '-'}
+                      {driver.currentVehicleId ? vehicles.find((v: any) => v.id === driver.currentVehicleId)?.plateNumber : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <button className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors">

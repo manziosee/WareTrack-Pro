@@ -1,17 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle, Clock, Truck, Package, Edit } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import UpdateOrderStatusForm from '@/components/forms/UpdateOrderStatusForm';
-import { mockOrders } from '@/data/mockData';
+import { ordersService } from '@/services/ordersService';
 import { formatOrderNumber, formatDateTime } from '@/utils/formatters';
 
 export default function Tracking() {
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const activeOrders = mockOrders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
+  const [activeOrders, setActiveOrders] = useState<any[]>([]);
+  const [, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchActiveOrders = async () => {
+      try {
+        const response = await ordersService.getOrders();
+        const orders = response.data || [];
+        setActiveOrders(orders.filter((o: any) => o.status !== 'delivered' && o.status !== 'cancelled'));
+      } catch (error) {
+        console.error('Failed to fetch orders:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchActiveOrders();
+  }, []);
 
   const handleUpdateStatus = (orderId: number) => {
     setSelectedOrder(orderId.toString());

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Save, Plus, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import { mockInventory } from '@/data/mockData';
+import { inventoryService } from '@/services/inventoryService';
+
 
 interface EditOrderFormProps {
   order: any;
@@ -21,16 +22,27 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
     paymentMethod: 'cash',
     items: [] as any[]
   });
+  const [inventory, setInventory] = useState<any[]>([]);
 
   const calculateTotal = () => {
     return formData.items.reduce((total, item) => {
-      const inventoryItem = mockInventory.find(inv => inv.id.toString() === item.inventoryId);
-      const price = (inventoryItem as any)?.unitPrice || 0;
+      const inventoryItem = inventory.find((inv: any) => inv.id.toString() === item.inventoryId);
+      const price = inventoryItem?.unitPrice || 0;
       return total + (price * item.quantity);
     }, 0);
   };
 
   useEffect(() => {
+    const fetchInventory = async () => {
+      try {
+        const response = await inventoryService.getInventory();
+        setInventory(response.data || []);
+      } catch (error) {
+        console.error('Failed to fetch inventory:', error);
+      }
+    };
+    fetchInventory();
+
     if (order) {
       const mappedItems = order.items?.map((item: any) => ({
         inventoryId: item.itemId || item.inventoryId || '',
@@ -82,14 +94,14 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     
     if (field === 'inventoryId') {
-      const selectedItem = mockInventory.find(item => item.id.toString() === value);
+      const selectedItem = inventory.find((item: any) => item.id.toString() === value);
       if (selectedItem) {
         updatedItems[index] = {
           ...updatedItems[index],
           name: selectedItem.name,
           code: selectedItem.code,
           unit: selectedItem.unit,
-          price: (selectedItem as any).unitPrice || 0
+          price: selectedItem.unitPrice || 0
         };
       }
     }
@@ -221,7 +233,7 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
                     required
                   >
                     <option value="">Select Item</option>
-                    {mockInventory.filter(inv => (inv as any).status === 'active').map((invItem) => (
+                    {inventory.filter((inv: any) => inv.status === 'active').map((invItem: any) => (
                       <option key={invItem.id} value={invItem.id.toString()}>
                         {invItem.name} ({invItem.code})
                       </option>

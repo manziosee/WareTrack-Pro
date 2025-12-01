@@ -1,0 +1,12 @@
+{
+  "name": "waretrack-pro-tests",
+  "version": "1.0.0",
+  "description": "API endpoint tests for WareTrack-Pro",
+  "scripts": {
+    "test": "node test-endpoints.js",
+    "test:quick": "node test-endpoints.js --quick"
+  },
+  "dependencies": {
+    "axios": "^1.6.2"
+  }
+}

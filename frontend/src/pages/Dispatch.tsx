@@ -1,93 +1,294 @@
-import { useState } from 'react';
-import { Truck, Calendar, Package } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Edit, Truck } from 'lucide-react';
+import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
-import ScheduleDispatchForm from '../components/forms/ScheduleDispatchForm';
-import CreateOrderForm from '../components/forms/CreateOrderForm';
-import AddVehicleForm from '../components/forms/AddVehicleForm';
+import SearchFilter from '../components/ui/SearchFilter';
+import DispatchForm from '../components/forms/DispatchForm';
+import { formatDate } from '../utils/formatters';
+import { dispatchService } from '../services/dispatchService';
+import { useRealTimeData } from '../hooks/useRealTimeData';
+import { exportToCSV, exportToPDF, exportToJSON } from '../utils/exportUtils';
+import toast from 'react-hot-toast';
 
-const Dispatch = () => {
-  const [activeModal, setActiveModal] = useState<string | null>(null);
+export default function Dispatch() {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedDispatch, setSelectedDispatch] = useState<any>(null);
+  const [dispatches, setDispatches] = useState<any[]>([]);
+  const [filteredDispatches, setFilteredDispatches] = useState<any[]>([]);
+  const [filters, setFilters] = useState<any>({});
+  
+  // Real-time data fetching
+  const { data: realtimeDispatches, loading, refetch } = useRealTimeData(
+    () => dispatchService.getDispatches(filters),
+    30000 // Update every 30 seconds
+  );
 
-  const openModal = (modalType: string) => setActiveModal(modalType);
-  const closeModal = () => setActiveModal(null);
+  useEffect(() => {
+    if (realtimeDispatches) {
+      setDispatches(realtimeDispatches.data || []);
+      setFilteredDispatches(realtimeDispatches.data || []);
+    }
+  }, [realtimeDispatches]);
 
-  const dispatches = [
-    { id: 1, orderNumber: 'ORD-001', driver: 'John Doe', vehicle: 'TRK-001', status: 'In Transit', destination: 'Downtown' },
-    { id: 2, orderNumber: 'ORD-002', driver: 'Jane Smith', vehicle: 'TRK-002', status: 'Scheduled', destination: 'Uptown' },
-  ];
+  const handleSearch = (searchTerm: string) => {
+    const filtered = dispatches.filter(dispatch =>
+      dispatch.order?.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      dispatch.driver?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      dispatch.vehicle?.registrationNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredDispatches(filtered);
+  };
+
+  const handleFilter = (newFilters: any) => {
+    setFilters(newFilters);
+    let filtered = [...dispatches];
+    
+    if (newFilters.status) {
+      filtered = filtered.filter(dispatch => dispatch.status === newFilters.status);
+    }
+    if (newFilters.start && newFilters.end) {
+      filtered = filtered.filter(dispatch => {
+        const dispatchDate = new Date(dispatch.startTime);
+        return dispatchDate >= new Date(newFilters.start) && dispatchDate <= new Date(newFilters.end);
+      });
+    }
+    
+    setFilteredDispatches(filtered);
+  };
+
+  const handleExport = (format: 'csv' | 'pdf' | 'json') => {
+    const exportData = filteredDispatches.map(dispatch => ({
+      'Order Number': dispatch.order?.orderNumber || 'N/A',
+      'Driver': dispatch.driver?.name || 'N/A',
+      'Vehicle': dispatch.vehicle?.registrationNumber || 'N/A',
+      'Status': dispatch.status,
+      'Start Time': formatDate(dispatch.startTime),
+      'Estimated Arrival': dispatch.estimatedArrival ? formatDate(dispatch.estimatedArrival) : 'N/A'
+    }));
+
+    switch (format) {
+      case 'csv':
+        exportToCSV(exportData, 'dispatches');
+        break;
+      case 'pdf':
+        exportToPDF(exportData, 'dispatches', 'Dispatch Report');
+        break;
+      case 'json':
+        exportToJSON(exportData, 'dispatches');
+        break;
+    }
+    toast.success(`Dispatches exported as ${format.toUpperCase()}`);
+  };
+
+  const handleEdit = (dispatch: any) => {
+    setSelectedDispatch(dispatch);
+    setShowEditModal(true);
+  };
+
+  const handleUpdateStatus = async (dispatchId: number, status: string) => {
+    try {
+      await dispatchService.updateDispatchStatus(dispatchId, status);
+      toast.success('Dispatch status updated successfully');
+      refetch();
+    } catch (error) {
+      console.error('Failed to update dispatch status:', error);
+      toast.error('Failed to update dispatch status');
+    }
+  };
+
+  const handleSaveDispatch = () => {
+    setShowEditModal(false);
+    setShowCreateModal(false);
+    setSelectedDispatch(null);
+    refetch();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'completed': return 'success';
+      case 'in_progress': return 'info';
+      case 'pending': return 'warning';
+      case 'cancelled': return 'error';
+      default: return 'gray';
+    }
+  };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Dispatch Management</h1>
-        <div className="flex gap-3">
-          <Button onClick={() => openModal('schedule')} className="flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            Schedule Dispatch
-          </Button>
-          <Button onClick={() => openModal('order')} className="flex items-center gap-2">
-            <Package className="w-4 h-4" />
-            Create Order
-          </Button>
-          <Button onClick={() => openModal('vehicle')} className="flex items-center gap-2">
-            <Truck className="w-4 h-4" />
-            Add Vehicle
-          </Button>
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-heading text-3xl font-bold text-gray-900">Dispatch Management</h1>
+          <p className="text-gray-600 mt-1">Manage delivery dispatches and track progress</p>
         </div>
+        <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+          <Plus className="w-5 h-5 mr-2" />
+          Create Dispatch
+        </Button>
       </div>
 
-      {/* Dispatch List */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Active Dispatches</h2>
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card>
+          <p className="text-sm text-gray-600">Total Dispatches</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{dispatches.length}</p>
+        </Card>
+        <Card>
+          <p className="text-sm text-gray-600">In Progress</p>
+          <p className="text-2xl font-bold text-info-600 mt-1">
+            {dispatches.filter(d => d.status === 'in_progress').length}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-sm text-gray-600">Completed</p>
+          <p className="text-2xl font-bold text-success-600 mt-1">
+            {dispatches.filter(d => d.status === 'completed').length}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-sm text-gray-600">Pending</p>
+          <p className="text-2xl font-bold text-warning-600 mt-1">
+            {dispatches.filter(d => d.status === 'pending').length}
+          </p>
+        </Card>
+      </div>
+
+      {/* Search and Filters */}
+      <SearchFilter
+        onSearch={handleSearch}
+        onFilter={handleFilter}
+        onExport={handleExport}
+        showDateRange={true}
+        filterOptions={[
+          {
+            label: 'Status',
+            value: 'status',
+            options: [
+              { label: 'Pending', value: 'pending' },
+              { label: 'In Progress', value: 'in_progress' },
+              { label: 'Completed', value: 'completed' },
+              { label: 'Cancelled', value: 'cancelled' }
+            ]
+          }
+        ]}
+      />
+
+      {/* Dispatches Table */}
+      <Card padding="none">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Destination</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ETA</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {dispatches.map((dispatch) => (
-                <tr key={dispatch.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{dispatch.orderNumber}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{dispatch.driver}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{dispatch.vehicle}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{dispatch.destination}</td>
+              {filteredDispatches.map((dispatch) => (
+                <tr key={dispatch.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      dispatch.status === 'In Transit' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {dispatch.status}
-                    </span>
+                    <div className="text-sm font-medium text-gray-900">
+                      {dispatch.order?.orderNumber || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {dispatch.order?.customerName || 'N/A'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {dispatch.driver?.name || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {dispatch.driver?.phone || 'N/A'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <Truck className="w-4 h-4 text-gray-400 mr-2" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {dispatch.vehicle?.registrationNumber || 'N/A'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {dispatch.vehicle?.make} {dispatch.vehicle?.model}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <Badge variant={getStatusBadgeVariant(dispatch.status)}>
+                      {dispatch.status.replace('_', ' ')}
+                    </Badge>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatDate(dispatch.startTime)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {dispatch.estimatedArrival ? formatDate(dispatch.estimatedArrival) : 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => handleEdit(dispatch)}
+                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        title="Edit dispatch"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      {dispatch.status === 'pending' && (
+                        <button
+                          onClick={() => handleUpdateStatus(dispatch.id, 'in_progress')}
+                          className="px-2 py-1 text-xs bg-info-100 text-info-700 rounded hover:bg-info-200"
+                        >
+                          Start
+                        </button>
+                      )}
+                      {dispatch.status === 'in_progress' && (
+                        <button
+                          onClick={() => handleUpdateStatus(dispatch.id, 'completed')}
+                          className="px-2 py-1 text-xs bg-success-100 text-success-700 rounded hover:bg-success-200"
+                        >
+                          Complete
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
-      {/* Modals */}
-      <Modal isOpen={activeModal === 'schedule'} onClose={closeModal} title="Schedule Dispatch">
-        <ScheduleDispatchForm onClose={closeModal} />
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create New Dispatch">
+        <DispatchForm onClose={() => setShowCreateModal(false)} onSave={handleSaveDispatch} />
       </Modal>
 
-      <Modal isOpen={activeModal === 'order'} onClose={closeModal} title="Create Order">
-        <CreateOrderForm onClose={closeModal} />
-      </Modal>
-
-      <Modal isOpen={activeModal === 'vehicle'} onClose={closeModal} title="Add Vehicle">
-        <AddVehicleForm onClose={closeModal} />
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Dispatch">
+        {selectedDispatch && (
+          <DispatchForm 
+            dispatch={selectedDispatch}
+            onClose={() => setShowEditModal(false)}
+            onSave={handleSaveDispatch}
+          />
+        )}
       </Modal>
     </div>
   );
-};
-
-export default Dispatch;
+}
