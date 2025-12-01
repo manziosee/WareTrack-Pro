@@ -170,9 +170,11 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Start server (Redis optional in development)
-if (process.env.REDIS_URL) {
+// Redis disabled in production to avoid connection limits
+if (process.env.NODE_ENV !== 'production' && process.env.REDIS_URL) {
   connectRedis();
+} else {
+  console.log('⚠️  Redis disabled in production - running without caching');
 }
 
 // Start inventory alerts scheduler

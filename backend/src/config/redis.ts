@@ -1,30 +1,69 @@
 import { createClient } from 'redis';
 
-const redisClient = createClient({
-  username: 'default',
-  password: 'AIdDsSCoXEfTZh6nvaC53D0F2hsdIIkO',
-  socket: {
-    host: 'redis-13712.c73.us-east-1-2.ec2.cloud.redislabs.com',
-    port: 13712
+let redisClient: any = null;
+let isRedisAvailable = false;
+
+// Only create Redis client if URL is provided
+if (process.env.REDIS_URL) {
+  try {
+    redisClient = createClient({
+      url: process.env.REDIS_URL,
+      socket: {
+        connectTimeout: 5000,
+        lazyConnect: true,
+        reconnectStrategy: (retries) => {
+          if (retries > 3) {
+            console.log('❌ Redis max retries reached, disabling Redis');
+            return false;
+          }
+          return Math.min(retries * 50, 500);
+        }
+      }
+    });
+
+    redisClient.on('error', (err) => {
+      console.warn('⚠️  Redis Error (continuing without Redis):', err.message);
+      isRedisAvailable = false;
+    });
+
+    redisClient.on('connect', () => {
+      console.log('✅ Connected to Redis');
+      isRedisAvailable = true;
+    });
+
+    redisClient.on('disconnect', () => {
+      console.log('⚠️  Redis disconnected');
+      isRedisAvailable = false;
+    });
+  } catch (error) {
+    console.warn('⚠️  Redis client creation failed:', error.message);
+    redisClient = null;
   }
-});
-
-redisClient.on('error', (err) => {
-  console.error('Redis Client Error:', err);
-});
-
-redisClient.on('connect', () => {
-  console.log('Connected to Redis');
-});
+}
 
 export const connectRedis = async () => {
+  if (!redisClient) {
+    console.log('⚠️  Redis not configured, running without caching');
+    return;
+  }
+
   try {
-    await redisClient.connect();
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
+    isRedisAvailable = true;
     console.log('✅ Connected to Redis');
   } catch (error) {
-    console.warn('⚠️  Redis not available, running without caching:', error.message);
-    // Don't exit process, just continue without Redis
+    console.warn('⚠️  Redis connection failed, running without caching:', error.message);
+    isRedisAvailable = false;
+    // Don't throw error, just continue without Redis
   }
 };
+
+export const getRedisClient = () => {
+  return isRedisAvailable && redisClient?.isOpen ? redisClient : null;
+};
+
+export const isRedisConnected = () => isRedisAvailable;
 
 export { redisClient };
