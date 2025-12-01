@@ -4,41 +4,56 @@ services:
   # Nginx Load Balancer
   nginx:
     image: nginx:alpine
+    container_name: waretrack-nginx
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-      - ./ssl:/etc/ssl/certs
-      - nginx_cache:/var/cache/nginx
-      - ./frontend/dist:/var/www/waretrack/frontend
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
     depends_on:
       - backend1
       - backend2
-      - backend3
-    restart: unless-stopped
     networks:
       - waretrack-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Backend Instance 1
   backend1:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
+    container_name: waretrack-backend-1
+    restart: unless-stopped
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - DATABASE_URL=postgresql://postgres:8p%21_q4fq2RhV9FU@db.exxpofcteuatggdxgbdk.supabase.co:5432/postgres
+      - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRE=7d
-      - FRONTEND_URL=https://waretrack.com
-      - REDIS_URL=redis://redis:6379
-      - INSTANCE_ID=backend1
+      - FRONTEND_URL=${FRONTEND_URL}
+      - REDIS_URL=${REDIS_URL}
+      - EMAILJS_SERVICE_ID=${EMAILJS_SERVICE_ID}
+      - EMAILJS_TEMPLATE_ID=${EMAILJS_TEMPLATE_ID}
+      - EMAILJS_PUBLIC_KEY=${EMAILJS_PUBLIC_KEY}
+      - EMAILJS_PRIVATE_KEY=${EMAILJS_PRIVATE_KEY}
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=1000
     depends_on:
       - redis
-    restart: unless-stopped
     networks:
       - waretrack-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -52,21 +67,32 @@ services:
   backend2:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
+    container_name: waretrack-backend-2
+    restart: unless-stopped
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - DATABASE_URL=postgresql://postgres:8p%21_q4fq2RhV9FU@db.exxpofcteuatggdxgbdk.supabase.co:5432/postgres
+      - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRE=7d
-      - FRONTEND_URL=https://waretrack.com
-      - REDIS_URL=redis://redis:6379
-      - INSTANCE_ID=backend2
+      - FRONTEND_URL=${FRONTEND_URL}
+      - REDIS_URL=${REDIS_URL}
+      - EMAILJS_SERVICE_ID=${EMAILJS_SERVICE_ID}
+      - EMAILJS_TEMPLATE_ID=${EMAILJS_TEMPLATE_ID}
+      - EMAILJS_PUBLIC_KEY=${EMAILJS_PUBLIC_KEY}
+      - EMAILJS_PRIVATE_KEY=${EMAILJS_PRIVATE_KEY}
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=1000
     depends_on:
       - redis
-    restart: unless-stopped
     networks:
       - waretrack-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -76,43 +102,21 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  # Backend Instance 3 (Backup)
-  backend3:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    environment:
-      - NODE_ENV=production
-      - PORT=5000
-      - DATABASE_URL=postgresql://postgres:8p%21_q4fq2RhV9FU@db.exxpofcteuatggdxgbdk.supabase.co:5432/postgres
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRE=7d
-      - FRONTEND_URL=https://waretrack.com
-      - REDIS_URL=redis://redis:6379
-      - INSTANCE_ID=backend3
-    depends_on:
-      - redis
-    restart: unless-stopped
-    networks:
-      - waretrack-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-
-  # Redis Cache & Session Store
+  # Redis Cache & Queue (Production)
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    container_name: waretrack-redis-prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
-    restart: unless-stopped
     networks:
       - waretrack-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     deploy:
       resources:
         limits:
@@ -122,30 +126,41 @@ services:
           cpus: '0.1'
           memory: 128M
 
-  # Redis Commander (Redis GUI - Development/Monitoring)
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    environment:
-      - REDIS_HOSTS=local:redis:6379
-      - HTTP_USER=admin
-      - HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD:-admin123}
-    ports:
-      - "8081:8081"
-    depends_on:
-      - redis
+  # Frontend (Production Build)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: waretrack-frontend-prod
     restart: unless-stopped
+    environment:
+      - VITE_API_URL=${BACKEND_URL}/api
+      - VITE_APP_NAME=WareTrack Pro
     networks:
       - waretrack-network
-    profiles:
-      - monitoring
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
-  # Monitoring with Prometheus (Optional)
+  # Monitoring (Optional)
   prometheus:
     image: prom/prometheus:latest
+    container_name: waretrack-prometheus
+    restart: unless-stopped
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -154,54 +169,36 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
-    restart: unless-stopped
     networks:
       - waretrack-network
-    profiles:
-      - monitoring
 
-  # Grafana for Monitoring Dashboard (Optional)
+  # Grafana Dashboard (Optional)
   grafana:
     image: grafana/grafana:latest
+    container_name: waretrack-grafana
+    restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
-    restart: unless-stopped
     networks:
       - waretrack-network
-    profiles:
-      - monitoring
-
-  # Log aggregation with Loki (Optional)
-  loki:
-    image: grafana/loki:latest
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
-      - loki_data:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    restart: unless-stopped
-    networks:
-      - waretrack-network
-    profiles:
-      - monitoring
 
 volumes:
   redis_data:
-  nginx_cache:
+    driver: local
+  nginx_logs:
+    driver: local
   prometheus_data:
+    driver: local
   grafana_data:
-  loki_data:
+    driver: local
 
 networks:
   waretrack-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16

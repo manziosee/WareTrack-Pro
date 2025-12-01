@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { mockInventory } from '@/data/mockData';
+import { inventoryService } from '@/services/inventoryService';
+
 
 export default function EditInventory() {
   const { id } = useParams();
@@ -21,20 +22,27 @@ export default function EditInventory() {
   });
 
   useEffect(() => {
-    const foundItem = mockInventory.find(i => i.id.toString() === id);
-    if (foundItem) {
-      setItem(foundItem);
-      setFormData({
-        name: foundItem.name,
-        code: foundItem.code,
-        category: foundItem.category,
-        quantity: foundItem.quantity,
-        minQuantity: foundItem.minQuantity,
-        unit: foundItem.unit,
-        location: foundItem.location,
-        description: (foundItem as any).description || ''
-      });
-    }
+    const fetchItem = async () => {
+      try {
+        if (id) {
+          const foundItem = await inventoryService.getInventoryById(Number(id));
+          setItem(foundItem);
+          setFormData({
+            name: foundItem.name,
+            code: foundItem.code,
+            category: foundItem.category,
+            quantity: foundItem.quantity,
+            minQuantity: foundItem.minQuantity,
+            unit: foundItem.unit,
+            location: foundItem.location,
+            description: foundItem.description || ''
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch item:', error);
+      }
+    };
+    fetchItem();
   }, [id]);
 
   const handleSubmit = (e: React.FormEvent) => {

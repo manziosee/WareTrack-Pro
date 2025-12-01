@@ -1,19 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Download, Calendar } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import ExportReportForm from '@/components/forms/ExportReportForm';
-import { mockDeliveryTrends, mockOrders, mockInventory } from '@/data/mockData';
+import { ordersService } from '@/services/ordersService';
+import { inventoryService } from '@/services/inventoryService';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function Reports() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [inventory, setInventory] = useState<any[]>([]);
   const [dateRange, setDateRange] = useState({
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
   });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [ordersData, inventoryData] = await Promise.all([
+          ordersService.getOrders(),
+          inventoryService.getInventory()
+        ]);
+        setOrders(ordersData.data || []);
+        setInventory(inventoryData.data || []);
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      }
+    };
+    fetchData();
+  }, []);
 
   const handleDateRangeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,15 +42,25 @@ export default function Reports() {
   };
   
   const deliveryStatusData = [
-    { name: 'Delivered', value: mockOrders.filter(o => o.status === 'delivered').length, color: '#10B981' },
-    { name: 'In Transit', value: mockOrders.filter(o => o.status === 'in_transit').length, color: '#FF8C42' },
-    { name: 'Dispatched', value: mockOrders.filter(o => o.status === 'dispatched').length, color: '#F59E0B' },
-    { name: 'Pending', value: mockOrders.filter(o => o.status === 'pending').length, color: '#6B7280' },
+    { name: 'Delivered', value: orders.filter((o: any) => o.status === 'delivered').length, color: '#10B981' },
+    { name: 'In Transit', value: orders.filter((o: any) => o.status === 'in_transit').length, color: '#FF8C42' },
+    { name: 'Dispatched', value: orders.filter((o: any) => o.status === 'dispatched').length, color: '#F59E0B' },
+    { name: 'Pending', value: orders.filter((o: any) => o.status === 'pending').length, color: '#6B7280' },
   ];
 
   const inventoryByCategory = [
-    { category: 'Electronics', count: mockInventory.filter(i => i.category === 'Electronics').reduce((sum, i) => sum + i.quantity, 0) },
-    { category: 'Furniture', count: mockInventory.filter(i => i.category === 'Furniture').reduce((sum, i) => sum + i.quantity, 0) },
+    { category: 'Electronics', count: inventory.filter((i: any) => i.category === 'Electronics').reduce((sum: number, i: any) => sum + i.quantity, 0) },
+    { category: 'Furniture', count: inventory.filter((i: any) => i.category === 'Furniture').reduce((sum: number, i: any) => sum + i.quantity, 0) },
+  ];
+
+  const mockDeliveryTrends = [
+    { date: '2024-01-01', delivered: 12, inTransit: 5, pending: 3 },
+    { date: '2024-01-02', delivered: 15, inTransit: 8, pending: 2 },
+    { date: '2024-01-03', delivered: 10, inTransit: 6, pending: 4 },
+    { date: '2024-01-04', delivered: 18, inTransit: 4, pending: 1 },
+    { date: '2024-01-05', delivered: 14, inTransit: 7, pending: 3 },
+    { date: '2024-01-06', delivered: 16, inTransit: 5, pending: 2 },
+    { date: '2024-01-07', delivered: 13, inTransit: 9, pending: 5 }
   ];
 
   return (
@@ -58,7 +87,7 @@ export default function Reports() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <p className="text-sm text-gray-600">Total Orders</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{mockOrders.length}</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{orders.length}</p>
           <p className="text-xs text-success-600 mt-2">+15% from last month</p>
         </Card>
         <Card>

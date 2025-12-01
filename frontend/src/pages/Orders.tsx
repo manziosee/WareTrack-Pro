@@ -1,22 +1,93 @@
-import { useState } from 'react';
-import { Plus, Eye, Edit, Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Eye, Edit } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
+import SearchFilter from '../components/ui/SearchFilter';
 import CreateOrderForm from '../components/forms/CreateOrderForm';
 import EditOrderForm from '../components/forms/EditOrderForm';
 import ViewOrderModal from '../components/forms/ViewOrderModal';
-import { mockOrders } from '../data/mockData';
 import { formatOrderNumber, formatDate } from '../utils/formatters';
+import { ordersService } from '../services/ordersService';
+import { useRealTimeData } from '../hooks/useRealTimeData';
+import { exportToCSV, exportToPDF, exportToJSON } from '../utils/exportUtils';
+import toast from 'react-hot-toast';
 
 export default function Orders() {
-  const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const orders = mockOrders;
+  const [orders, setOrders] = useState<any[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<any[]>([]);
+  const [filters, setFilters] = useState<any>({});
+  
+  // Real-time data fetching
+  const { data: realtimeOrders, loading, refetch } = useRealTimeData(
+    () => ordersService.getOrders(filters),
+    30000 // Update every 30 seconds
+  );
+
+  useEffect(() => {
+    if (realtimeOrders) {
+      setOrders(realtimeOrders.data || []);
+      setFilteredOrders(realtimeOrders.data || []);
+    }
+  }, [realtimeOrders]);
+
+  const handleSearch = (searchTerm: string) => {
+    const filtered = orders.filter(order =>
+      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.customerName?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredOrders(filtered);
+  };
+
+  const handleFilter = (newFilters: any) => {
+    setFilters(newFilters);
+    let filtered = [...orders];
+    
+    if (newFilters.status) {
+      filtered = filtered.filter(order => order.status === newFilters.status);
+    }
+    if (newFilters.priority) {
+      filtered = filtered.filter(order => order.priority === newFilters.priority);
+    }
+    if (newFilters.start && newFilters.end) {
+      filtered = filtered.filter(order => {
+        const orderDate = new Date(order.createdAt);
+        return orderDate >= new Date(newFilters.start) && orderDate <= new Date(newFilters.end);
+      });
+    }
+    
+    setFilteredOrders(filtered);
+  };
+
+  const handleExport = (format: 'csv' | 'pdf' | 'json') => {
+    const exportData = filteredOrders.map(order => ({
+      'Order Number': order.orderNumber,
+      'Customer': order.customerName,
+      'Status': order.status,
+      'Priority': order.priority,
+      'Total Amount': order.totalAmount,
+      'Created': formatDate(order.createdAt),
+      'Delivery Address': order.deliveryAddress
+    }));
+
+    switch (format) {
+      case 'csv':
+        exportToCSV(exportData, 'orders');
+        break;
+      case 'pdf':
+        exportToPDF(exportData, 'orders', 'Orders Report');
+        break;
+      case 'json':
+        exportToJSON(exportData, 'orders');
+        break;
+    }
+    toast.success(`Orders exported as ${format.toUpperCase()}`);
+  };
 
   const handleView = (order: any) => {
     setSelectedOrder(order);
@@ -28,15 +99,34 @@ export default function Orders() {
     setShowEditModal(true);
   };
 
-  const handleSaveOrder = (orderData: any) => {
-    console.log('Saving order data:', orderData);
-    // Here you would typically call an API to update the order
+  const handleSaveOrder = async (orderData: any) => {
+    try {
+      if (selectedOrder) {
+        await ordersService.updateOrder(selectedOrder.id, orderData);
+        toast.success('Order updated successfully');
+      } else {
+        await ordersService.createOrder(orderData);
+        toast.success('Order created successfully');
+      }
+      setShowEditModal(false);
+      setShowCreateModal(false);
+      setSelectedOrder(null);
+      refetch();
+    } catch (error) {
+      console.error('Failed to save order:', error);
+      toast.error('Failed to save order');
+    }
   };
 
-  const filteredOrders = orders.filter(order =>
-    order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customerName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -96,22 +186,35 @@ export default function Orders() {
         </Card>
       </div>
 
-      {/* Search */}
-      <Card>
-        <div className="flex items-center gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by order number or customer..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
-          <Button variant="secondary">Filter by Status</Button>
-        </div>
-      </Card>
+      {/* Search and Filters */}
+      <SearchFilter
+        onSearch={handleSearch}
+        onFilter={handleFilter}
+        onExport={handleExport}
+        showDateRange={true}
+        filterOptions={[
+          {
+            label: 'Status',
+            value: 'status',
+            options: [
+              { label: 'Pending', value: 'pending' },
+              { label: 'Dispatched', value: 'dispatched' },
+              { label: 'In Transit', value: 'in_transit' },
+              { label: 'Delivered', value: 'delivered' },
+              { label: 'Cancelled', value: 'cancelled' }
+            ]
+          },
+          {
+            label: 'Priority',
+            value: 'priority',
+            options: [
+              { label: 'High', value: 'high' },
+              { label: 'Medium', value: 'medium' },
+              { label: 'Low', value: 'low' }
+            ]
+          }
+        ]}
+      />
 
       {/* Orders Table */}
       <Card padding="none">
@@ -186,7 +289,7 @@ export default function Orders() {
       </Card>
 
       <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create New Order">
-        <CreateOrderForm onClose={() => setShowCreateModal(false)} />
+        <CreateOrderForm onClose={() => setShowCreateModal(false)} onSave={handleSaveOrder} />
       </Modal>
 
       <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Order Details" size="lg">

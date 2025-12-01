@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Package, AlertTriangle, TrendingUp, TrendingDown, ArrowRight, Plus } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -6,26 +6,46 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import AddInventoryForm from '../../components/forms/AddInventoryForm';
 import CreateOrderForm from '../../components/forms/CreateOrderForm';
-import { mockInventory, mockOrders } from '../../data/mockData';
+import { inventoryService } from '../../services/inventoryService';
+import { ordersService } from '../../services/ordersService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatDate } from '../../utils/formatters';
 
 export default function WarehouseDashboard() {
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const lowStockItems = mockInventory.filter(item => item.quantity < item.minQuantity);
-  const criticalStock = mockInventory.filter(item => item.quantity < item.minQuantity * 0.5);
-  const totalStock = mockInventory.reduce((sum, item) => sum + item.quantity, 0);
-  const pendingOrders = mockOrders.filter(o => o.status === 'pending');
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [inventoryData, ordersData] = await Promise.all([
+          inventoryService.getInventory(),
+          ordersService.getOrders()
+        ]);
+        setInventory(inventoryData.data || []);
+        setOrders(ordersData.data || []);
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      }
+    };
+    fetchData();
+  }, []);
+  
+  const lowStockItems = inventory.filter((item: any) => item.quantity < item.minQuantity);
+  const criticalStock = inventory.filter((item: any) => item.quantity < item.minQuantity * 0.5);
+  const totalStock = inventory.reduce((sum: number, item: any) => sum + item.quantity, 0);
+  const pendingOrders = orders.filter((o: any) => o.status === 'pending');
 
   const openModal = (modalType: string) => setActiveModal(modalType);
   const closeModal = () => setActiveModal(null);
 
   const categoryData = [
-    { category: 'Electronics', stock: mockInventory.filter(i => i.category === 'Electronics').reduce((sum, i) => sum + i.quantity, 0) },
-    { category: 'Furniture', stock: mockInventory.filter(i => i.category === 'Furniture').reduce((sum, i) => sum + i.quantity, 0) },
+    { category: 'Electronics', stock: inventory.filter((i: any) => i.category === 'Electronics').reduce((sum: number, i: any) => sum + i.quantity, 0) },
+    { category: 'Furniture', stock: inventory.filter((i: any) => i.category === 'Furniture').reduce((sum: number, i: any) => sum + i.quantity, 0) },
   ];
 
-  const recentActivity = mockInventory.slice(0, 5);
+  const recentActivity = inventory.slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -122,7 +142,7 @@ export default function WarehouseDashboard() {
             <Badge variant="error">{criticalStock.length} Items</Badge>
           </div>
           <div className="space-y-3 max-h-[300px] overflow-y-auto">
-            {criticalStock.map((item) => (
+            {criticalStock.map((item: any) => (
               <div key={item.id} className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">{item.name}</p>
@@ -146,7 +166,7 @@ export default function WarehouseDashboard() {
             <a href="/inventory" className="text-sm text-primary-600 hover:text-primary-700 font-medium">View All</a>
           </div>
           <div className="space-y-3">
-            {recentActivity.map((item) => (
+            {recentActivity.map((item: any) => (
               <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">{item.name}</p>
@@ -168,7 +188,7 @@ export default function WarehouseDashboard() {
             <Badge variant="warning">{pendingOrders.length} Orders</Badge>
           </div>
           <div className="space-y-3">
-            {pendingOrders.map((order) => (
+            {pendingOrders.map((order: any) => (
               <div key={order.id} className="p-4 bg-warning-50 border border-warning-200 rounded-lg">
                 <div className="flex items-start justify-between mb-2">
                   <div>

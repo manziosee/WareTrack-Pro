@@ -3,9 +3,10 @@ import { unitCategories } from '@/utils/units';
 
 interface AddInventoryFormProps {
   onClose: () => void;
+  onSave?: (data: any) => void;
 }
 
-const AddInventoryForm = ({ onClose }: AddInventoryFormProps) => {
+const AddInventoryForm = ({ onClose, onSave }: AddInventoryFormProps) => {
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -29,8 +30,19 @@ const AddInventoryForm = ({ onClose }: AddInventoryFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Item ${formData.name} added successfully!`);
-    onClose();
+    const itemData = {
+      ...formData,
+      quantity: parseInt(formData.quantity),
+      minQuantity: parseInt(formData.minQuantity),
+      unitPrice: formData.unitPrice
+    };
+    
+    if (onSave) {
+      onSave(itemData);
+    } else {
+      alert(`Item ${formData.name} added successfully!`);
+      onClose();
+    }
   };
 
   return (

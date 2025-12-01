@@ -1,42 +1,148 @@
-import { useState } from 'react';
-import { Plus, Edit, Trash2, Search, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Edit, Trash2, AlertTriangle } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
+import SearchFilter from '../components/ui/SearchFilter';
 import AddInventoryForm from '../components/forms/AddInventoryForm';
 import EditInventoryForm from '../components/forms/EditInventoryForm';
-import { mockInventory } from '../data/mockData';
 import { formatDate, formatStockLevel } from '../utils/formatters';
+import { inventoryService } from '../services/inventoryService';
+import { useRealTimeData } from '../hooks/useRealTimeData';
+import { exportToCSV, exportToPDF, exportToJSON } from '../utils/exportUtils';
+import toast from 'react-hot-toast';
 
 export default function Inventory() {
-  const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
-  const inventory = mockInventory;
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [filteredInventory, setFilteredInventory] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [currentPage] = useState(1);
+  const [filters, setFilters] = useState<any>({});
+  
+  // Real-time data fetching
+  const { data: realtimeInventory, loading, refetch } = useRealTimeData(
+    () => inventoryService.getInventory({ ...filters, page: currentPage, limit: 20 }),
+    30000 // Update every 30 seconds
+  );
+
+  const fetchStats = async () => {
+    try {
+      const statsData = await inventoryService.getStats();
+      setStats(statsData);
+    } catch (error) {
+      console.error('Failed to fetch inventory stats:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  useEffect(() => {
+    if (realtimeInventory) {
+      setInventory(realtimeInventory.data || []);
+      setFilteredInventory(realtimeInventory.data || []);
+    }
+  }, [realtimeInventory]);
+
+  const handleSearch = (searchTerm: string) => {
+    const filtered = inventory.filter(item =>
+      item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.code?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredInventory(filtered);
+  };
+
+  const handleFilter = (newFilters: any) => {
+    setFilters(newFilters);
+    let filtered = [...inventory];
+    
+    if (newFilters.category) {
+      filtered = filtered.filter(item => item.category === newFilters.category);
+    }
+    if (newFilters.status) {
+      filtered = filtered.filter(item => item.status === newFilters.status);
+    }
+    
+    setFilteredInventory(filtered);
+  };
+
+  const handleExport = (format: 'csv' | 'pdf' | 'json') => {
+    const exportData = filteredInventory.map(item => ({
+      Name: item.name,
+      Code: item.code,
+      Category: item.category,
+      Quantity: item.quantity,
+      'Min Quantity': item.minQuantity,
+      'Unit Price': item.unitPrice,
+      Location: item.location,
+      Status: item.status
+    }));
+
+    switch (format) {
+      case 'csv':
+        exportToCSV(exportData, 'inventory');
+        break;
+      case 'pdf':
+        exportToPDF(exportData, 'inventory', 'Inventory Report');
+        break;
+      case 'json':
+        exportToJSON(exportData, 'inventory');
+        break;
+    }
+    toast.success(`Inventory exported as ${format.toUpperCase()}`);
+  };
 
   const handleEdit = (item: any) => {
     setSelectedItem(item);
     setShowEditModal(true);
   };
 
-  const handleDelete = (itemId: number) => {
+  const handleDelete = async (itemId: number) => {
     if (window.confirm('Are you sure you want to delete this item?')) {
-      console.log('Deleting item:', itemId);
-      // Here you would typically call an API to delete the item
+      try {
+        await inventoryService.deleteInventoryItem(itemId);
+        toast.success('Item deleted successfully');
+        refetch();
+        fetchStats();
+      } catch (error) {
+        console.error('Failed to delete item:', error);
+        toast.error('Failed to delete item');
+      }
     }
   };
 
-  const handleSaveItem = (itemData: any) => {
-    console.log('Saving item data:', itemData);
-    // Here you would typically call an API to update the item
+  const handleSaveItem = async (itemData: any) => {
+    try {
+      if (selectedItem) {
+        await inventoryService.updateInventoryItem(selectedItem.id, itemData);
+        toast.success('Item updated successfully');
+      } else {
+        await inventoryService.createInventoryItem(itemData);
+        toast.success('Item created successfully');
+      }
+      setShowEditModal(false);
+      setShowAddModal(false);
+      setSelectedItem(null);
+      refetch();
+      fetchStats();
+    } catch (error) {
+      console.error('Failed to save item:', error);
+      toast.error('Failed to save item');
+    }
   };
 
-  const filteredInventory = inventory.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  if (loading && inventory.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   const getStockBadgeVariant = (current: number, min: number) => {
     const percentage = (current / min) * 100;
@@ -63,38 +169,52 @@ export default function Inventory() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <p className="text-sm text-gray-600">Total Items</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{inventory.length}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{stats?.totalItems || 0}</p>
         </Card>
         <Card>
-          <p className="text-sm text-gray-600">Total Stock</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{inventory.reduce((sum, item) => sum + item.quantity, 0)}</p>
+          <p className="text-sm text-gray-600">Total Value</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">${stats?.totalValue?.toFixed(2) || '0.00'}</p>
         </Card>
         <Card>
           <p className="text-sm text-gray-600">Low Stock</p>
-          <p className="text-2xl font-bold text-error-600 mt-1">{inventory.filter(i => i.quantity < i.minQuantity).length}</p>
+          <p className="text-2xl font-bold text-error-600 mt-1">{stats?.lowStock || 0}</p>
         </Card>
         <Card>
-          <p className="text-sm text-gray-600">Categories</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{new Set(inventory.map(i => i.category)).size}</p>
+          <p className="text-sm text-gray-600">Out of Stock</p>
+          <p className="text-2xl font-bold text-error-600 mt-1">{stats?.outOfStock || 0}</p>
         </Card>
       </div>
 
-      {/* Search */}
-      <Card>
-        <div className="flex items-center gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name or code..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
-          <Button variant="secondary">Filter by Category</Button>
-        </div>
-      </Card>
+      {/* Search and Filters */}
+      <SearchFilter
+        onSearch={handleSearch}
+        onFilter={handleFilter}
+        onExport={handleExport}
+        showDateRange={false}
+        filterOptions={[
+          {
+            label: 'Category',
+            value: 'category',
+            options: [
+              { label: 'Electronics', value: 'Electronics' },
+              { label: 'Furniture', value: 'Furniture' },
+              { label: 'Office Supplies', value: 'Office Supplies' },
+              { label: 'Equipment', value: 'Equipment' },
+              { label: 'Tools', value: 'Tools' },
+              { label: 'Materials', value: 'Materials' }
+            ]
+          },
+          {
+            label: 'Status',
+            value: 'status',
+            options: [
+              { label: 'Active', value: 'active' },
+              { label: 'Inactive', value: 'inactive' },
+              { label: 'Discontinued', value: 'discontinued' }
+            ]
+          }
+        ]}
+      />
 
       {/* Inventory Table */}
       <Card padding="none">
@@ -170,7 +290,7 @@ export default function Inventory() {
       </Card>
 
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Inventory Item">
-        <AddInventoryForm onClose={() => setShowAddModal(false)} />
+        <AddInventoryForm onClose={() => setShowAddModal(false)} onSave={handleSaveItem} />
       </Modal>
 
       <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Inventory Item">

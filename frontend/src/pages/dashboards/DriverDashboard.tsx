@@ -1,19 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MapPin, Package, CheckCircle, Clock, Navigation, Phone } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
-import { mockOrders } from '../../data/mockData';
+import { ordersService } from '../../services/ordersService';
 import { formatOrderNumber, formatDateTime } from '../../utils/formatters';
 
 export default function DriverDashboard() {
   const [, setDeliveryStatus] = useState<string>('in_transit');
+  const [orders, setOrders] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const response = await ordersService.getOrders();
+        setOrders(response.data || []);
+      } catch (error) {
+        console.error('Failed to fetch orders:', error);
+      }
+    };
+    fetchOrders();
+  }, []);
+  
   // Simulate driver's assigned orders
-  const myOrders = mockOrders.filter(o => o.driverId === 4);
-  const todayDeliveries = myOrders.filter(o => o.status !== 'delivered');
-  const completedToday = myOrders.filter(o => o.status === 'delivered');
-  const currentDelivery = myOrders.find(o => o.status === 'in_transit');
-  const upcomingDeliveries = myOrders.filter(o => o.status === 'dispatched');
+  const myOrders = orders.filter((o: any) => o.driverId === 4);
+  const todayDeliveries = myOrders.filter((o: any) => o.status !== 'delivered');
+  const completedToday = myOrders.filter((o: any) => o.status === 'delivered');
+  const currentDelivery = myOrders.find((o: any) => o.status === 'in_transit');
+  const upcomingDeliveries = myOrders.filter((o: any) => o.status === 'dispatched');
 
   const handleNavigate = () => {
     window.open(`https://maps.google.com/maps?q=${encodeURIComponent(currentDelivery?.deliveryAddress || '')}`, '_blank');
@@ -110,7 +124,7 @@ export default function DriverDashboard() {
           <div className="bg-white rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-600 mb-2">Items to Deliver</p>
             <div className="space-y-2">
-              {currentDelivery.items.map((item, idx) => (
+              {currentDelivery.items.map((item: any, idx: number) => (
                 <div key={idx} className="flex items-center justify-between">
                   <span className="text-gray-900">{item.itemName}</span>
                   <Badge variant="gray">{item.quantity} {item.unit}</Badge>
@@ -143,7 +157,7 @@ export default function DriverDashboard() {
           <Badge variant="warning">{upcomingDeliveries.length} Pending</Badge>
         </div>
         <div className="space-y-3">
-          {upcomingDeliveries.map((order, index) => (
+          {upcomingDeliveries.map((order: any, index: number) => (
             <div key={order.id} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
@@ -190,7 +204,7 @@ export default function DriverDashboard() {
             <Badge variant="success">{completedToday.length} Delivered</Badge>
           </div>
           <div className="space-y-3">
-            {completedToday.map((order) => (
+            {completedToday.map((order: any) => (
               <div key={order.id} className="p-4 bg-success-50 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">

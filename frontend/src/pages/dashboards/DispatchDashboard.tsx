@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Truck, Clock, MapPin, Calendar, Users, Package } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -7,17 +7,42 @@ import Modal from '../../components/ui/Modal';
 import ScheduleDispatchForm from '../../components/forms/ScheduleDispatchForm';
 import CreateOrderForm from '../../components/forms/CreateOrderForm';
 import AddVehicleForm from '../../components/forms/AddVehicleForm';
-import { mockOrders, mockDrivers, mockVehicles } from '../../data/mockData';
+import { ordersService } from '../../services/ordersService';
 import { formatOrderNumber, formatDate } from '../../utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function DispatchDashboard() {
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const pendingOrders = mockOrders.filter(o => o.status === 'pending');
-  const dispatchedOrders = mockOrders.filter(o => o.status === 'dispatched');
-  const inTransitOrders = mockOrders.filter(o => o.status === 'in_transit');
-  const availableDrivers = mockDrivers.filter(d => d.status === 'available');
-  const availableVehicles = mockVehicles.filter(v => v.status === 'available');
+  const [orders, setOrders] = useState<any[]>([]);
+  
+  // Sample data - replace with API calls
+  const mockDrivers = [
+    { id: 1, name: 'John Doe', status: 'available' },
+    { id: 2, name: 'Jane Smith', status: 'on_duty' }
+  ];
+  
+  const mockVehicles = [
+    { id: 1, plateNumber: 'RAB 123A', type: 'Truck', status: 'available' },
+    { id: 2, plateNumber: 'RAB 456B', type: 'Van', status: 'in_use' }
+  ];
+  
+  const pendingOrders = orders.filter((o: any) => o.status === 'pending');
+  const dispatchedOrders = orders.filter((o: any) => o.status === 'dispatched');
+  const inTransitOrders = orders.filter((o: any) => o.status === 'in_transit');
+  const availableDrivers = mockDrivers.filter((d: any) => d.status === 'available');
+  const availableVehicles = mockVehicles.filter((v: any) => v.status === 'available');
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const response = await ordersService.getOrders();
+        setOrders(response.data || []);
+      } catch (error) {
+        console.error('Failed to fetch orders:', error);
+      }
+    };
+    fetchOrders();
+  }, []);
 
   const openModal = (modalType: string) => setActiveModal(modalType);
   const closeModal = () => setActiveModal(null);
@@ -140,7 +165,7 @@ export default function DispatchDashboard() {
                 <Badge variant="success">{availableDrivers.length} Available</Badge>
               </div>
               <div className="space-y-2">
-                {mockDrivers.map((driver) => (
+                {mockDrivers.map((driver: any) => (
                   <div key={driver.id} className="flex items-center justify-between text-sm">
                     <span className="text-gray-700">{driver.name}</span>
                     <Badge variant={driver.status === 'available' ? 'success' : 'gray'} size="sm">
@@ -157,7 +182,7 @@ export default function DispatchDashboard() {
                 <Badge variant="primary">{availableVehicles.length} Available</Badge>
               </div>
               <div className="space-y-2">
-                {mockVehicles.slice(0, 3).map((vehicle) => (
+                {mockVehicles.slice(0, 3).map((vehicle: any) => (
                   <div key={vehicle.id} className="flex items-center justify-between text-sm">
                     <span className="text-gray-700">{vehicle.plateNumber} - {vehicle.type}</span>
                     <Badge variant={vehicle.status === 'available' ? 'success' : vehicle.status === 'in_use' ? 'warning' : 'error'} size="sm">
@@ -178,7 +203,7 @@ export default function DispatchDashboard() {
           <Badge variant="warning">{pendingOrders.length} Orders</Badge>
         </div>
         <div className="space-y-3">
-          {pendingOrders.map((order) => (
+          {pendingOrders.map((order: any) => (
             <div key={order.id} className="p-4 bg-warning-50 border border-warning-200 rounded-lg">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -217,7 +242,7 @@ export default function DispatchDashboard() {
           <Badge variant="primary">{inTransitOrders.length + dispatchedOrders.length} Active</Badge>
         </div>
         <div className="space-y-3">
-          {[...dispatchedOrders, ...inTransitOrders].map((order) => (
+          {[...dispatchedOrders, ...inTransitOrders].map((order: any) => (
             <div key={order.id} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex-1">

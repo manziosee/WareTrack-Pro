@@ -3,13 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { mockOrders, mockInventory } from '@/data/mockData';
+import { ordersService } from '@/services/ordersService';
+import { inventoryService } from '@/services/inventoryService';
 import { formatOrderNumber } from '@/utils/formatters';
 
 export default function EditOrder() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<any>(null);
+  const [inventory, setInventory] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     customerName: '',
     contactNumber: '',
@@ -21,19 +23,31 @@ export default function EditOrder() {
   });
 
   useEffect(() => {
-    const foundOrder = mockOrders.find(o => o.id.toString() === id);
-    if (foundOrder) {
-      setOrder(foundOrder);
-      setFormData({
-        customerName: foundOrder.customerName,
-        contactNumber: foundOrder.contactNumber,
-        deliveryAddress: foundOrder.deliveryAddress,
-        priority: foundOrder.priority,
-        scheduledDate: foundOrder.scheduledDate ? new Date(foundOrder.scheduledDate).toISOString().split('T')[0] : '',
-        deliveryInstructions: (foundOrder as any).deliveryInstructions || '',
-        items: foundOrder.items || []
-      });
-    }
+    const fetchData = async () => {
+      try {
+        if (id) {
+          const [orderData, inventoryData] = await Promise.all([
+            ordersService.getOrderById(Number(id)),
+            inventoryService.getInventory()
+          ]);
+          
+          setOrder(orderData);
+          setInventory(inventoryData.data || []);
+          setFormData({
+            customerName: orderData.customerName,
+            contactNumber: orderData.contactNumber,
+            deliveryAddress: orderData.deliveryAddress,
+            priority: orderData.priority,
+            scheduledDate: orderData.scheduledDate ? new Date(orderData.scheduledDate).toISOString().split('T')[0] : '',
+            deliveryInstructions: orderData.deliveryInstructions || '',
+            items: orderData.items || []
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      }
+    };
+    fetchData();
   }, [id]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -61,7 +75,7 @@ export default function EditOrder() {
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     
     if (field === 'inventoryId') {
-      const selectedItem = mockInventory.find(item => item.id === value);
+      const selectedItem = inventory.find((item: any) => item.id === value);
       if (selectedItem) {
         updatedItems[index] = {
           ...updatedItems[index],
@@ -201,7 +215,7 @@ export default function EditOrder() {
                     required
                   >
                     <option value="">Select Item</option>
-                    {mockInventory.map((invItem) => (
+                    {inventory.map((invItem: any) => (
                       <option key={invItem.id} value={invItem.id}>
                         {invItem.name} ({invItem.code})
                       </option>

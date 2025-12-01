@@ -4,7 +4,7 @@ import { ArrowLeft, Package, User, MapPin, Clock, Truck } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { mockOrders } from '@/data/mockData';
+import { ordersService } from '@/services/ordersService';
 import { formatOrderNumber, formatDate } from '@/utils/formatters';
 
 export default function ViewOrder() {
@@ -13,10 +13,17 @@ export default function ViewOrder() {
   const [order, setOrder] = useState<any>(null);
 
   useEffect(() => {
-    const foundOrder = mockOrders.find(o => o.id.toString() === id);
-    if (foundOrder) {
-      setOrder(foundOrder);
-    }
+    const fetchOrder = async () => {
+      try {
+        if (id) {
+          const orderData = await ordersService.getOrderById(Number(id));
+          setOrder(orderData);
+        }
+      } catch (error) {
+        console.error('Failed to fetch order:', error);
+      }
+    };
+    fetchOrder();
   }, [id]);
 
   const getStatusBadgeVariant = (status: string) => {
