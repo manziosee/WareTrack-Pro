@@ -135,7 +135,8 @@ app.get('/api', (req, res) => {
     name: 'WareTrack-Pro API',
     version: '1.0.0',
     description: 'Comprehensive Warehouse Delivery & Dispatch Tracking System',
-    documentation: process.env.NODE_ENV !== 'production' ? '/api-docs' : 'Contact support for documentation',
+    documentation: '/api-docs',
+    health: '/health',
     endpoints: {
       auth: '/api/auth',
       users: '/api/users',
@@ -146,6 +147,11 @@ app.get('/api', (req, res) => {
       dispatch: '/api/dispatch',
       dashboard: '/api/dashboard',
       reports: '/api/reports'
+    },
+    utilities: {
+      health: '/health',
+      documentation: '/api-docs',
+      test: '/api/test'
     }
   });
 });
