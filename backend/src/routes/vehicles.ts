@@ -1,12 +1,16 @@
-import express from 'express';
-const router = express.Router();
+import { Router } from 'express';
+import { VehiclesController } from '../controllers/vehiclesController';
+import { auth } from '../middleware/auth';
 
-router.get('/', (req, res) => {
-  res.json({ message: 'Get vehicles endpoint' });
-});
+const router = Router();
 
-router.post('/', (req, res) => {
-  res.json({ message: 'Create vehicle endpoint' });
-});
+router.get('/', auth, VehiclesController.getVehicles);
+router.get('/status', auth, VehiclesController.getStatuses);
+router.get('/:id', auth, VehiclesController.getVehicleById);
+router.get('/:id/maintenance', auth, VehiclesController.getMaintenanceHistory);
+router.post('/', auth, VehiclesController.createVehicle);
+router.post('/:id/maintenance', auth, VehiclesController.scheduleMaintenance);
+router.put('/:id', auth, VehiclesController.updateVehicle);
+router.delete('/:id', auth, VehiclesController.deleteVehicle);
 
 export default router;

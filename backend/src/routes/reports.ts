@@ -1,12 +1,13 @@
-import express from 'express';
-const router = express.Router();
+import { Router } from 'express';
+import { ReportsController } from '../controllers/reportsController';
+import { auth } from '../middleware/auth';
 
-router.get('/dashboard', (req, res) => {
-  res.json({ message: 'Get dashboard stats endpoint' });
-});
+const router = Router();
 
-router.get('/inventory', (req, res) => {
-  res.json({ message: 'Get inventory reports endpoint' });
-});
+router.get('/sales', auth, ReportsController.getSalesReport);
+router.get('/inventory', auth, ReportsController.getInventoryReport);
+router.get('/vehicles', auth, ReportsController.getVehiclesReport);
+router.get('/drivers', auth, ReportsController.getDriversReport);
+router.post('/export', auth, ReportsController.exportReport);
 
 export default router;

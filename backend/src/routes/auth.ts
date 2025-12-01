@@ -1,19 +1,13 @@
-import express from 'express';
-const router = express.Router();
+import { Router } from 'express';
+import { AuthController } from '../controllers/authController';
+import { auth } from '../middleware/auth';
 
-// POST /api/auth/login
-router.post('/login', (req, res) => {
-  res.json({ message: 'Login endpoint' });
-});
+const router = Router();
 
-// POST /api/auth/register
-router.post('/register', (req, res) => {
-  res.json({ message: 'Register endpoint' });
-});
-
-// POST /api/auth/logout
-router.post('/logout', (req, res) => {
-  res.json({ message: 'Logout endpoint' });
-});
+router.post('/register', AuthController.register);
+router.post('/login', AuthController.login);
+router.post('/refresh', AuthController.refresh);
+router.post('/logout', auth, AuthController.logout);
+router.get('/me', auth, AuthController.getProfile);
 
 export default router;

@@ -1,12 +1,15 @@
-import express from 'express';
-const router = express.Router();
+import { Router } from 'express';
+import { DriversController } from '../controllers/driversController';
+import { auth } from '../middleware/auth';
 
-router.get('/', (req, res) => {
-  res.json({ message: 'Get drivers endpoint' });
-});
+const router = Router();
 
-router.post('/', (req, res) => {
-  res.json({ message: 'Create driver endpoint' });
-});
+router.get('/', auth, DriversController.getDrivers);
+router.get('/available', auth, DriversController.getAvailableDrivers);
+router.get('/:id', auth, DriversController.getDriverById);
+router.get('/:id/assignments', auth, DriversController.getDriverAssignments);
+router.post('/', auth, DriversController.createDriver);
+router.put('/:id', auth, DriversController.updateDriver);
+router.delete('/:id', auth, DriversController.deleteDriver);
 
 export default router;

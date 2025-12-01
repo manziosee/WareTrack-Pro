@@ -22,15 +22,16 @@ A comprehensive Warehouse Delivery & Dispatch Tracking System built with Node.js
 ### Backend
 - **Runtime**: Node.js with TypeScript
 - **Framework**: Express.js
-- **Database**: MongoDB with Mongoose
+- **Database**: PostgreSQL with Drizzle ORM
+- **Cache**: Redis with BullMQ
 - **Authentication**: JWT with bcrypt
 - **Security**: Helmet, CORS, Rate Limiting
-- **File Upload**: Multer
-- **Email**: Nodemailer
-- **Validation**: Express Validator
+- **Email**: EmailJS
+- **Documentation**: Swagger/OpenAPI 3.0
 
 ### Frontend
 - **Framework**: React 18 with TypeScript
+- **Build Tool**: Vite
 - **Routing**: React Router v6
 - **State Management**: React Query
 - **Forms**: React Hook Form with Yup validation
@@ -75,8 +76,9 @@ WareTrack-Pro/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js (v16 or higher)
-- MongoDB
+- Node.js (v18 or higher)
+- PostgreSQL
+- Redis (optional for caching)
 - npm or yarn
 
 ### Installation
@@ -100,7 +102,7 @@ WareTrack-Pro/
    ```bash
    cd frontend
    npm install
-   npm start
+   npm run dev
    ```
 
 ### Environment Variables
@@ -110,10 +112,15 @@ Create a `.env` file in the backend directory:
 ```env
 NODE_ENV=development
 PORT=5000
-MONGODB_URI=mongodb://localhost:27017/waretrack-pro
+DATABASE_URL=postgresql://username:password@host:port/database
 JWT_SECRET=your-super-secret-jwt-key
 JWT_EXPIRE=7d
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:3001
+REDIS_URL=redis://username:password@host:port
+EMAILJS_SERVICE_ID=your_service_id
+EMAILJS_TEMPLATE_ID=your_template_id
+EMAILJS_PUBLIC_KEY=your_public_key
+EMAILJS_PRIVATE_KEY=your_private_key
 ```
 
 ## 📊 System Features
@@ -150,32 +157,83 @@ Pending → Dispatched → In Transit → Delivered
 cd backend
 npm run dev          # Start development server
 npm run build        # Build for production
-npm run test         # Run tests
-npm run lint         # Run ESLint
+npm run db:generate  # Generate database schema
+npm run db:migrate   # Run database migrations
 ```
 
 ### Frontend Development
 ```bash
 cd frontend
-npm start            # Start development server
+npm run dev          # Start development server (port 3001)
 npm run build        # Build for production
-npm test             # Run tests
-npm run lint         # Run ESLint
+npm run preview      # Preview production build
 ```
 
-## 📱 API Documentation
+## 🐳 Docker Deployment
 
-### Authentication Endpoints
+```bash
+# Build and run with Docker
+docker build -t waretrack-pro .
+docker run -p 5000:5000 --env-file backend/.env waretrack-pro
+```
+
+## 🚀 Production Deployment
+
+### Backend (Render)
+- Set environment variables in Render dashboard
+- Deploy from GitHub repository
+- Ensure PostgreSQL and Redis are configured
+
+### Frontend (Vercel)
+- Connect GitHub repository to Vercel
+- Set `REACT_APP_API_URL` environment variable
+- Automatic deployments on push to main branch
+
+## 📱 Live Demo & API Documentation
+
+### 🌐 Live Application
+- **Frontend**: [https://ware-track-pro.vercel.app/](https://ware-track-pro.vercel.app/)
+- **API Documentation**: [Backend URL]/api-docs (Swagger UI)
+- **Local Frontend**: http://localhost:3001
+- **Local API**: http://localhost:5000
+
+### 📧 Email Notification Testing
+Test all email notifications:
+```bash
+# Test welcome email
+curl -X POST http://localhost:5000/api/test/email \
+  -H "Content-Type: application/json" \
+  -d '{"type": "welcome"}'
+
+# Test order update email
+curl -X POST http://localhost:5000/api/test/email \
+  -H "Content-Type: application/json" \
+  -d '{"type": "order_update"}'
+
+# Test low stock alert
+curl -X POST http://localhost:5000/api/test/email \
+  -H "Content-Type: application/json" \
+  -d '{"type": "low_stock"}'
+
+# Test delivery assignment
+curl -X POST http://localhost:5000/api/test/email \
+  -H "Content-Type: application/json" \
+  -d '{"type": "delivery_assignment"}'
+
+# Test delivery confirmation
+curl -X POST http://localhost:5000/api/test/email \
+  -H "Content-Type: application/json" \
+  -d '{"type": "delivery_confirmation"}'}
+```
+
+### Key API Endpoints
 - `POST /api/auth/login` - User login
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/logout` - User logout
-
-### Core Endpoints
-- `GET /api/inventory` - Get inventory items
-- `POST /api/orders` - Create delivery order
-- `GET /api/dispatch` - Get dispatch schedules
-- `PUT /api/orders/:id/status` - Update order status
-- `GET /api/reports/dashboard` - Get dashboard statistics
+- `POST /api/auth/register` - User registration (first user becomes admin)
+- `GET /api/dashboard/stats` - Dashboard statistics
+- `GET /api/inventory` - Inventory management
+- `POST /api/orders` - Order management
+- `GET /api/dispatch` - Dispatch tracking
+- `GET /api/reports` - Analytics and reports
 
 ## 🤝 Contributing
 
@@ -191,9 +249,40 @@ npm run lint         # Run ESLint
 - GitHub: [@manziosee](https://github.com/manziosee)
 - Project Link: [https://github.com/manziosee/WareTrack-Pro](https://github.com/manziosee/WareTrack-Pro)
 
+## ✨ Key Features Implemented
+
+### 📧 Email Notification System
+- ✅ **Welcome Email** 🎉 - Sent on first-time login (backend checks `lastLogin` field)
+- ✅ **Order Status Updates** 📦 - Sent when order status changes (triggered by API calls)
+- ✅ **Low Stock Alerts** ⚠️ - Sent when inventory falls below minimum (checked on updates)
+- ✅ **Delivery Assignment** 🚛 - Sent when driver is assigned to delivery (dispatch creation)
+- ✅ **Delivery Confirmation** ✅ - Sent when order status changes to 'delivered'
+
+### 👥 User Management System
+- ✅ **First User Admin** - First registered user automatically becomes admin
+- ✅ **Role-Based Access** - Admin, Warehouse Staff, Dispatch Officer, Driver roles
+- ✅ **Account Activation** - New users start inactive, admin can activate/deactivate
+- ✅ **JWT Authentication** - Access and refresh tokens with proper session management
+
+### 🏢 Core System Features
+- ✅ **Real-time Inventory** - Live stock tracking with automated low-stock alerts
+- ✅ **Order Lifecycle** - Complete order management from creation to delivery
+- ✅ **Dispatch Management** - Schedule dispatches, assign vehicles/drivers, track progress
+- ✅ **Comprehensive Reports** - Analytics, performance metrics, and export capabilities
+- ✅ **Redis & BullMQ** - Background job processing and caching system
+- ✅ **Swagger Documentation** - Complete API documentation with 58+ endpoints
+
+### 🔧 Technical Implementation
+- ✅ **PostgreSQL + Supabase** - Production database with Drizzle ORM
+- ✅ **EmailJS Integration** - Professional email templates and delivery
+- ✅ **Docker Support** - Multi-stage production builds
+- ✅ **Render Deployment** - Production-ready backend configuration
+- ✅ **Vercel Frontend** - Optimized React deployment
+
 ## 🙏 Acknowledgments
 
 - Built as a comprehensive warehouse management solution
 - Designed for scalability and real-world deployment
 - Implements modern web development best practices
+- Production-ready with Docker support
 - Suitable for educational and commercial use
