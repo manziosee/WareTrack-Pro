@@ -1,18 +1,41 @@
 import { useState } from 'react';
-import { Plus, Truck, Calendar, Package } from 'lucide-react';
+import { Truck, Calendar, Package, FileText } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ScheduleDispatchForm from '../components/forms/ScheduleDispatchForm';
 import CreateOrderForm from '../components/forms/CreateOrderForm';
 import AddVehicleForm from '../components/forms/AddVehicleForm';
-import { useAuth } from '../context/AuthContext';
+import DispatchNote from '../components/dispatch/DispatchNote';
+import ExportButton from '../components/export/ExportButton';
+
 
 const Dispatch = () => {
-  const { user } = useAuth();
+
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [showDispatchNote, setShowDispatchNote] = useState(false);
+  const [selectedDispatch, setSelectedDispatch] = useState<any>(null);
 
   const openModal = (modalType: string) => setActiveModal(modalType);
   const closeModal = () => setActiveModal(null);
+
+  const handleViewDispatchNote = (dispatch: any) => {
+    const mockDispatchData = {
+      id: `DSP-${dispatch.id.toString().padStart(3, '0')}`,
+      orderNumber: dispatch.orderNumber,
+      customerName: 'TechCorp Inc.',
+      customerAddress: '123 Business Ave, Downtown',
+      items: [
+        { name: 'Wireless Mouse', quantity: 2, unit: 'pcs' },
+        { name: 'USB Cable', quantity: 5, unit: 'pcs' }
+      ],
+      driverName: dispatch.driver,
+      vehicleNumber: dispatch.vehicle,
+      scheduledDate: new Date().toISOString(),
+      notes: 'Handle with care - fragile items'
+    };
+    setSelectedDispatch(mockDispatchData);
+    setShowDispatchNote(true);
+  };
 
   const dispatches = [
     { id: 1, orderNumber: 'ORD-001', driver: 'John Doe', vehicle: 'TRK-001', status: 'In Transit', destination: 'Downtown' },
@@ -24,6 +47,11 @@ const Dispatch = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Dispatch Management</h1>
         <div className="flex gap-3">
+          <ExportButton
+            data={dispatches}
+            filename="dispatch-report"
+            type="excel"
+          />
           <Button onClick={() => openModal('schedule')} className="flex items-center gap-2">
             <Calendar className="w-4 h-4" />
             Schedule Dispatch
@@ -53,6 +81,7 @@ const Dispatch = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Destination</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -68,6 +97,15 @@ const Dispatch = () => {
                     }`}>
                       {dispatch.status}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <button 
+                      onClick={() => handleViewDispatchNote(dispatch)}
+                      className="p-1 text-primary-600 hover:bg-primary-50 hover:scale-110 rounded transition-all duration-200"
+                      title="View dispatch note"
+                    >
+                      <FileText className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -87,6 +125,20 @@ const Dispatch = () => {
 
       <Modal isOpen={activeModal === 'vehicle'} onClose={closeModal} title="Add Vehicle">
         <AddVehicleForm onClose={closeModal} />
+      </Modal>
+
+      <Modal 
+        isOpen={showDispatchNote} 
+        onClose={() => {
+          setShowDispatchNote(false);
+          setSelectedDispatch(null);
+        }} 
+        title="Dispatch Note"
+        size="lg"
+      >
+        {selectedDispatch && (
+          <DispatchNote dispatch={selectedDispatch} />
+        )}
       </Modal>
     </div>
   );

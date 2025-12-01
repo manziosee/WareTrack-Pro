@@ -9,11 +9,11 @@ import { mockOrders } from '@/data/mockData';
 import { formatOrderNumber, formatDateTime } from '@/utils/formatters';
 
 export default function Tracking() {
-  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<number | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const activeOrders = mockOrders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
 
-  const handleUpdateStatus = (orderId: string) => {
+  const handleUpdateStatus = (orderId: number) => {
     setSelectedOrder(orderId);
     setShowUpdateModal(true);
   };
@@ -53,7 +53,7 @@ export default function Tracking() {
           const currentStageIndex = getCurrentStageIndex(order.status);
 
           return (
-            <Card key={order.id}>
+            <Card key={order.id} className="hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <div className="flex items-center gap-3">
@@ -72,7 +72,7 @@ export default function Tracking() {
                     variant="secondary" 
                     size="sm" 
                     onClick={() => handleUpdateStatus(order.id)}
-                    className="mb-2"
+                    className="mb-2 hover:scale-105 transition-transform duration-200"
                   >
                     <Edit className="w-4 h-4 mr-1" />
                     Update Status
@@ -163,7 +163,7 @@ export default function Tracking() {
           title="Update Order Status"
         >
           <UpdateOrderStatusForm 
-            orderId={selectedOrder}
+            orderId={selectedOrder?.toString() || ''}
             currentStatus={activeOrders.find(o => o.id === selectedOrder)?.status || 'pending'}
             onClose={() => {
               setShowUpdateModal(false);

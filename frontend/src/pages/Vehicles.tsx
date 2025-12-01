@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Edit, Wrench } from 'lucide-react';
+import { Plus, Edit, Wrench, Trash2 } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -65,7 +65,7 @@ export default function Vehicles() {
         <h2 className="font-heading text-xl font-semibold text-gray-900 mb-4">Vehicles</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {vehicles.map((vehicle) => (
-            <Card key={vehicle.id} className="hover:shadow-lg transition-shadow">
+            <Card key={vehicle.id} className="hover:shadow-xl hover:-translate-y-2 transition-all duration-300 cursor-pointer group">
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <p className="text-sm text-gray-600">Plate Number</p>
@@ -95,7 +95,7 @@ export default function Vehicles() {
                 <Button 
                   variant="secondary" 
                   size="sm" 
-                  className="flex-1"
+                  className="flex-1 hover:scale-105 transition-transform duration-200"
                   onClick={() => handleEditVehicle(vehicle)}
                 >
                   <Edit className="w-4 h-4 mr-1" />
@@ -104,7 +104,7 @@ export default function Vehicles() {
                 <Button 
                   variant="warning" 
                   size="sm" 
-                  className="flex-1"
+                  className="flex-1 hover:scale-105 transition-transform duration-200"
                   onClick={() => handleScheduleMaintenance(vehicle)}
                 >
                   <Wrench className="w-4 h-4 mr-1" />
@@ -156,9 +156,26 @@ export default function Vehicles() {
                       {driver.currentVehicleId ? vehicles.find(v => v.id === driver.currentVehicleId)?.plateNumber : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <button className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors">
-                        <Edit className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => alert(`Edit driver ${driver.name}`)}
+                          className="p-1 text-primary-600 hover:bg-primary-50 hover:scale-110 rounded transition-all duration-200"
+                          title="Edit driver"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to remove ${driver.name}?`)) {
+                              alert(`Driver ${driver.name} removed successfully!`);
+                            }
+                          }}
+                          className="p-1 text-error-600 hover:bg-error-50 hover:scale-110 rounded transition-all duration-200"
+                          title="Remove driver"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

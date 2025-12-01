@@ -27,7 +27,11 @@ const navigation = [
   { name: 'Reports', href: '/reports', icon: BarChart3 },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  onToggle?: () => void;
+}
+
+export default function Sidebar({ }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -74,7 +78,7 @@ export default function Sidebar() {
     navigate('/');
   };
   return (
-    <div className={`flex flex-col h-full bg-white border-r border-gray-200 transition-all duration-300 relative ${isCollapsed ? 'w-16' : 'w-64'}`}>
+    <div className={`flex flex-col h-full bg-white border-r border-gray-200 transition-all duration-300 relative ${isMobile ? 'w-64' : (isCollapsed ? 'w-16' : 'w-64')}`}>
       {/* Logo */}
       <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-4 py-5 border-b border-gray-200`}>
         <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -89,7 +93,7 @@ export default function Sidebar() {
         {!isMobile && (
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
+            className="p-1 rounded-lg hover:bg-gray-100 hover:scale-110 transition-all duration-200 flex-shrink-0"
             title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {isCollapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
@@ -104,7 +108,7 @@ export default function Sidebar() {
             key={item.name}
             to={item.href}
             className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group relative ${
+              `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative hover:scale-105 ${
                 isActive
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
@@ -128,7 +132,7 @@ export default function Sidebar() {
         <NavLink
           to="/settings"
           className={({ isActive }) =>
-            `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group relative ${
+            `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative hover:scale-105 ${
               isActive
                 ? 'bg-blue-50 text-blue-700'
                 : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
@@ -146,7 +150,7 @@ export default function Sidebar() {
         </NavLink>
         <button 
           onClick={handleLogout}
-          className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} w-full px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors group relative`}
+          className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} w-full px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 hover:scale-105 transition-all duration-200 group relative`}
           title={isCollapsed ? 'Logout' : ''}
         >
           <LogOut className="w-5 h-5 flex-shrink-0" />

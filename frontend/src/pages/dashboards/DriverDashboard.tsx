@@ -7,7 +7,7 @@ import { mockOrders } from '../../data/mockData';
 import { formatOrderNumber, formatDateTime } from '../../utils/formatters';
 
 export default function DriverDashboard() {
-  const [deliveryStatus, setDeliveryStatus] = useState<string>('in_transit');
+  const [, setDeliveryStatus] = useState<string>('in_transit');
   // Simulate driver's assigned orders
   const myOrders = mockOrders.filter(o => o.driverId === 4);
   const todayDeliveries = myOrders.filter(o => o.status !== 'delivered');

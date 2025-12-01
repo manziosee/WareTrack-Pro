@@ -25,7 +25,7 @@ export const mockOrders: DeliveryOrder[] = [
     customerName: 'TechCorp Inc.',
     deliveryAddress: '123 Business Ave, Tech City, TC 12345',
     contactNumber: '+1555123456',
-    items: [{ itemId: 1, itemName: 'Laptop Dell XPS 15', quantity: 5, unit: 'pcs' }],
+    items: [{ itemId: 1, itemName: 'Laptop Dell XPS 15', quantity: 5, unit: 'pcs', unitPrice: 850000 }],
     priority: 'high',
     status: 'in_transit',
     driverId: 4,
@@ -41,8 +41,8 @@ export const mockOrders: DeliveryOrder[] = [
     deliveryAddress: '456 Commerce St, Business Park, BP 67890',
     contactNumber: '+1555123457',
     items: [
-      { itemId: 2, itemName: 'Office Chair Ergonomic', quantity: 10, unit: 'pcs' },
-      { itemId: 4, itemName: 'Standing Desk', quantity: 5, unit: 'pcs' }
+      { itemId: 2, itemName: 'Office Chair Ergonomic', quantity: 10, unit: 'pcs', unitPrice: 125000 },
+      { itemId: 4, itemName: 'Standing Desk', quantity: 5, unit: 'pcs', unitPrice: 275000 }
     ],
     priority: 'medium',
     status: 'dispatched',
@@ -58,7 +58,7 @@ export const mockOrders: DeliveryOrder[] = [
     customerName: 'StartUp Hub',
     deliveryAddress: '789 Innovation Blvd, Startup City, SC 11111',
     contactNumber: '+1555123458',
-    items: [{ itemId: 5, itemName: 'Monitor 27" 4K', quantity: 15, unit: 'pcs' }],
+    items: [{ itemId: 5, itemName: 'Monitor 27" 4K', quantity: 15, unit: 'pcs', unitPrice: 320000 }],
     priority: 'high',
     status: 'pending',
     createdAt: new Date('2024-11-30'),
@@ -71,7 +71,7 @@ export const mockOrders: DeliveryOrder[] = [
     customerName: 'Digital Agency Pro',
     deliveryAddress: '321 Creative Lane, Design District, DD 22222',
     contactNumber: '+1555123459',
-    items: [{ itemId: 3, itemName: 'Printer HP LaserJet', quantity: 3, unit: 'pcs' }],
+    items: [{ itemId: 3, itemName: 'Printer HP LaserJet', quantity: 3, unit: 'pcs', unitPrice: 180000 }],
     priority: 'low',
     status: 'delivered',
     driverId: 4,

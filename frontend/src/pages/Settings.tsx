@@ -21,7 +21,7 @@ const Settings = () => {
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
         <button 
           onClick={() => setShowExportModal(true)} 
-          className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+          className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 hover:scale-105 transition-all duration-200 font-medium"
         >
           <Calendar className="w-4 h-4" />
           Export Report
@@ -35,10 +35,10 @@ const Settings = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all duration-200 ${
                 activeTab === tab.id
                   ? 'bg-primary-50 text-primary-700 border-r-2 border-primary-700'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  : 'text-gray-700 hover:bg-gray-100 hover:scale-105'
               }`}
             >
               <tab.icon className="w-5 h-5" />
@@ -187,9 +187,7 @@ const Settings = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
                   <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
-                    <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="GBP">GBP (£)</option>
+                    <option value="RWF">RWF (Rwandan Franc)</option>
                   </select>
                 </div>
                 <button className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium">

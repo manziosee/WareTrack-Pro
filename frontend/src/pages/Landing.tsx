@@ -95,18 +95,16 @@ export default function Landing() {
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
-              <Button variant="secondary" size="lg">
-                Watch Demo
-              </Button>
+              <Link to="/about">
+                <Button variant="secondary" size="lg">
+                  Learn More
+                </Button>
+              </Link>
             </div>
             <div className="mt-8 flex items-center gap-6 text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-5 h-5 text-success-500" />
-                No credit card required
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-success-500" />
-                14-day free trial
+                Free of charge
               </div>
             </div>
           </div>
@@ -239,7 +237,7 @@ export default function Landing() {
             Ready to Transform Your Logistics?
           </h2>
           <p className="text-xl text-primary-50 mb-8 max-w-2xl mx-auto">
-            Start your free 14-day trial today. No credit card required.
+            Free to use it.
           </p>
           <Link to="/register">
             <Button variant="secondary" size="lg" className="bg-white text-primary-700 hover:bg-gray-100">

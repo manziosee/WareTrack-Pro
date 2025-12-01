@@ -65,6 +65,7 @@ export interface OrderItem {
   itemName: string;
   quantity: number;
   unit: string;
+  unitPrice?: number;
 }
 
 // Vehicle Types

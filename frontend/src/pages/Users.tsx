@@ -5,13 +5,27 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import AddUserForm from '../components/forms/AddUserForm';
+import EditUserForm from '../components/forms/EditUserForm';
 import { mockUsers } from '../data/mockData';
 import { formatDate } from '../utils/formatters';
 
 export default function Users() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
   const users = mockUsers;
+
+  const handleEditUser = (user: any) => {
+    setSelectedUser(user);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteUser = (user: any) => {
+    if (window.confirm(`Are you sure you want to delete ${user.name}?`)) {
+      alert(`User ${user.name} deleted successfully!`);
+    }
+  };
 
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -36,7 +50,7 @@ export default function Users() {
           <h1 className="font-heading text-3xl font-bold text-gray-900">User Management</h1>
           <p className="text-gray-600 mt-1">Manage users, roles, and permissions</p>
         </div>
-        <Button variant="primary" onClick={() => setShowAddModal(true)}>
+        <Button variant="primary" onClick={() => setShowAddModal(true)} className="hover:scale-105 transition-transform duration-200">
           <Plus className="w-5 h-5 mr-2" />
           Add User
         </Button>
@@ -55,7 +69,7 @@ export default function Users() {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
-          <Button variant="secondary">Filter</Button>
+          <Button variant="secondary" className="hover:scale-105 transition-transform duration-200">Filter</Button>
         </div>
       </Card>
 
@@ -103,10 +117,18 @@ export default function Users() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center gap-2">
-                      <button className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors">
+                      <button 
+                        onClick={() => handleEditUser(user)}
+                        className="p-1 text-primary-600 hover:bg-primary-50 hover:scale-110 rounded transition-all duration-200"
+                        title="Edit user"
+                      >
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors">
+                      <button 
+                        onClick={() => handleDeleteUser(user)}
+                        className="p-1 text-error-600 hover:bg-error-50 hover:scale-110 rounded transition-all duration-200"
+                        title="Delete user"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -121,6 +143,25 @@ export default function Users() {
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New User">
         <AddUserForm onClose={() => setShowAddModal(false)} />
       </Modal>
+
+      {selectedUser && (
+        <Modal 
+          isOpen={showEditModal} 
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedUser(null);
+          }} 
+          title="Edit User"
+        >
+          <EditUserForm 
+            user={selectedUser} 
+            onClose={() => {
+              setShowEditModal(false);
+              setSelectedUser(null);
+            }} 
+          />
+        </Modal>
+      )}
     </div>
   );
 }
