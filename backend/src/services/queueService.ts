@@ -1,21 +1,22 @@
 import { Queue, Worker, Job } from 'bullmq';
-import { redisClient } from '../config/redis';
+import { getRedisClient, isRedisConnected } from '../config/redis';
 import { db, schema } from '../db';
 import { eq } from 'drizzle-orm';
 import { EmailService } from './emailService';
 
-// Check if Redis is available
-const isRedisAvailable = true;
+// Disable Redis queues for production to avoid connection issues
+const isRedisAvailable = false;
+let queueConfig: any = null;
 
-// Queue configuration
-const queueConfig = {
-  connection: {
-    username: 'default',
-    password: 'AIdDsSCoXEfTZh6nvaC53D0F2hsdIIkO',
-    host: 'redis-13712.c73.us-east-1-2.ec2.cloud.redislabs.com',
-    port: 13712,
-  },
-};
+if (process.env.NODE_ENV !== 'production' && process.env.REDIS_URL) {
+  queueConfig = {
+    connection: {
+      url: process.env.REDIS_URL,
+      maxRetriesPerRequest: 1,
+      retryDelayOnFailover: 100,
+    },
+  };
+}
 
 // Define job types
 export interface EmailJobData {
@@ -46,11 +47,11 @@ export interface NotificationJobData {
   data?: any;
 }
 
-// Create queues
-export const emailQueue = new Queue('email', queueConfig);
-export const reportQueue = new Queue('reports', queueConfig);
-export const inventoryQueue = new Queue('inventory', queueConfig);
-export const notificationQueue = new Queue('notifications', queueConfig);
+// Queues disabled in production
+export const emailQueue: any = null;
+export const reportQueue: any = null;
+export const inventoryQueue: any = null;
+export const notificationQueue: any = null;
 
 // Email worker
 const emailWorker = new Worker('email', async (job: Job<EmailJobData>) => {
@@ -251,14 +252,20 @@ async function convertReportToFormat(data: any[], format: 'pdf' | 'excel') {
 // Queue service class
 export class QueueService {
   static async addEmailJob(data: EmailJobData, options?: any) {
-    return await emailQueue.add('send-email', data, {
-      attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 2000,
-      },
-      ...options
-    });
+    // Process email immediately without queue in production
+    try {
+      const success = await EmailService.sendEmail({
+        email: data.email,
+        title: data.title,
+        name: data.name,
+        message: data.message
+      });
+      console.log(`✅ Email ${success ? 'sent successfully' : 'failed'} to: ${data.email}`);
+      return { success, sentAt: new Date() };
+    } catch (error) {
+      console.error('❌ Email sending failed:', error);
+      throw error;
+    }
   }
 
   static async addReportJob(data: ReportJobData, options?: any) {
@@ -312,19 +319,4 @@ export class QueueService {
   }
 }
 
-// Error handling for workers
-[emailWorker, reportWorker, inventoryWorker, notificationWorker].forEach(worker => {
-  worker.on('completed', (job) => {
-    console.log(`Job ${job.id} completed successfully`);
-  });
-
-  worker.on('failed', (job, err) => {
-    console.error(`Job ${job?.id} failed:`, err);
-  });
-
-  worker.on('error', (err) => {
-    console.error('Worker error:', err);
-  });
-});
-
-console.log('✅ Queue workers initialized with Redis');
+console.log('⚠️  Running without Redis queues - processing jobs immediately');
