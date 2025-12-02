@@ -70,32 +70,27 @@ export class DispatchController {
     try {
       const { id } = req.params;
       
-      // Mock driver's current dispatch
-      const dispatch = {
-        id: '1',
-        orderId: '1',
-        orderNumber: 'ORD-001',
-        customerName: 'TechCorp Inc.',
-        deliveryAddress: '123 Business Ave, Tech City',
-        status: 'in_progress',
-        startTime: new Date().toISOString(),
-        estimatedArrival: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-        currentLocation: {
-          lat: 0,
-          lng: 0
-        },
-        route: [
-          { lat: 0, lng: 0 },
-          { lat: 1, lng: 1 }
-        ],
-        items: [
-          {
-            id: '1',
-            name: 'Laptop Dell XPS 15',
-            quantity: 5
+      const dispatch = await prisma.dispatch.findFirst({
+        where: {
+          driverId: Number(id),
+          status: {
+            in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT']
           }
-        ]
-      };
+        },
+        include: {
+          order: {
+            include: {
+              items: true
+            }
+          },
+          driver: true,
+          vehicle: true
+        }
+      });
+
+      if (!dispatch) {
+        return res.json({ success: true, data: null });
+      }
 
       res.json({ success: true, data: dispatch });
     } catch (error) {
@@ -237,6 +232,60 @@ export class DispatchController {
           error: { code: 'DISPATCH_NOT_FOUND', message: 'Dispatch not found' }
         });
       }
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
+
+  static async getAvailableOrders(req: Request, res: Response) {
+    try {
+      const orders = await prisma.deliveryOrder.findMany({
+        where: { status: 'PENDING' },
+        select: {
+          id: true,
+          orderNumber: true,
+          customerName: true,
+          deliveryAddress: true,
+          priority: true,
+          totalAmount: true,
+          createdAt: true
+        }
+      });
+      res.json({ success: true, data: orders });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
+
+  static async getAvailableDrivers(req: Request, res: Response) {
+    try {
+      const drivers = await prisma.driver.findMany({
+        where: { status: 'AVAILABLE' },
+        include: {
+          user: true
+        }
+      });
+      res.json({ success: true, data: drivers });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
+
+  static async getAvailableVehicles(req: Request, res: Response) {
+    try {
+      const vehicles = await prisma.vehicle.findMany({
+        where: { status: 'AVAILABLE' }
+      });
+      res.json({ success: true, data: vehicles });
+    } catch (error) {
       res.status(500).json({ 
         success: false,
         error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }

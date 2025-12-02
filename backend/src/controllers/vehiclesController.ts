@@ -142,7 +142,7 @@ export class VehiclesController {
   static async scheduleMaintenance(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { type, scheduledDate, notes, description, cost } = req.body;
+      const { type, scheduledDate, notes, description, cost, performedBy } = req.body;
 
       // Create maintenance record
       const maintenance = await prisma.maintenanceRecord.create({
@@ -152,7 +152,8 @@ export class VehiclesController {
           description: description || type,
           cost: cost ? Number(cost) : 0,
           notes,
-          scheduledDate: new Date(scheduledDate)
+          scheduledDate: new Date(scheduledDate),
+          performedBy: performedBy || 'System'
         }
       });
 
@@ -170,6 +171,107 @@ export class VehiclesController {
         message: 'Maintenance scheduled successfully',
         data: maintenance
       });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
+
+  static async completeMaintenance(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { maintenanceId, notes, actualCost } = req.body;
+
+      // Update maintenance record
+      await prisma.maintenanceRecord.update({
+        where: { id: Number(maintenanceId) },
+        data: {
+          completedDate: new Date(),
+          cost: actualCost ? Number(actualCost) : undefined,
+          notes: notes
+        }
+      });
+
+      // Update vehicle status back to available
+      await prisma.vehicle.update({
+        where: { id: Number(id) },
+        data: { 
+          status: 'AVAILABLE',
+          lastMaintenance: new Date()
+        }
+      });
+
+      res.json({ 
+        success: true,
+        message: 'Maintenance completed successfully'
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
+
+  static async getVehicleTracking(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      
+      const vehicle = await prisma.vehicle.findUnique({
+        where: { id: Number(id) },
+        include: {
+          orders: {
+            where: {
+              status: {
+                in: ['DISPATCHED', 'IN_TRANSIT']
+              }
+            },
+            include: {
+              driver: true
+            }
+          },
+          dispatches: {
+            where: {
+              status: {
+                in: ['DISPATCHED', 'IN_TRANSIT']
+              }
+            },
+            include: {
+              order: true,
+              driver: true
+            }
+          }
+        }
+      });
+
+      if (!vehicle) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'VEHICLE_NOT_FOUND', message: 'Vehicle not found' }
+        });
+      }
+
+      // Mock GPS tracking data
+      const trackingData = {
+        vehicleId: vehicle.id,
+        plateNumber: vehicle.plateNumber,
+        status: vehicle.status,
+        currentLocation: {
+          lat: -1.9441 + (Math.random() - 0.5) * 0.1, // Kigali area
+          lng: 30.0619 + (Math.random() - 0.5) * 0.1,
+          address: 'Kigali, Rwanda',
+          timestamp: new Date()
+        },
+        speed: vehicle.status === 'IN_USE' ? Math.floor(Math.random() * 60) + 20 : 0,
+        fuel: Math.floor(Math.random() * 100),
+        mileage: Math.floor(Math.random() * 100000) + 50000,
+        activeOrders: vehicle.orders,
+        activeDispatches: vehicle.dispatches
+      };
+
+      res.json({ success: true, data: trackingData });
     } catch (error) {
       res.status(500).json({ 
         success: false,

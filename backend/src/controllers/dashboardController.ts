@@ -44,16 +44,43 @@ export class DashboardController {
 
       const lowStockCount = Array.isArray(lowStockItems) ? lowStockItems[0]?.count || 0 : 0;
 
+      // Get today's deliveries
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const deliveriesToday = await prisma.deliveryOrder.count({
+        where: {
+          status: 'DELIVERED',
+          deliveredAt: {
+            gte: today,
+            lt: tomorrow
+          }
+        }
+      });
+
+      // Get total inventory value
+      const inventoryItems = await prisma.inventoryItem.findMany({
+        select: { quantity: true, unitPrice: true }
+      });
+      const totalInventoryValue = inventoryItems.reduce((sum, item) => 
+        sum + (item.quantity * Number(item.unitPrice)), 0
+      );
+
       const summary = {
         totalOrders,
         completedOrders,
         pendingOrders,
         totalRevenue,
+        deliveriesToday,
         activeVehicles,
         inMaintenance,
         lowStockItems: Number(lowStockCount),
         totalInventoryItems,
-        totalDrivers
+        totalInventoryValue,
+        totalDrivers,
+        currency: 'RWF'
       };
 
       await cache.cacheDashboardStats(summary);
@@ -71,16 +98,75 @@ export class DashboardController {
 
   static async getActivity(req: Request, res: Response) {
     try {
-      // Mock recent activities
-      const activities = [
-        { id: 1, type: 'order_created', message: 'New order ORD-000001 created', timestamp: new Date(), user: 'Admin' },
-        { id: 2, type: 'inventory_updated', message: 'Laptop Dell XPS 15 stock updated', timestamp: new Date(), user: 'Warehouse Staff' },
-        { id: 3, type: 'order_delivered', message: 'Order ORD-000002 delivered successfully', timestamp: new Date(), user: 'Driver' }
-      ];
+      // Get real recent activities from database
+      const [recentOrders, recentInventoryUpdates, deliveredOrders] = await Promise.all([
+        prisma.deliveryOrder.findMany({
+          take: 3,
+          orderBy: { createdAt: 'desc' },
+          include: { createdByUser: true }
+        }),
+        prisma.inventoryHistory.findMany({
+          take: 3,
+          orderBy: { performedAt: 'desc' },
+          include: { 
+            item: true,
+            performedByUser: true
+          }
+        }),
+        prisma.deliveryOrder.findMany({
+          where: { status: 'DELIVERED' },
+          take: 3,
+          orderBy: { deliveredAt: 'desc' },
+          include: { driver: { include: { user: true } } }
+        })
+      ]);
+
+      const activities = [];
+
+      // Add order activities
+      recentOrders.forEach(order => {
+        activities.push({
+          id: `order_${order.id}`,
+          type: 'order_created',
+          message: `New order ${order.orderNumber} from ${order.customerName}`,
+          timestamp: order.createdAt,
+          user: order.createdByUser?.name || 'System'
+        });
+      });
+
+      // Add inventory activities
+      recentInventoryUpdates.forEach(update => {
+        activities.push({
+          id: `inventory_${update.id}`,
+          type: 'inventory_updated',
+          message: `${update.item.name} stock ${update.action} (${update.quantity} units)`,
+          timestamp: update.performedAt,
+          user: update.performedByUser?.name || 'System'
+        });
+      });
+
+      // Add delivery activities
+      deliveredOrders.forEach(order => {
+        activities.push({
+          id: `delivery_${order.id}`,
+          type: 'order_delivered',
+          message: `Order ${order.orderNumber} delivered successfully`,
+          timestamp: order.deliveredAt || order.updatedAt,
+          user: order.driver?.name || 'Driver'
+        });
+      });
+
+      // Sort by timestamp and take latest 10
+      const sortedActivities = activities
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 10);
       
-      res.json(activities);
+      res.json({ success: true, data: sortedActivities });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -139,9 +225,11 @@ export class DashboardController {
       const alerts = (lowStockItems as any[]).map((item: any) => ({
         id: item.id,
         type: 'low_stock',
-        message: `Low stock alert: ${item.name} (${item.quantity} remaining)`,
+        title: 'Low Stock Alert',
+        message: `${item.name} is running low (${item.quantity} units left)`,
         severity: 'warning',
-        timestamp: new Date()
+        timestamp: new Date(),
+        timeAgo: getTimeAgo(item.last_updated || new Date())
       }));
 
       res.json({ success: true, data: alerts });
@@ -155,4 +243,102 @@ export class DashboardController {
       });
     }
   }
+
+  static async getNotifications(req: Request, res: Response) {
+    try {
+      const [lowStockItems, recentOrders, deliveredOrders] = await Promise.all([
+        prisma.$queryRaw`SELECT * FROM inventory_items WHERE quantity < min_quantity ORDER BY last_updated DESC LIMIT 5`,
+        prisma.deliveryOrder.findMany({
+          where: { 
+            createdAt: {
+              gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 5
+        }),
+        prisma.deliveryOrder.findMany({
+          where: { 
+            status: 'DELIVERED',
+            deliveredAt: {
+              gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
+            }
+          },
+          orderBy: { deliveredAt: 'desc' },
+          take: 5
+        })
+      ]);
+
+      const notifications = [];
+
+      // Low stock notifications
+      (lowStockItems as any[]).forEach(item => {
+        notifications.push({
+          id: `low_stock_${item.id}`,
+          type: 'low_stock',
+          title: 'Low Stock Alert',
+          message: `${item.name} is running low (${item.quantity} units left)`,
+          timestamp: item.last_updated || new Date(),
+          timeAgo: getTimeAgo(item.last_updated || new Date()),
+          severity: 'warning'
+        });
+      });
+
+      // New order notifications
+      recentOrders.forEach(order => {
+        notifications.push({
+          id: `new_order_${order.id}`,
+          type: 'new_order',
+          title: 'New Order',
+          message: `New order ${order.orderNumber} from ${order.customerName}`,
+          timestamp: order.createdAt,
+          timeAgo: getTimeAgo(order.createdAt),
+          severity: 'info'
+        });
+      });
+
+      // Delivery notifications
+      deliveredOrders.forEach(order => {
+        notifications.push({
+          id: `delivered_${order.id}`,
+          type: 'order_delivered',
+          title: 'Order Delivered',
+          message: `Order ${order.orderNumber} has been delivered successfully`,
+          timestamp: order.deliveredAt || order.updatedAt,
+          timeAgo: getTimeAgo(order.deliveredAt || order.updatedAt),
+          severity: 'success'
+        });
+      });
+
+      // Sort by timestamp and take latest 10
+      const sortedNotifications = notifications
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 10);
+
+      res.json({ success: true, data: sortedNotifications });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Server error'
+        }
+      });
+    }
+  }
+}
+
+// Helper function to calculate time ago
+function getTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffInMs = now.getTime() - new Date(date).getTime();
+  const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+  const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+  if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+  return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+}
 }

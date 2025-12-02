@@ -9,5 +9,6 @@ router.post('/login', AuthController.login);
 router.post('/refresh', AuthController.refresh);
 router.post('/logout', auth, AuthController.logout);
 router.get('/me', auth, AuthController.getProfile);
+router.get('/dashboard-url', auth, AuthController.getDashboardUrl);
 
 export default router;

@@ -12,5 +12,7 @@ router.post('/', auth, VehiclesController.createVehicle);
 router.post('/:id/maintenance', auth, VehiclesController.scheduleMaintenance);
 router.put('/:id', auth, VehiclesController.updateVehicle);
 router.delete('/:id', auth, VehiclesController.deleteVehicle);
+router.post('/:id/maintenance/complete', auth, VehiclesController.completeMaintenance);
+router.get('/:id/tracking', auth, VehiclesController.getVehicleTracking);
 
 export default router;

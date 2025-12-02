@@ -5,27 +5,48 @@ import { QueueService } from '../services/queueService';
 export class ReportsController {
   static async getSalesReport(req: Request, res: Response) {
     try {
-      const { startDate, endDate, format = 'json' } = req.query;
+      const { startDate, endDate, format = 'json', customerId, paymentMethod } = req.query;
+      
+      const whereClause: any = {
+        status: 'DELIVERED'
+      };
+
+      if (startDate && endDate) {
+        whereClause.deliveredAt = {
+          gte: new Date(startDate as string),
+          lte: new Date(endDate as string)
+        };
+      }
+
+      if (customerId) {
+        whereClause.customerId = Number(customerId);
+      }
+
+      if (paymentMethod) {
+        whereClause.paymentMethod = paymentMethod;
+      }
       
       const orders = await prisma.deliveryOrder.findMany({
-        where: {
-          status: 'DELIVERED',
-          ...(startDate && endDate && {
-            deliveredAt: {
-              gte: new Date(startDate as string),
-              lte: new Date(endDate as string)
-            }
-          })
-        }
+        where: whereClause,
+        include: {
+          items: true,
+          driver: true
+        },
+        orderBy: { deliveredAt: 'desc' }
       });
 
       const salesData = orders.map(order => ({
         orderId: order.id,
         orderNumber: order.orderNumber,
         customerName: order.customerName,
+        deliveryAddress: order.deliveryAddress,
         totalAmount: Number(order.totalAmount),
+        formattedAmount: `RWF ${Number(order.totalAmount).toLocaleString()}`,
+        currency: 'RWF',
         deliveredAt: order.deliveredAt,
-        paymentMethod: order.paymentMethod
+        paymentMethod: order.paymentMethod,
+        driverName: order.driver?.name || 'N/A',
+        itemCount: order.items.length
       }));
 
       const totalSales = salesData.reduce((sum, order) => sum + order.totalAmount, 0);
@@ -34,7 +55,12 @@ export class ReportsController {
         summary: {
           totalOrders: salesData.length,
           totalSales,
-          averageOrderValue: totalSales / salesData.length || 0
+          averageOrderValue: totalSales / salesData.length || 0,
+          currency: 'RWF',
+          dateRange: {
+            startDate: startDate || null,
+            endDate: endDate || null
+          }
         },
         data: salesData
       };
@@ -82,6 +108,9 @@ export class ReportsController {
         minQuantity: item.minQuantity,
         unitPrice: Number(item.unitPrice),
         totalValue: item.quantity * Number(item.unitPrice),
+        formattedValue: `RWF ${(item.quantity * Number(item.unitPrice)).toLocaleString()}`,
+        formattedUnitPrice: `RWF ${Number(item.unitPrice).toLocaleString()}`,
+        currency: 'RWF',
         status: item.status,
         isLowStock: item.quantity < item.minQuantity
       }));
