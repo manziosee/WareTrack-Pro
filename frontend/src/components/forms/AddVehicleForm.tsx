@@ -1,27 +1,48 @@
 import { useState } from 'react';
+import { vehiclesService } from '../../services/vehiclesService';
+import toast from 'react-hot-toast';
 
 interface AddVehicleFormProps {
   onClose: () => void;
+  onSave?: () => void;
 }
 
-const AddVehicleForm = ({ onClose }: AddVehicleFormProps) => {
+const AddVehicleForm = ({ onClose, onSave }: AddVehicleFormProps) => {
   const [formData, setFormData] = useState({
     plateNumber: '',
-    type: 'truck',
+    type: 'Truck',
     capacity: '',
-    model: '',
+    vehicleModel: '',
     year: '',
-    fuelType: 'diesel',
-    status: 'available',
-    insuranceExpiry: '',
-    lastMaintenance: '',
-    mileage: ''
+    fuelType: 'Diesel',
+    status: 'AVAILABLE'
   });
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Vehicle ${formData.plateNumber} added successfully!`);
-    onClose();
+    setLoading(true);
+    
+    try {
+      await vehiclesService.createVehicle({
+        plateNumber: formData.plateNumber,
+        type: formData.type,
+        capacity: Number(formData.capacity),
+        vehicleModel: formData.vehicleModel,
+        year: Number(formData.year),
+        fuelType: formData.fuelType,
+        status: formData.status
+      });
+      
+      toast.success(`Vehicle ${formData.plateNumber} added successfully!`);
+      if (onSave) onSave();
+      onClose();
+    } catch (error: any) {
+      console.error('Failed to create vehicle:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to add vehicle');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -45,10 +66,10 @@ const AddVehicleForm = ({ onClose }: AddVehicleFormProps) => {
             onChange={(e) => setFormData({ ...formData, type: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            <option value="truck">Truck</option>
-            <option value="van">Van</option>
-            <option value="motorcycle">Motorcycle</option>
-            <option value="car">Car</option>
+            <option value="Truck">Truck</option>
+            <option value="Van">Van</option>
+            <option value="Motorcycle">Motorcycle</option>
+            <option value="Car">Car</option>
           </select>
         </div>
       </div>
@@ -59,8 +80,8 @@ const AddVehicleForm = ({ onClose }: AddVehicleFormProps) => {
           <input
             type="text"
             required
-            value={formData.model}
-            onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+            value={formData.vehicleModel}
+            onChange={(e) => setFormData({ ...formData, vehicleModel: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
             placeholder="e.g., Ford Transit"
           />
@@ -79,7 +100,7 @@ const AddVehicleForm = ({ onClose }: AddVehicleFormProps) => {
         </div>
       </div>
       
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Capacity (kg)</label>
           <input
@@ -98,65 +119,21 @@ const AddVehicleForm = ({ onClose }: AddVehicleFormProps) => {
             onChange={(e) => setFormData({ ...formData, fuelType: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            <option value="diesel">Diesel</option>
-            <option value="gasoline">Gasoline</option>
-            <option value="electric">Electric</option>
-            <option value="hybrid">Hybrid</option>
+            <option value="Diesel">Diesel</option>
+            <option value="Gasoline">Gasoline</option>
+            <option value="Electric">Electric</option>
+            <option value="Hybrid">Hybrid</option>
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-          <select
-            value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="available">Available</option>
-            <option value="in_use">In Use</option>
-            <option value="maintenance">Maintenance</option>
-          </select>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiry</label>
-          <input
-            type="date"
-            required
-            value={formData.insuranceExpiry}
-            onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Last Maintenance</label>
-          <input
-            type="date"
-            value={formData.lastMaintenance}
-            onChange={(e) => setFormData({ ...formData, lastMaintenance: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-      </div>
-      
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Current Mileage</label>
-        <input
-          type="number"
-          value={formData.mileage}
-          onChange={(e) => setFormData({ ...formData, mileage: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="Current vehicle mileage"
-        />
       </div>
       
       <div className="flex gap-3 pt-4">
         <button
           type="submit"
-          className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+          disabled={loading}
+          className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Add Vehicle
+          {loading ? 'Adding...' : 'Add Vehicle'}
         </button>
         <button
           type="button"

@@ -5,6 +5,7 @@ import { auth } from '../middleware/auth';
 const router = Router();
 
 router.get('/', auth, DispatchController.getDispatches);
+router.get('/stats', auth, DispatchController.getStats);
 router.get('/active', auth, DispatchController.getActiveDispatches);
 router.get('/orders', auth, DispatchController.getAvailableOrders);
 router.get('/drivers', auth, DispatchController.getAvailableDrivers);

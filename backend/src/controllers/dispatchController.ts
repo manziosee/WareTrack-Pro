@@ -292,4 +292,31 @@ export class DispatchController {
       });
     }
   }
+
+  static async getStats(req: Request, res: Response) {
+    try {
+      const [totalDispatches, completedDispatches, pendingDispatches, inTransitDispatches] = await Promise.all([
+        prisma.dispatch.count(),
+        prisma.dispatch.count({ where: { status: 'DELIVERED' } }),
+        prisma.dispatch.count({ where: { status: 'PENDING' } }),
+        prisma.dispatch.count({ where: { status: 'IN_TRANSIT' } })
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          totalDispatches,
+          completedDispatches,
+          pendingDispatches,
+          inTransitDispatches,
+          currency: 'RWF'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
 }

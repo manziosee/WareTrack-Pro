@@ -2,9 +2,10 @@ import { useState } from 'react';
 
 interface AddDriverFormProps {
   onClose: () => void;
+  onSave?: () => void;
 }
 
-const AddDriverForm = ({ onClose }: AddDriverFormProps) => {
+const AddDriverForm = ({ onClose, onSave }: AddDriverFormProps) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -22,6 +23,7 @@ const AddDriverForm = ({ onClose }: AddDriverFormProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     alert(`Driver ${formData.name} added successfully!`);
+    if (onSave) onSave();
     onClose();
   };
 

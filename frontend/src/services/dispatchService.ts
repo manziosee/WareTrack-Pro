@@ -50,5 +50,25 @@ export const dispatchService = {
   async updateDispatchStatus(id: number, status: string) {
     const response = await api.post(`/dispatch/${id}/status`, { status });
     return response.data;
+  },
+
+  async getStats() {
+    const response = await api.get('/dispatch/stats');
+    return response.data;
+  },
+
+  async getAvailableOrders() {
+    const response = await api.get('/dispatch/orders');
+    return response.data;
+  },
+
+  async getAvailableDrivers() {
+    const response = await api.get('/dispatch/drivers');
+    return response.data;
+  },
+
+  async getAvailableVehicles() {
+    const response = await api.get('/dispatch/vehicles');
+    return response.data;
   }
 };

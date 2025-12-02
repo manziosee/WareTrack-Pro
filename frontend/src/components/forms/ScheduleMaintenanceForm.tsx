@@ -7,9 +7,10 @@ interface ScheduleMaintenanceFormProps {
     type: string;
   };
   onClose: () => void;
+  onSave?: () => void;
 }
 
-const ScheduleMaintenanceForm = ({ vehicle, onClose }: ScheduleMaintenanceFormProps) => {
+const ScheduleMaintenanceForm = ({ vehicle, onClose, onSave }: ScheduleMaintenanceFormProps) => {
   const [formData, setFormData] = useState({
     maintenanceType: 'routine',
     scheduledDate: '',
@@ -23,6 +24,7 @@ const ScheduleMaintenanceForm = ({ vehicle, onClose }: ScheduleMaintenanceFormPr
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     alert(`Maintenance scheduled for vehicle ${vehicle.plateNumber}!`);
+    if (onSave) onSave();
     onClose();
   };
 

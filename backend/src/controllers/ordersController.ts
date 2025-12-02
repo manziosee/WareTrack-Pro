@@ -126,49 +126,133 @@ export class OrdersController {
     try {
       const { customerName, customerEmail, customerPhone, deliveryAddress, items, notes, priority = 'MEDIUM' } = req.body;
 
+      console.log('Creating order with items:', items);
+
+      // Validate items and check inventory availability
+      if (!items || items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_ITEMS', message: 'Order must contain at least one item' }
+        });
+      }
+
+      // Check inventory availability for all items
+      for (const item of items) {
+        const inventoryItem = await prisma.inventoryItem.findUnique({
+          where: { id: Number(item.itemId) }
+        });
+
+        if (!inventoryItem) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'ITEM_NOT_FOUND', message: `Item with ID ${item.itemId} not found` }
+          });
+        }
+
+        if (inventoryItem.quantity < item.quantity) {
+          return res.status(400).json({
+            success: false,
+            error: { 
+              code: 'INSUFFICIENT_STOCK', 
+              message: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.quantity}, Requested: ${item.quantity}` 
+            }
+          });
+        }
+      }
+
       // Generate order number
       const orderCount = await prisma.deliveryOrder.count();
-      const orderNumber = `ORD-${String(orderCount + 1).padStart(3, '0')}`;
+      const orderNumber = `ORD-${String(orderCount + 1).padStart(6, '0')}`;
 
       // Calculate total amount from items
       let totalAmount = 0;
-      if (items && items.length > 0) {
-        totalAmount = items.reduce((sum: number, item: any) => {
-          return sum + (item.unitPrice * item.quantity);
-        }, 0);
+      const orderItems = [];
+
+      for (const item of items) {
+        const inventoryItem = await prisma.inventoryItem.findUnique({
+          where: { id: Number(item.itemId) }
+        });
+
+        const itemTotal = Number(inventoryItem!.unitPrice) * item.quantity;
+        totalAmount += itemTotal;
+
+        orderItems.push({
+          itemId: Number(item.itemId),
+          itemName: inventoryItem!.name,
+          quantity: item.quantity,
+          unit: inventoryItem!.unit,
+          unitPrice: Number(inventoryItem!.unitPrice),
+          totalPrice: itemTotal
+        });
       }
 
-      const order = await prisma.deliveryOrder.create({
-        data: {
-          orderNumber,
-          customerId: 1,
-          customerName,
-          deliveryAddress,
-          contactNumber: customerPhone,
-          priority: priority as any,
-          status: 'PENDING',
-          orderType: 'delivery',
-          paymentMethod: 'cash',
-          totalAmount,
-          deliveryInstructions: notes,
-          createdBy: Number(req.user?.userId) || 1,
-          items: {
-            create: items?.map((item: any) => ({
-              itemId: item.itemId,
-              itemName: item.itemName,
-              quantity: item.quantity,
-              unit: item.unit || 'pcs',
-              unitPrice: item.unitPrice,
-              totalPrice: item.unitPrice * item.quantity
-            })) || []
+      // Create order with transaction to ensure data consistency
+      const order = await prisma.$transaction(async (tx) => {
+        // Create the order
+        const newOrder = await tx.deliveryOrder.create({
+          data: {
+            orderNumber,
+            customerId: 1,
+            customerName,
+            deliveryAddress,
+            contactNumber: customerPhone || '',
+            priority: priority as any,
+            status: 'PENDING',
+            orderType: 'delivery',
+            paymentMethod: 'cash',
+            totalAmount,
+            deliveryInstructions: notes,
+            createdBy: Number(req.user?.userId) || 1,
+            items: {
+              create: orderItems
+            }
+          },
+          include: {
+            items: {
+              include: {
+                item: true
+              }
+            }
           }
-        },
-        include: {
-          items: true
+        });
+
+        // Reduce inventory quantities and create history records
+        for (const item of items) {
+          const inventoryItem = await tx.inventoryItem.findUnique({
+            where: { id: Number(item.itemId) }
+          });
+
+          const newQuantity = inventoryItem!.quantity - item.quantity;
+
+          // Update inventory quantity
+          await tx.inventoryItem.update({
+            where: { id: Number(item.itemId) },
+            data: { 
+              quantity: newQuantity,
+              lastUpdated: new Date()
+            }
+          });
+
+          // Create inventory history record
+          await tx.inventoryHistory.create({
+            data: {
+              itemId: Number(item.itemId),
+              action: 'stock_out',
+              quantity: item.quantity,
+              previousQuantity: inventoryItem!.quantity,
+              newQuantity: newQuantity,
+              orderId: newOrder.id,
+              notes: `Stock reduced for order ${orderNumber}`,
+              performedBy: Number(req.user?.userId) || 1
+            }
+          });
         }
+
+        return newOrder;
       });
 
       await cache.invalidateOrderCache();
+      await cache.invalidateInventoryCache();
       
       res.status(201).json({
         success: true,
@@ -179,13 +263,15 @@ export class OrdersController {
           totalAmount: Number(order.totalAmount),
           formattedAmount: `RWF ${Number(order.totalAmount).toLocaleString()}`,
           currency: 'RWF',
-          orderDate: order.createdAt
+          orderDate: order.createdAt,
+          items: order.items
         }
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Order creation error:', error);
       res.status(500).json({ 
         success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+        error: { code: 'INTERNAL_SERVER_ERROR', message: error.message || 'Server error' }
       });
     }
   }

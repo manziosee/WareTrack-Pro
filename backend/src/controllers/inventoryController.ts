@@ -84,7 +84,7 @@ export class InventoryController {
             name: item.category,
             count: 1,
             value: item.quantity * Number(item.unitPrice),
-          currency: 'RWF'
+            currency: 'RWF'
           });
         }
         return acc;
@@ -95,7 +95,7 @@ export class InventoryController {
         data: {
           totalItems,
           totalValue,
-        currency: 'RWF',
+          currency: 'RWF',
           outOfStock,
           lowStock,
           categories
