@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "lib": ["ES2020"],
+    "lib": ["ES2020", "DOM"],
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": false,
@@ -21,32 +21,16 @@
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "noEmitOnError": false
+    "noEmitOnError": false,
+    "types": ["node"]
   },
   "include": [
-    "src/server.ts",
-    "src/config/**/*",
-    "src/db/**/*",
-    "src/middleware/**/*",
-    "src/routes/**/*",
-    "src/services/**/*",
-    "src/utils/**/*",
-    "src/controllers/authController.ts",
-    "src/controllers/dashboardController.ts",
-    "src/controllers/dispatchController.ts",
-    "src/controllers/driversController.ts",
-    "src/controllers/inventoryController.ts",
-    "src/controllers/ordersController.ts",
-    "src/controllers/reportsController.ts",
-    "src/controllers/usersController.ts",
-    "src/controllers/vehiclesController.ts"
+    "src/**/*",
+    "prisma/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "**/*.test.ts",
-    "src/controllers/driverController.ts",
-    "src/controllers/orderController.ts",
-    "src/controllers/reportController.ts"
+    "**/*.test.ts"
   ]
 }
