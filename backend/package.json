@@ -11,6 +11,8 @@
     "seed": "ts-node src/scripts/seed.ts",
     "db:generate": "drizzle-kit generate:pg",
     "db:migrate": "ts-node src/scripts/migrate.ts",
+    "db:migrate:fix": "ts-node src/scripts/run-migration.ts",
+    "db:clean": "ts-node src/scripts/clean-db.ts",
     "db:studio": "drizzle-kit studio",
     "test": "jest",
     "lint": "eslint src/**/*.ts",

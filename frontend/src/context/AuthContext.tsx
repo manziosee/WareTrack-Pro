@@ -1,6 +1,7 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { UserRole } from '@/types';
+import { authService } from '../services/authService';
 
 interface AuthUser {
   id: number;
@@ -12,47 +13,58 @@ interface AuthUser {
 
 interface AuthContextType {
   user: AuthUser | null;
-  login: (email: string, password: string) => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    // Check localStorage for saved user
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = (email: string, _password: string) => {
-    // Mock login - in production, this would call an API
-    let mockUser: AuthUser;
-    
-    if (email === 'admin@waretrack.com') {
-      mockUser = { id: 1, name: 'John Admin', email, role: 'admin', phone: '+250 788 123 456' };
-    } else if (email === 'warehouse@waretrack.com') {
-      mockUser = { id: 2, name: 'Sarah Wilson', email, role: 'warehouse_staff', phone: '+250 788 234 567' };
-    } else if (email === 'dispatch@waretrack.com') {
-      mockUser = { id: 3, name: 'Mike Johnson', email, role: 'dispatch_officer', phone: '+250 788 345 678' };
-    } else if (email === 'driver@waretrack.com') {
-      mockUser = { id: 4, name: 'David Brown', email, role: 'driver', phone: '+250 788 456 789' };
-    } else {
-      mockUser = { id: 1, name: 'John Admin', email, role: 'admin', phone: '+250 788 123 456' };
+  useEffect(() => {
+    // Check if user is already logged in
+    const initAuth = async () => {
+      const token = authService.getToken();
+      if (token) {
+        try {
+          const userData = await authService.getProfile();
+          setUser(userData);
+        } catch (error) {
+          // Token is invalid, clear it
+          authService.logout();
+        }
+      }
+      setLoading(false);
+    };
+
+    initAuth();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    try {
+      const { user: userData } = await authService.login({ email, password });
+      setUser(userData);
+    } catch (error) {
+      throw error;
     }
-
-    setUser(mockUser);
-    localStorage.setItem('user', JSON.stringify(mockUser));
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setUser(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, loading }}>
       {children}
     </AuthContext.Provider>
   );

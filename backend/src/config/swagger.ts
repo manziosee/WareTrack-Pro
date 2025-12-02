@@ -16,12 +16,12 @@ const options = {
     servers: [
       {
         url: process.env.NODE_ENV === 'production' 
-          ? `${process.env.BACKEND_URL || 'https://waretrack-pro-backend.onrender.com'}/api`
-          : 'http://localhost:5000/api',
+          ? `${process.env.BACKEND_URL || 'https://waretrack-pro-backend.onrender.com'}`
+          : 'http://localhost:5000',
         description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server'
       },
       {
-        url: 'http://localhost:5000/api',
+        url: 'http://localhost:5000',
         description: 'Local development server'
       }
     ],
@@ -169,6 +169,97 @@ const options = {
                 page: { type: 'number' },
                 limit: { type: 'number' },
                 totalPages: { type: 'number' }
+              }
+            }
+          }
+        },
+        RegisterRequest: {
+          type: 'object',
+          required: ['name', 'email', 'password'],
+          properties: {
+            name: {
+              type: 'string',
+              example: 'John Doe'
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'john@example.com'
+            },
+            password: {
+              type: 'string',
+              minLength: 6,
+              example: 'password123'
+            },
+            phone: {
+              type: 'string',
+              example: '+1234567890'
+            }
+          }
+        },
+        LoginRequest: {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'john@example.com'
+            },
+            password: {
+              type: 'string',
+              example: 'password123'
+            }
+          }
+        },
+        AuthResponse: {
+          type: 'object',
+          properties: {
+            success: {
+              type: 'boolean',
+              example: true
+            },
+            data: {
+              type: 'object',
+              properties: {
+                user: {
+                  $ref: '#/components/schemas/User'
+                },
+                tokens: {
+                  type: 'object',
+                  properties: {
+                    access: {
+                      type: 'string',
+                      example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+                    },
+                    refresh: {
+                      type: 'string',
+                      example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        Error: {
+          type: 'object',
+          properties: {
+            success: {
+              type: 'boolean',
+              example: false
+            },
+            error: {
+              type: 'object',
+              properties: {
+                code: {
+                  type: 'string',
+                  example: 'VALIDATION_ERROR'
+                },
+                message: {
+                  type: 'string',
+                  example: 'Validation failed'
+                }
               }
             }
           }

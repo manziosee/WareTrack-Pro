@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { sql } from 'drizzle-orm';
 // Redis disabled in production
 // import { connectRedis } from './config/redis';
 import { specs, swaggerUi } from './config/swagger';
@@ -174,10 +175,29 @@ process.on('SIGINT', () => {
 // Redis completely disabled to prevent connection issues
 console.log('⚠️  Redis disabled - running without caching and queues');
 
+// Test database connection before starting server
+async function testDatabaseConnection() {
+  try {
+    const { db } = await import('./db');
+    await db.execute(sql`SELECT 1`);
+    console.log('✅ Database connection test successful');
+    return true;
+  } catch (error) {
+    console.error('❌ Database connection test failed:', error);
+    return false;
+  }
+}
+
 // Start inventory alerts scheduler
 InventoryAlerts.startScheduledCheck();
 
-Promise.resolve().then(() => {
+// Start server with database connection test
+testDatabaseConnection().then((dbConnected) => {
+  if (!dbConnected && process.env.NODE_ENV === 'production') {
+    console.error('❌ Cannot start server without database connection in production');
+    process.exit(1);
+  }
+  
   const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
