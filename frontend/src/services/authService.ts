@@ -24,12 +24,12 @@ export interface User {
 export const authService = {
   async login(credentials: LoginCredentials) {
     const response = await api.post('/auth/login', credentials);
-    const { token, user } = response.data.data;
+    const { tokens, user } = response.data.data;
     
-    localStorage.setItem('token', token);
+    localStorage.setItem('token', tokens.access);
     localStorage.setItem('user', JSON.stringify(user));
     
-    return { token, user };
+    return { token: tokens.access, user };
   },
 
   async register(data: RegisterData) {
