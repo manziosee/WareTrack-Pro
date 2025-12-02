@@ -67,10 +67,16 @@ app.use(globalLimiter);
 
 // CORS
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://ware-track-pro.vercel.app', process.env.FRONTEND_URL, 'http://localhost:3001', 'http://localhost:3000'].filter(Boolean)
-    : [process.env.FRONTEND_URL || 'http://localhost:3001', 'http://localhost:3000'],
-  credentials: true
+  origin: [
+    'https://ware-track-pro.vercel.app',
+    'https://waretrack-pro.onrender.com',
+    'http://localhost:3001',
+    'http://localhost:3000',
+    'http://localhost:5000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Body parsing with optimization

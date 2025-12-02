@@ -16,7 +16,7 @@ const options = {
     servers: [
       {
         url: process.env.NODE_ENV === 'production' 
-          ? `${process.env.BACKEND_URL || 'https://waretrack-pro-backend.onrender.com'}`
+          ? 'https://waretrack-pro.onrender.com'
           : 'http://localhost:5000',
         description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server'
       },
