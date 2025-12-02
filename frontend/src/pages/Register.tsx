@@ -26,12 +26,17 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await authService.register(formData);
-      toast.success('Registration successful! Please login.');
-      navigate('/login');
+      const response = await authService.register(formData);
+      if (response.success) {
+        toast.success('Registration successful! You can now login.');
+        navigate('/login');
+      } else {
+        toast.error('Registration failed. Please try again.');
+      }
     } catch (error: any) {
       console.error('Registration failed:', error);
-      toast.error(error.response?.data?.error?.message || 'Registration failed');
+      const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || 'Registration failed';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

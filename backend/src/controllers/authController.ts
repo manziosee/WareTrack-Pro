@@ -13,6 +13,21 @@ export class AuthController {
     try {
       const { name, email, password, phone, role } = req.body;
 
+      // Check if this is the first user registration
+      const allUsers = await db.select().from(schema.users);
+      const isFirstUser = allUsers.length === 0;
+      
+      // If not first user, registration is disabled (only admins can create users)
+      if (!isFirstUser) {
+        return res.status(403).json({ 
+          success: false,
+          error: {
+            code: 'REGISTRATION_DISABLED',
+            message: 'Public registration is disabled. Please contact an administrator to create your account.'
+          }
+        });
+      }
+
       // Validate required fields
       if (!name || !email || !password) {
         return res.status(400).json({ 
@@ -24,13 +39,36 @@ export class AuthController {
         });
       }
 
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid email format'
+          }
+        });
+      }
+
+      // Validate password length
+      if (password.length < 6) {
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Password must be at least 6 characters long'
+          }
+        });
+      }
+
       const existingUser = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
       if (existingUser.length > 0) {
         return res.status(400).json({ 
           success: false,
           error: {
             code: 'USER_EXISTS',
-            message: 'User already exists'
+            message: 'User with this email already exists'
           }
         });
       }
@@ -40,11 +78,9 @@ export class AuthController {
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      // Check if this is the first user (make them admin)
-      const allUsers = await db.select().from(schema.users);
-      const isFirstUser = allUsers.length === 0;
-      const userRole = isFirstUser ? 'admin' : (role || 'warehouse_staff');
-      const userStatus = isFirstUser ? 'active' : 'inactive';
+      // First user is always admin
+      const userRole = 'admin';
+      const userStatus = 'active';
 
       const hashedPassword = await bcrypt.hash(password, 12);
       const [user] = await db.insert(schema.users).values({
@@ -73,7 +109,7 @@ export class AuthController {
           email: user.email,
           title: 'Welcome to WareTrack-Pro',
           name: user.name,
-          message: 'Welcome to WareTrack-Pro! Your account has been successfully created.',
+          message: `Welcome to WareTrack-Pro, ${user.name}! Your account has been successfully created.`,
           template: 'welcome'
         });
       } catch (emailError) {
@@ -91,13 +127,25 @@ export class AuthController {
           }
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Registration error:', error);
+      
+      // Handle specific database errors
+      if (error.code === '23505') { // Unique constraint violation
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'USER_EXISTS',
+            message: 'User with this email already exists'
+          }
+        });
+      }
+      
       res.status(500).json({ 
         success: false,
         error: {
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Server error'
+          message: 'Registration failed. Please try again.'
         }
       });
     }
@@ -151,8 +199,8 @@ export class AuthController {
         await QueueService.addEmailJob({
           email: user.email,
           title: 'Welcome to WareTrack-Pro 🎉',
-          name: user.firstName || user.name?.split(' ')[0] || 'User',
-          message: 'Welcome to WareTrack-Pro! You have successfully logged in for the first time.',
+          name: user.name || user.firstName || 'User',
+          message: `Welcome to WareTrack-Pro, ${user.name || user.firstName || 'User'}! You have successfully logged in for the first time.`,
           template: 'welcome'
         });
       }

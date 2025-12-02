@@ -15,12 +15,13 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await authService.login({ email, password });
-      toast.success('Login successful!');
+      const { user } = await authService.login({ email, password });
+      toast.success(`Welcome back, ${user.name}!`);
       navigate('/dashboard');
     } catch (error: any) {
       console.error('Login failed:', error);
-      toast.error(error.response?.data?.error?.message || 'Login failed');
+      const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || 'Login failed';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -53,17 +53,41 @@ export class UsersController {
     try {
       const { name, email, password, phone, role } = req.body;
 
+      // Validate required fields
+      if (!name || !email || !password || !role) {
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Name, email, password, and role are required'
+          }
+        });
+      }
+
       const existingUser = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
       if (existingUser.length > 0) {
-        return res.status(400).json({ message: 'User already exists' });
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'USER_EXISTS',
+            message: 'User with this email already exists'
+          }
+        });
       }
+
+      // Split name into firstName and lastName
+      const nameParts = name.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
 
       const hashedPassword = await bcrypt.hash(password, 12);
       const [user] = await db.insert(schema.users).values({
+        firstName,
+        lastName,
         name,
         email,
         password: hashedPassword,
-        phone,
+        phone: phone || '',
         role,
         status: 'active'
       }).returning();
@@ -71,9 +95,18 @@ export class UsersController {
       await cache.invalidateUserCache();
       
       const { password: _, ...userWithoutPassword } = user;
-      res.status(201).json(userWithoutPassword);
+      res.status(201).json({
+        success: true,
+        data: userWithoutPassword
+      });
     } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
+      res.status(500).json({ 
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Server error'
+        }
+      });
     }
   }
 

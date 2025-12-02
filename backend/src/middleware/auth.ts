@@ -6,12 +6,24 @@ export const auth = (req: Request, res: Response, next: NextFunction) => {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ message: 'Access token required' });
+    return res.status(401).json({ 
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Access token required'
+      }
+    });
   }
 
   jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret', (err: any, user: any) => {
     if (err) {
-      return res.status(403).json({ message: 'Invalid or expired token' });
+      return res.status(403).json({ 
+        success: false,
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Invalid or expired token'
+        }
+      });
     }
     req.user = user;
     next();
