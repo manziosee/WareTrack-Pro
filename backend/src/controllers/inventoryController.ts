@@ -83,7 +83,8 @@ export class InventoryController {
           acc.push({
             name: item.category,
             count: 1,
-            value: item.quantity * Number(item.unitPrice)
+            value: item.quantity * Number(item.unitPrice),
+          currency: 'RWF'
           });
         }
         return acc;
@@ -94,6 +95,7 @@ export class InventoryController {
         data: {
           totalItems,
           totalValue,
+        currency: 'RWF',
           outOfStock,
           lowStock,
           categories
@@ -165,6 +167,19 @@ export class InventoryController {
         }
       });
 
+      // Create inventory history record
+      await prisma.inventoryHistory.create({
+        data: {
+          itemId: item.id,
+          action: 'stock_in',
+          quantity: Number(quantity),
+          previousQuantity: 0,
+          newQuantity: Number(quantity),
+          notes: 'Initial stock creation',
+          performedBy: Number(req.user?.userId) || 1
+        }
+      });
+
       await cache.invalidateInventoryCache();
       
       res.status(201).json({ success: true, data: item });
@@ -216,6 +231,18 @@ export class InventoryController {
       const { id } = req.params;
       const { name, code, category, quantity, minQuantity, unit, unitCategory, location, barcode, unitPrice, supplier, description, status } = req.body;
 
+      // Get current item for history tracking
+      const currentItem = await prisma.inventoryItem.findUnique({
+        where: { id: Number(id) }
+      });
+
+      if (!currentItem) {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'ITEM_NOT_FOUND', message: 'Item not found' }
+        });
+      }
+
       const item = await prisma.inventoryItem.update({
         where: { id: Number(id) },
         data: {
@@ -234,6 +261,22 @@ export class InventoryController {
           status: status as any
         }
       });
+
+      // Create inventory history if quantity changed
+      if (currentItem.quantity !== Number(quantity)) {
+        const action = Number(quantity) > currentItem.quantity ? 'stock_in' : 'stock_out';
+        await prisma.inventoryHistory.create({
+          data: {
+            itemId: item.id,
+            action,
+            quantity: Math.abs(Number(quantity) - currentItem.quantity),
+            previousQuantity: currentItem.quantity,
+            newQuantity: Number(quantity),
+            notes: 'Stock adjustment via update',
+            performedBy: Number(req.user?.userId) || 1
+          }
+        });
+      }
 
       // Check for low stock and send alert
       if (quantity <= minQuantity) {

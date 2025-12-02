@@ -15,10 +15,12 @@ const options = {
     },
     servers: [
       {
-        url: process.env.NODE_ENV === 'production' 
-          ? 'https://waretrack-pro.onrender.com'
-          : 'http://localhost:5000',
-        description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server'
+        url: 'https://waretrack-pro.onrender.com',
+        description: 'Production server'
+      },
+      {
+        url: 'http://localhost:5000',
+        description: 'Development server'
       },
       {
         url: 'http://localhost:5000',

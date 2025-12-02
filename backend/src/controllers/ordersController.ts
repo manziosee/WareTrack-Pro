@@ -30,11 +30,18 @@ export class OrdersController {
         }
       });
 
+      // Add formatted currency to orders
+      const formattedOrders = orders.map(order => ({
+        ...order,
+        formattedAmount: `RWF ${Number(order.totalAmount).toLocaleString()}`,
+        currency: 'RWF'
+      }));
+
       const total = await prisma.deliveryOrder.count();
 
       res.json({
         success: true,
-        data: orders,
+        data: formattedOrders,
         pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
       });
     } catch (error) {
@@ -170,6 +177,8 @@ export class OrdersController {
           orderNumber: order.orderNumber,
           status: order.status,
           totalAmount: Number(order.totalAmount),
+          formattedAmount: `RWF ${Number(order.totalAmount).toLocaleString()}`,
+          currency: 'RWF',
           orderDate: order.createdAt
         }
       });

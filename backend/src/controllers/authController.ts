@@ -230,6 +230,26 @@ export class AuthController {
       await cache.setSession(accessToken, user.id);
       
       const { password: _, ...userWithoutPassword } = user;
+      
+      // Determine redirect URL based on role
+      let redirectUrl = '/dashboard';
+      switch (user.role) {
+        case 'ADMIN':
+          redirectUrl = '/dashboard';
+          break;
+        case 'WAREHOUSE_STAFF':
+          redirectUrl = '/inventory';
+          break;
+        case 'DISPATCH_OFFICER':
+          redirectUrl = '/dispatch';
+          break;
+        case 'DRIVER':
+          redirectUrl = '/tracking';
+          break;
+        default:
+          redirectUrl = '/dashboard';
+      }
+      
       res.json({ 
         success: true,
         data: {
@@ -237,7 +257,8 @@ export class AuthController {
           tokens: {
             access: accessToken,
             refresh: refreshToken
-          }
+          },
+          redirectUrl
         }
       });
     } catch (error: any) {
@@ -354,6 +375,58 @@ export class AuthController {
       res.json({ 
         success: true,
         data: userWithoutPassword
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Server error'
+        }
+      });
+    }
+  }
+
+  static async getDashboardUrl(req: Request, res: Response) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: Number(req.user?.userId) }
+      });
+      
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'User not found'
+          }
+        });
+      }
+
+      let redirectUrl = '/dashboard';
+      switch (user.role) {
+        case 'ADMIN':
+          redirectUrl = '/dashboard';
+          break;
+        case 'WAREHOUSE_STAFF':
+          redirectUrl = '/inventory';
+          break;
+        case 'DISPATCH_OFFICER':
+          redirectUrl = '/dispatch';
+          break;
+        case 'DRIVER':
+          redirectUrl = '/tracking';
+          break;
+        default:
+          redirectUrl = '/dashboard';
+      }
+
+      res.json({ 
+        success: true,
+        data: {
+          redirectUrl,
+          role: user.role
+        }
       });
     } catch (error) {
       res.status(500).json({ 

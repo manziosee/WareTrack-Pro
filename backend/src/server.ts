@@ -18,6 +18,7 @@ import driverRoutes from './routes/drivers';
 import dashboardRoutes from './routes/dashboard';
 import reportRoutes from './routes/reports';
 import testEmailRoutes from './routes/test-email';
+import settingsRoutes from './routes/settings';
 import { errorHandler } from './middleware/errorHandler';
 import { InventoryAlerts } from './middleware/inventoryAlerts';
 
@@ -116,6 +117,7 @@ app.use('/api/drivers', driverRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/test', testEmailRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check with detailed information
 app.get('/health', (req, res) => {

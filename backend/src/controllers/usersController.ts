@@ -108,7 +108,9 @@ export class UsersController {
 
   static async createUser(req: Request, res: Response) {
     try {
-      const { name, email, password, phone, role } = req.body;
+      const { name, email, password, phone, role, status = 'ACTIVE' } = req.body;
+
+      console.log('Creating user with data:', { name, email, phone, role, status });
 
       // Validate required fields
       if (!name || !email || !password || !role) {
@@ -149,7 +151,7 @@ export class UsersController {
           password: hashedPassword,
           phone: phone || '',
           role: role as any,
-          status: 'ACTIVE'
+          status: status as any
         },
         select: {
           id: true,
@@ -164,18 +166,23 @@ export class UsersController {
         }
       });
 
-      await cache.invalidateUserCache();
+      try {
+        await cache.invalidateUserCache();
+      } catch (cacheError) {
+        console.warn('Cache invalidation failed:', cacheError);
+      }
       
       res.status(201).json({
         success: true,
         data: user
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('User creation error:', error);
       res.status(500).json({ 
         success: false,
         error: {
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Server error'
+          message: error.message || 'Server error'
         }
       });
     }
