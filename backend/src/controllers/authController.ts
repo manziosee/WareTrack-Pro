@@ -11,8 +11,18 @@ const cache = CacheService.getInstance();
 export class AuthController {
   static async register(req: Request, res: Response) {
     try {
-      const { firstName, lastName, email, password, phone, role } = req.body;
-      const name = `${firstName} ${lastName}`;
+      const { name, email, password, phone, role } = req.body;
+
+      // Validate required fields
+      if (!name || !email || !password) {
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Name, email, and password are required'
+          }
+        });
+      }
 
       const existingUser = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
       if (existingUser.length > 0) {
@@ -25,11 +35,16 @@ export class AuthController {
         });
       }
 
+      // Split name into firstName and lastName
+      const nameParts = name.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
       // Check if this is the first user (make them admin)
       const allUsers = await db.select().from(schema.users);
       const isFirstUser = allUsers.length === 0;
       const userRole = isFirstUser ? 'admin' : (role || 'warehouse_staff');
-      const userStatus = isFirstUser ? 'active' : 'inactive'; // New users are inactive until activated by admin
+      const userStatus = isFirstUser ? 'active' : 'inactive';
 
       const hashedPassword = await bcrypt.hash(password, 12);
       const [user] = await db.insert(schema.users).values({
@@ -38,7 +53,7 @@ export class AuthController {
         name,
         email,
         password: hashedPassword,
-        phone,
+        phone: phone || '',
         role: userRole,
         status: userStatus
       }).returning();
@@ -46,16 +61,24 @@ export class AuthController {
       const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
       const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, process.env.JWT_SECRET!, { expiresIn: '30d' });
       
-      await cache.setSession(accessToken, user.id);
+      try {
+        await cache.setSession(accessToken, user.id);
+      } catch (cacheError) {
+        console.warn('Cache session failed:', cacheError);
+      }
       
       // Send welcome email
-      await QueueService.addEmailJob({
-        email: user.email,
-        title: 'Welcome to WareTrack-Pro',
-        name: user.name,
-        message: 'Welcome to WareTrack-Pro! Your account has been successfully created.',
-        template: 'welcome'
-      });
+      try {
+        await QueueService.addEmailJob({
+          email: user.email,
+          title: 'Welcome to WareTrack-Pro',
+          name: user.name,
+          message: 'Welcome to WareTrack-Pro! Your account has been successfully created.',
+          template: 'welcome'
+        });
+      } catch (emailError) {
+        console.warn('Welcome email failed:', emailError);
+      }
       
       const { password: _, ...userWithoutPassword } = user;
       res.status(201).json({ 
@@ -69,6 +92,7 @@ export class AuthController {
         }
       });
     } catch (error) {
+      console.error('Registration error:', error);
       res.status(500).json({ 
         success: false,
         error: {
