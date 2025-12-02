@@ -175,27 +175,17 @@ process.on('SIGINT', () => {
 // Redis completely disabled to prevent connection issues
 console.log('⚠️  Redis disabled - running without caching and queues');
 
-// Test database connection before starting server
-async function testDatabaseConnection() {
-  try {
-    const { db } = await import('./db');
-    await db.execute(sql`SELECT 1`);
-    console.log('✅ Database connection test successful');
-    return true;
-  } catch (error) {
-    console.error('❌ Database connection test failed:', error);
-    return false;
-  }
-}
+// Import database connection test
+import { testConnection } from './utils/dbConnection';
 
 // Start inventory alerts scheduler
 InventoryAlerts.startScheduledCheck();
 
 // Start server with database connection test
-testDatabaseConnection().then((dbConnected) => {
-  if (!dbConnected && process.env.NODE_ENV === 'production') {
-    console.error('❌ Cannot start server without database connection in production');
-    process.exit(1);
+testConnection(3).then((dbConnected) => {
+  if (!dbConnected) {
+    console.warn('⚠️  Database connection failed, but starting server anyway...');
+    console.log('🔄 Server will retry database connections on demand');
   }
   
   const server = app.listen(PORT, () => {
