@@ -16,20 +16,33 @@ export function createDatabasePool() {
     throw new Error('DATABASE_URL environment variable is not set');
   }
 
-  // Parse the connection string to handle special characters
-  const url = new URL(connectionString);
-  
-  pool = new Pool({
-    host: url.hostname,
-    port: parseInt(url.port) || 5432,
-    database: url.pathname.slice(1), // Remove leading slash
-    user: url.username,
-    password: decodeURIComponent(url.password),
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
-  });
+  // For production, use connection string directly to avoid IPv6 issues
+  if (process.env.NODE_ENV === 'production') {
+    pool = new Pool({
+      connectionString: connectionString,
+      ssl: { rejectUnauthorized: false },
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 15000,
+      // Force IPv4
+      options: '-c default_transaction_isolation=read_committed',
+    });
+  } else {
+    // Parse the connection string for development
+    const url = new URL(connectionString);
+    
+    pool = new Pool({
+      host: url.hostname,
+      port: parseInt(url.port) || 5432,
+      database: url.pathname.slice(1),
+      user: url.username,
+      password: decodeURIComponent(url.password),
+      ssl: false,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+  }
 
   // Handle connection events
   pool.on('connect', () => {

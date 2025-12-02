@@ -141,6 +141,17 @@ export class AuthController {
         });
       }
       
+      // Handle database connection errors
+      if (error.code === 'ENETUNREACH' || error.code === 'ECONNREFUSED') {
+        return res.status(503).json({ 
+          success: false,
+          error: {
+            code: 'DATABASE_UNAVAILABLE',
+            message: 'Database is temporarily unavailable. Please try again later.'
+          }
+        });
+      }
+      
       res.status(500).json({ 
         success: false,
         error: {
@@ -221,12 +232,25 @@ export class AuthController {
           }
         }
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      // Handle database connection errors
+      if (error.code === 'ENETUNREACH' || error.code === 'ECONNREFUSED') {
+        return res.status(503).json({ 
+          success: false,
+          error: {
+            code: 'DATABASE_UNAVAILABLE',
+            message: 'Database is temporarily unavailable. Please try again later.'
+          }
+        });
+      }
+      
       res.status(500).json({ 
         success: false,
         error: {
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Server error'
+          message: 'Login failed. Please try again.'
         }
       });
     }
