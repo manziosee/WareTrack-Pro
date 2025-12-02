@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Edit, Wrench } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -8,8 +8,10 @@ import AddVehicleForm from '@/components/forms/AddVehicleForm';
 import AddDriverForm from '@/components/forms/AddDriverForm';
 import EditVehicleForm from '@/components/forms/EditVehicleForm';
 import ScheduleMaintenanceForm from '@/components/forms/ScheduleMaintenanceForm';
-
+import { vehiclesService } from '@/services/vehiclesService';
+import { driversService } from '@/services/driversService';
 import { formatDate } from '@/utils/formatters';
+import toast from 'react-hot-toast';
 
 export default function Vehicles() {
   const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
@@ -17,17 +19,30 @@ export default function Vehicles() {
   const [showEditVehicleModal, setShowEditVehicleModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
-  
-  // Sample data - replace with API calls
-  const vehicles = [
-    { id: 1, plateNumber: 'RAB 123A', type: 'Truck', capacity: 5000, status: 'available', lastMaintenance: '2024-01-15' },
-    { id: 2, plateNumber: 'RAB 456B', type: 'Van', capacity: 2000, status: 'in_use', lastMaintenance: '2024-01-10' }
-  ];
-  
-  const drivers = [
-    { id: 1, name: 'John Doe', licenseNumber: 'DL123456', phone: '+250788123456', status: 'available', currentVehicleId: null },
-    { id: 2, name: 'Jane Smith', licenseNumber: 'DL789012', phone: '+250788789012', status: 'on_duty', currentVehicleId: 2 }
-  ];
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [vehiclesData, driversData] = await Promise.all([
+        vehiclesService.getVehicles(),
+        driversService.getDrivers()
+      ]);
+      setVehicles(vehiclesData.data || []);
+      setDrivers(driversData.data || []);
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+      toast.error('Failed to load vehicles and drivers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
   
   
 
@@ -42,14 +57,43 @@ export default function Vehicles() {
   };
 
   const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'available': return 'success';
-      case 'in_use': return 'warning';
-      case 'maintenance': return 'error';
-      case 'unavailable': return 'gray';
+    switch (status.toUpperCase()) {
+      case 'AVAILABLE': return 'success';
+      case 'IN_USE': return 'warning';
+      case 'MAINTENANCE': return 'error';
+      case 'UNAVAILABLE': return 'gray';
       default: return 'gray';
     }
   };
+
+  const handleSaveVehicle = () => {
+    setShowAddVehicleModal(false);
+    setShowEditVehicleModal(false);
+    setSelectedVehicle(null);
+    fetchData();
+    toast.success('Vehicle saved successfully');
+  };
+
+  const handleSaveDriver = () => {
+    setShowAddDriverModal(false);
+    fetchData();
+    toast.success('Driver saved successfully');
+  };
+
+  const handleSaveMaintenance = () => {
+    setShowMaintenanceModal(false);
+    setSelectedVehicle(null);
+    fetchData();
+    toast.success('Maintenance scheduled successfully');
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -159,7 +203,7 @@ export default function Vehicles() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{driver.phone}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant={driver.status === 'available' ? 'success' : driver.status === 'on_duty' ? 'warning' : 'gray'}>
+                      <Badge variant={driver.status === 'AVAILABLE' ? 'success' : driver.status === 'ON_DUTY' ? 'warning' : 'gray'}>
                         {driver.status.replace('_', ' ')}
                       </Badge>
                     </td>
@@ -180,11 +224,11 @@ export default function Vehicles() {
       </div>
 
       <Modal isOpen={showAddVehicleModal} onClose={() => setShowAddVehicleModal(false)} title="Add New Vehicle">
-        <AddVehicleForm onClose={() => setShowAddVehicleModal(false)} />
+        <AddVehicleForm onClose={() => setShowAddVehicleModal(false)} onSave={handleSaveVehicle} />
       </Modal>
 
       <Modal isOpen={showAddDriverModal} onClose={() => setShowAddDriverModal(false)} title="Add New Driver">
-        <AddDriverForm onClose={() => setShowAddDriverModal(false)} />
+        <AddDriverForm onClose={() => setShowAddDriverModal(false)} onSave={handleSaveDriver} />
       </Modal>
 
       {selectedVehicle && (
@@ -202,7 +246,8 @@ export default function Vehicles() {
               onClose={() => {
                 setShowEditVehicleModal(false);
                 setSelectedVehicle(null);
-              }} 
+              }}
+              onSave={handleSaveVehicle}
             />
           </Modal>
 
@@ -219,7 +264,8 @@ export default function Vehicles() {
               onClose={() => {
                 setShowMaintenanceModal(false);
                 setSelectedVehicle(null);
-              }} 
+              }}
+              onSave={handleSaveMaintenance}
             />
           </Modal>
         </>

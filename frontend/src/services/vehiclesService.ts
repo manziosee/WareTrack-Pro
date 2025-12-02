@@ -12,12 +12,13 @@ export interface Vehicle {
 }
 
 export interface CreateVehicle {
-  registrationNumber: string;
-  make: string;
-  model: string;
-  year: number;
+  plateNumber: string;
   type: string;
   capacity: number;
+  vehicleModel?: string;
+  year?: number;
+  fuelType?: string;
+  status?: string;
 }
 
 export const vehiclesService = {

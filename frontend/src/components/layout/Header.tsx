@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Bell, Search, User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { dashboardService } from '@/services/dashboardService';
 
 export default function Header() {
   const { user, logout } = useAuth();
@@ -11,11 +12,39 @@ export default function Header() {
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
 
-  const notifications = [
-    { id: 1, title: 'Low Stock Alert', message: 'Wireless Mouse is running low (5 units left)', time: '5 min ago', type: 'warning' },
-    { id: 2, title: 'Order Delivered', message: 'Order ORD-000004 has been delivered successfully', time: '1 hour ago', type: 'success' },
-    { id: 3, title: 'New Order', message: 'New order ORD-000005 from TechCorp Inc.', time: '2 hours ago', type: 'info' },
-  ];
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+
+  // Fetch notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        setNotificationLoading(true);
+        const data = await dashboardService.getNotifications();
+        setNotifications(data || []);
+      } catch (error) {
+        console.error('Failed to fetch notifications:', error);
+        setNotifications([]);
+      } finally {
+        setNotificationLoading(false);
+      }
+    };
+
+    fetchNotifications();
+    
+    // Refresh notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getNotificationTypeColor = (severity: string) => {
+    switch (severity) {
+      case 'warning': return 'bg-warning-500';
+      case 'success': return 'bg-success-500';
+      case 'info': return 'bg-primary-500';
+      default: return 'bg-gray-500';
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -64,7 +93,11 @@ export default function Header() {
               className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-error-500 rounded-full"></span>
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-error-500 text-white text-xs rounded-full flex items-center justify-center">
+                  {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
+              )}
             </button>
             
             {showNotifications && (
@@ -73,22 +106,30 @@ export default function Header() {
                   <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
                 </div>
                 <div className="max-h-96 overflow-y-auto">
-                  {notifications.map((notification) => (
-                    <div key={notification.id} className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-2 h-2 rounded-full mt-2 ${
-                          notification.type === 'warning' ? 'bg-warning-500' :
-                          notification.type === 'success' ? 'bg-success-500' :
-                          'bg-primary-500'
-                        }`}></div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">{notification.title}</p>
-                          <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
-                          <p className="text-xs text-gray-500 mt-2">{notification.time}</p>
+                  {notificationLoading ? (
+                    <div className="p-4 text-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
+                      <p className="text-sm text-gray-500 mt-2">Loading notifications...</p>
+                    </div>
+                  ) : notifications.length > 0 ? (
+                    notifications.map((notification) => (
+                      <div key={notification.id} className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
+                        <div className="flex items-start gap-3">
+                          <div className={`w-2 h-2 rounded-full mt-2 ${getNotificationTypeColor(notification.severity)}`}></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">{notification.title}</p>
+                            <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                            <p className="text-xs text-gray-500 mt-2">{notification.timeAgo}</p>
+                          </div>
                         </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-gray-500">
+                      <Bell className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm">No notifications</p>
                     </div>
-                  ))}
+                  )}
                 </div>
                 <div className="p-3 border-t border-gray-200">
                   <button className="w-full text-center text-sm text-primary-600 hover:text-primary-700 font-medium">

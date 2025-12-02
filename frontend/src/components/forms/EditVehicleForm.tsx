@@ -12,9 +12,10 @@ interface EditVehicleFormProps {
     status: string;
   };
   onClose: () => void;
+  onSave?: () => void;
 }
 
-const EditVehicleForm = ({ vehicle, onClose }: EditVehicleFormProps) => {
+const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => {
   const [formData, setFormData] = useState({
     plateNumber: vehicle.plateNumber,
     type: vehicle.type,
@@ -28,6 +29,7 @@ const EditVehicleForm = ({ vehicle, onClose }: EditVehicleFormProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     alert(`Vehicle ${formData.plateNumber} updated successfully!`);
+    if (onSave) onSave();
     onClose();
   };
 

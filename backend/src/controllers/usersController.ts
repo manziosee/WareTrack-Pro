@@ -123,6 +123,30 @@ export class UsersController {
         });
       }
 
+      // Validate role
+      const validRoles = ['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'];
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'INVALID_ROLE',
+            message: 'Invalid role specified'
+          }
+        });
+      }
+
+      // Validate status
+      const validStatuses = ['ACTIVE', 'INACTIVE'];
+      if (status && !validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'INVALID_STATUS',
+            message: 'Invalid status specified'
+          }
+        });
+      }
+
       const existingUser = await prisma.user.findUnique({
         where: { email }
       });
@@ -149,7 +173,7 @@ export class UsersController {
           name,
           email,
           password: hashedPassword,
-          phone: phone || '',
+          phone: phone || null,
           role: role as any,
           status: status as any
         },
@@ -177,7 +201,24 @@ export class UsersController {
         data: user
       });
     } catch (error: any) {
-      console.error('User creation error:', error);
+      console.error('User creation error:', {
+        message: error.message,
+        code: error.code,
+        meta: error.meta,
+        stack: error.stack
+      });
+      
+      // Handle Prisma specific errors
+      if (error.code === 'P2002') {
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'DUPLICATE_FIELD',
+            message: 'A user with this email already exists'
+          }
+        });
+      }
+      
       res.status(500).json({ 
         success: false,
         error: {

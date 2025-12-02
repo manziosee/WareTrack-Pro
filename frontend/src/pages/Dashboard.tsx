@@ -3,32 +3,30 @@ import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import Badge from '@/components/ui/Badge';
-import { formatOrderNumber } from '@/utils/formatters';
+
 import { dashboardService } from '@/services/dashboardService';
-import { ordersService } from '@/services/ordersService';
-import { inventoryService } from '@/services/inventoryService';
 
 export default function Dashboard() {
   const [stats, setStats] = useState<any>(null);
   const [trends, setTrends] = useState<any[]>([]);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
-  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [inventoryByCategory, setInventoryByCategory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [dashboardStats, dashboardTrends, ordersData, lowStock] = await Promise.all([
+        const [dashboardStats, dashboardTrends, dashboardOrders, categoryData] = await Promise.all([
           dashboardService.getStats(),
           dashboardService.getTrends(),
-          ordersService.getOrders({ limit: 5 }),
-          inventoryService.getLowStock()
+          dashboardService.getRecentOrders(5),
+          dashboardService.getInventoryByCategory()
         ]);
 
         setStats(dashboardStats);
         setTrends(dashboardTrends);
-        setRecentOrders(ordersData.data || []);
-        setLowStockItems(lowStock || []);
+        setRecentOrders(dashboardOrders || []);
+        setInventoryByCategory(categoryData || []);
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       } finally {
@@ -37,6 +35,10 @@ export default function Dashboard() {
     };
 
     fetchDashboardData();
+    
+    // Set up real-time updates every 30 seconds
+    const interval = setInterval(fetchDashboardData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -55,12 +57,47 @@ export default function Dashboard() {
     );
   }
 
+  const formatPercentage = (percentage: number) => {
+    const sign = percentage >= 0 ? '+' : '';
+    return `${sign}${percentage}%`;
+  };
+
   const statCards = [
-    { label: 'Total Inventory', value: stats.totalInventory || 0, icon: Package, color: 'bg-primary-500', change: '+12%' },
-    { label: 'Deliveries Today', value: stats.deliveriesToday || 0, icon: CheckCircle, color: 'bg-success-500', change: '+5%' },
-    { label: 'Pending Dispatches', value: stats.pendingDispatches || 0, icon: Clock, color: 'bg-warning-500', change: '-2%' },
-    { label: 'In Transit', value: stats.inTransit || 0, icon: Truck, color: 'bg-accent-500', change: '+8%' },
-    { label: 'Low Stock Alerts', value: lowStockItems.length, icon: AlertTriangle, color: 'bg-error-500', change: '+1' },
+    { 
+      label: 'Total Inventory', 
+      value: stats.totalInventory?.value || 0, 
+      icon: Package, 
+      color: 'bg-primary-500', 
+      change: formatPercentage(stats.totalInventory?.percentage || 0)
+    },
+    { 
+      label: 'Deliveries Today', 
+      value: stats.deliveriesToday?.value || 0, 
+      icon: CheckCircle, 
+      color: 'bg-success-500', 
+      change: formatPercentage(stats.deliveriesToday?.percentage || 0)
+    },
+    { 
+      label: 'Pending Dispatches', 
+      value: stats.pendingDispatches?.value || 0, 
+      icon: Clock, 
+      color: 'bg-warning-500', 
+      change: formatPercentage(stats.pendingDispatches?.percentage || 0)
+    },
+    { 
+      label: 'In Transit', 
+      value: stats.inTransit?.value || 0, 
+      icon: Truck, 
+      color: 'bg-accent-500', 
+      change: formatPercentage(stats.inTransit?.percentage || 0)
+    },
+    { 
+      label: 'Low Stock Alerts', 
+      value: stats.lowStockAlerts?.value || 0, 
+      icon: AlertTriangle, 
+      color: 'bg-error-500', 
+      change: formatPercentage(stats.lowStockAlerts?.percentage || 0)
+    },
   ];
 
   return (
@@ -101,8 +138,8 @@ export default function Dashboard() {
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
               <Legend />
-              <Line type="monotone" dataKey="delivered" stroke="#10B981" strokeWidth={2} name="Delivered" />
-              <Line type="monotone" dataKey="inTransit" stroke="#FF8C42" strokeWidth={2} name="In Transit" />
+              <Line type="monotone" dataKey="completed" stroke="#10B981" strokeWidth={2} name="Completed" />
+              <Line type="monotone" dataKey="cancelled" stroke="#EF4444" strokeWidth={2} name="Cancelled" />
               <Line type="monotone" dataKey="pending" stroke="#F59E0B" strokeWidth={2} name="Pending" />
             </LineChart>
           </ResponsiveContainer>
@@ -112,11 +149,7 @@ export default function Dashboard() {
         <Card>
           <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Inventory by Category</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={[
-              { category: 'Electronics', count: 113 },
-              { category: 'Furniture', count: 37 },
-              { category: 'Office Supplies', count: 5 },
-            ]}>
+            <BarChart data={inventoryByCategory}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis dataKey="category" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
@@ -139,20 +172,22 @@ export default function Dashboard() {
             {recentOrders.map((order) => (
               <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                 <div className="flex-1">
-                  <p className="font-medium text-gray-900">{formatOrderNumber(order.id)}</p>
+                  <p className="font-medium text-gray-900">{order.orderNumber}</p>
                   <p className="text-sm text-gray-600">{order.customerName}</p>
+                  <p className="text-xs text-gray-500">{order.totalAmount}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant={
-                    order.status === 'delivered' ? 'success' :
-                    order.status === 'in_transit' ? 'info' :
-                    order.status === 'dispatched' ? 'warning' : 'gray'
+                    order.status === 'DELIVERED' ? 'success' :
+                    order.status === 'IN_TRANSIT' ? 'info' :
+                    order.status === 'DISPATCHED' ? 'warning' : 'gray'
                   }>
                     {order.status.replace('_', ' ')}
                   </Badge>
-                  <Badge variant={order.priority === 'high' ? 'error' : order.priority === 'medium' ? 'warning' : 'gray'} size="sm">
-                    {order.priority}
-                  </Badge>
+                  <div className="text-right text-xs text-gray-500">
+                    <p>Driver: {order.driver}</p>
+                    <p>Vehicle: {order.vehicle}</p>
+                  </div>
                 </div>
               </div>
             ))}
@@ -166,18 +201,19 @@ export default function Dashboard() {
             <a href="/inventory" className="text-sm text-primary-600 hover:text-primary-700 font-medium">View All</a>
           </div>
           <div className="space-y-3">
-            {lowStockItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">{item.name}</p>
-                  <p className="text-sm text-gray-600">{item.code} • {item.location}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-error-600">{item.quantity} {item.unit}</p>
-                  <p className="text-xs text-gray-500">Min: {item.minQuantity}</p>
-                </div>
+            {stats?.lowStockAlerts?.value > 0 ? (
+              <div className="p-3 bg-red-50 rounded-lg text-center">
+                <AlertTriangle className="w-8 h-8 text-error-500 mx-auto mb-2" />
+                <p className="font-medium text-gray-900">{stats.lowStockAlerts.value} items need attention</p>
+                <p className="text-sm text-gray-600">Check inventory for items below minimum stock</p>
               </div>
-            ))}
+            ) : (
+              <div className="p-3 bg-green-50 rounded-lg text-center">
+                <CheckCircle className="w-8 h-8 text-success-500 mx-auto mb-2" />
+                <p className="font-medium text-gray-900">All items in stock</p>
+                <p className="text-sm text-gray-600">No low stock alerts at this time</p>
+              </div>
+            )}
           </div>
         </Card>
       </div>

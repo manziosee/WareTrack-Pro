@@ -18,6 +18,7 @@ export default function Dispatch() {
   const [selectedDispatch, setSelectedDispatch] = useState<any>(null);
   const [dispatches, setDispatches] = useState<any[]>([]);
   const [filteredDispatches, setFilteredDispatches] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
   const [filters, setFilters] = useState<any>({});
   
   // Real-time data fetching
@@ -26,10 +27,24 @@ export default function Dispatch() {
     30000 // Update every 30 seconds
   );
 
+  const fetchStats = async () => {
+    try {
+      const statsData = await dispatchService.getStats();
+      setStats(statsData.data);
+    } catch (error) {
+      console.error('Failed to fetch dispatch stats:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
   useEffect(() => {
     if (realtimeDispatches) {
       setDispatches(realtimeDispatches.data || []);
       setFilteredDispatches(realtimeDispatches.data || []);
+      fetchStats(); // Refresh stats when data updates
     }
   }, [realtimeDispatches]);
 
@@ -142,25 +157,19 @@ export default function Dispatch() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <p className="text-sm text-gray-600">Total Dispatches</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{dispatches.length}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{stats?.totalDispatches || 0}</p>
         </Card>
         <Card>
-          <p className="text-sm text-gray-600">In Progress</p>
-          <p className="text-2xl font-bold text-info-600 mt-1">
-            {dispatches.filter(d => d.status === 'in_progress').length}
-          </p>
+          <p className="text-sm text-gray-600">In Transit</p>
+          <p className="text-2xl font-bold text-info-600 mt-1">{stats?.inTransitDispatches || 0}</p>
         </Card>
         <Card>
           <p className="text-sm text-gray-600">Completed</p>
-          <p className="text-2xl font-bold text-success-600 mt-1">
-            {dispatches.filter(d => d.status === 'completed').length}
-          </p>
+          <p className="text-2xl font-bold text-success-600 mt-1">{stats?.completedDispatches || 0}</p>
         </Card>
         <Card>
           <p className="text-sm text-gray-600">Pending</p>
-          <p className="text-2xl font-bold text-warning-600 mt-1">
-            {dispatches.filter(d => d.status === 'pending').length}
-          </p>
+          <p className="text-2xl font-bold text-warning-600 mt-1">{stats?.pendingDispatches || 0}</p>
         </Card>
       </div>
 
@@ -175,10 +184,11 @@ export default function Dispatch() {
             label: 'Status',
             value: 'status',
             options: [
-              { label: 'Pending', value: 'pending' },
-              { label: 'In Progress', value: 'in_progress' },
-              { label: 'Completed', value: 'completed' },
-              { label: 'Cancelled', value: 'cancelled' }
+              { label: 'Pending', value: 'PENDING' },
+              { label: 'Dispatched', value: 'DISPATCHED' },
+              { label: 'In Transit', value: 'IN_TRANSIT' },
+              { label: 'Delivered', value: 'DELIVERED' },
+              { label: 'Cancelled', value: 'CANCELLED' }
             ]
           }
         ]}

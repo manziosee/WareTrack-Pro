@@ -4,6 +4,7 @@ import { auth } from '../middleware/auth';
 
 const router = Router();
 
+router.get('/analytics', auth, ReportsController.getAnalytics);
 router.get('/sales', auth, ReportsController.getSalesReport);
 router.get('/inventory', auth, ReportsController.getInventoryReport);
 router.get('/vehicles', auth, ReportsController.getVehiclesReport);

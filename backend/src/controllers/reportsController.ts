@@ -290,4 +290,202 @@ export class ReportsController {
       });
     }
   }
+
+  static async getAnalytics(req: Request, res: Response) {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      const now = new Date();
+      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+      
+      // Current period data
+      const [currentOrders, currentDelivered, currentDrivers, last7DaysOrders] = await Promise.all([
+        prisma.deliveryOrder.count({
+          where: {
+            createdAt: { gte: currentMonth }
+          }
+        }),
+        prisma.deliveryOrder.count({
+          where: {
+            status: 'DELIVERED',
+            deliveredAt: { gte: currentMonth }
+          }
+        }),
+        prisma.driver.count({ where: { status: 'AVAILABLE' } }),
+        prisma.deliveryOrder.findMany({
+          where: {
+            createdAt: {
+              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            }
+          },
+          select: {
+            createdAt: true,
+            status: true,
+            deliveredAt: true,
+            scheduledDate: true
+          }
+        })
+      ]);
+
+      // Previous month data for comparison
+      const [prevOrders, prevDelivered] = await Promise.all([
+        prisma.deliveryOrder.count({
+          where: {
+            createdAt: { gte: lastMonth, lt: currentMonth }
+          }
+        }),
+        prisma.deliveryOrder.count({
+          where: {
+            status: 'DELIVERED',
+            deliveredAt: { gte: lastMonth, lt: lastMonthEnd }
+          }
+        })
+      ]);
+
+      // Calculate delivery rate and percentage changes
+      const deliveryRate = currentOrders > 0 ? (currentDelivered / currentOrders) * 100 : 0;
+      const prevDeliveryRate = prevOrders > 0 ? (prevDelivered / prevOrders) * 100 : 0;
+      
+      const ordersChange = prevOrders > 0 ? ((currentOrders - prevOrders) / prevOrders) * 100 : 0;
+      const deliveryRateChange = prevDeliveryRate > 0 ? deliveryRate - prevDeliveryRate : 0;
+
+      // Calculate average delivery time
+      const deliveredOrders = await prisma.deliveryOrder.findMany({
+        where: {
+          status: 'DELIVERED',
+          deliveredAt: { not: null },
+          createdAt: { gte: currentMonth }
+        },
+        select: {
+          createdAt: true,
+          deliveredAt: true
+        }
+      });
+
+      const avgDeliveryTime = deliveredOrders.length > 0 
+        ? deliveredOrders.reduce((sum, order) => {
+            const deliveryTime = new Date(order.deliveredAt!).getTime() - new Date(order.createdAt).getTime();
+            return sum + (deliveryTime / (1000 * 60 * 60 * 24)); // Convert to days
+          }, 0) / deliveredOrders.length
+        : 0;
+
+      // Previous month average delivery time
+      const prevDeliveredOrders = await prisma.deliveryOrder.findMany({
+        where: {
+          status: 'DELIVERED',
+          deliveredAt: { not: null },
+          createdAt: { gte: lastMonth, lt: currentMonth }
+        },
+        select: {
+          createdAt: true,
+          deliveredAt: true
+        }
+      });
+
+      const prevAvgDeliveryTime = prevDeliveredOrders.length > 0 
+        ? prevDeliveredOrders.reduce((sum, order) => {
+            const deliveryTime = new Date(order.deliveredAt!).getTime() - new Date(order.createdAt).getTime();
+            return sum + (deliveryTime / (1000 * 60 * 60 * 24));
+          }, 0) / prevDeliveredOrders.length
+        : 0;
+
+      const deliveryTimeChange = prevAvgDeliveryTime > 0 ? avgDeliveryTime - prevAvgDeliveryTime : 0;
+
+      // Generate 7-day trends
+      const trends = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        date.setHours(0, 0, 0, 0);
+        
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        const dayOrders = last7DaysOrders.filter(order => {
+          const orderDate = new Date(order.createdAt);
+          return orderDate >= date && orderDate < nextDay;
+        });
+        
+        trends.push({
+          date: date.toISOString().split('T')[0],
+          orders: dayOrders.length,
+          delivered: dayOrders.filter(o => o.status === 'DELIVERED').length,
+          pending: dayOrders.filter(o => o.status === 'PENDING').length,
+          inTransit: dayOrders.filter(o => o.status === 'IN_TRANSIT').length
+        });
+      }
+
+      // Status distribution
+      const statusDistribution = await prisma.deliveryOrder.groupBy({
+        by: ['status'],
+        _count: { status: true },
+        where: {
+          createdAt: { gte: currentMonth }
+        }
+      });
+
+      // Inventory by category
+      const inventoryByCategory = await prisma.inventoryItem.groupBy({
+        by: ['category'],
+        _count: { id: true },
+        _sum: { quantity: true }
+      });
+
+      // Calculate KPIs
+      const onTimeDeliveries = deliveredOrders.filter(order => {
+        if (!order.deliveredAt) return false;
+        const deliveryTime = new Date(order.deliveredAt).getTime() - new Date(order.createdAt).getTime();
+        return deliveryTime <= (3 * 24 * 60 * 60 * 1000); // 3 days or less
+      }).length;
+
+      const onTimeRate = deliveredOrders.length > 0 ? (onTimeDeliveries / deliveredOrders.length) * 100 : 0;
+      
+      // Fleet utilization (vehicles in use vs total)
+      const [totalVehicles, inUseVehicles] = await Promise.all([
+        prisma.vehicle.count(),
+        prisma.vehicle.count({ where: { status: 'IN_USE' } })
+      ]);
+      
+      const fleetUtilization = totalVehicles > 0 ? (inUseVehicles / totalVehicles) * 100 : 0;
+
+      res.json({
+        success: true,
+        data: {
+          summary: {
+            totalOrders: currentOrders,
+            ordersChange: Math.round(ordersChange),
+            deliveryRate: Math.round(deliveryRate),
+            deliveryRateChange: Math.round(deliveryRateChange),
+            avgDeliveryTime: Math.round(avgDeliveryTime * 10) / 10,
+            deliveryTimeChange: Math.round(deliveryTimeChange * 10) / 10,
+            activeDrivers: currentDrivers,
+            currency: 'RWF'
+          },
+          trends,
+          statusDistribution: statusDistribution.map(item => ({
+            status: item.status,
+            count: item._count.status
+          })),
+          inventoryByCategory: inventoryByCategory.map(item => ({
+            category: item.category,
+            count: item._count.id,
+            totalQuantity: item._sum.quantity || 0
+          })),
+          kpis: {
+            onTimeDeliveryRate: Math.round(onTimeRate),
+            customerSatisfaction: 4.8, // This would come from a ratings system
+            fleetUtilization: Math.round(fleetUtilization)
+          }
+        }
+      });
+    } catch (error: any) {
+      console.error('Analytics error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
 }

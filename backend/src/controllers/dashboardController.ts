@@ -7,85 +7,119 @@ const cache = CacheService.getInstance();
 export class DashboardController {
   static async getSummary(req: Request, res: Response) {
     try {
-      const { period = 'month' } = req.query;
-      
-      // Check cache first
-      const cached = await cache.getCachedDashboardStats();
-      if (cached) {
-        return res.json({ success: true, data: cached });
-      }
-
-      const [
-        totalOrders,
-        completedOrders,
-        pendingOrders,
-        activeVehicles,
-        inMaintenance,
-        lowStockItems,
-        totalInventoryItems,
-        totalDrivers
-      ] = await Promise.all([
-        prisma.deliveryOrder.count(),
-        prisma.deliveryOrder.count({ where: { status: 'DELIVERED' } }),
-        prisma.deliveryOrder.count({ where: { status: 'PENDING' } }),
-        prisma.vehicle.count({ where: { status: 'AVAILABLE' } }),
-        prisma.vehicle.count({ where: { status: 'MAINTENANCE' } }),
-        prisma.$queryRaw`SELECT COUNT(*)::int as count FROM inventory_items WHERE quantity < min_quantity`,
-        prisma.inventoryItem.count(),
-        prisma.driver.count()
-      ]);
-
-      // Calculate total revenue from completed orders
-      const revenueResult = await prisma.deliveryOrder.findMany({
-        where: { status: 'DELIVERED' },
-        select: { totalAmount: true }
-      });
-      const totalRevenue = revenueResult.reduce((sum, order) => sum + Number(order.totalAmount), 0);
-
-      const lowStockCount = Array.isArray(lowStockItems) ? lowStockItems[0]?.count || 0 : 0;
-
-      // Get today's deliveries
-      const today = new Date();
+      const now = new Date();
+      const today = new Date(now);
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      const deliveriesToday = await prisma.deliveryOrder.count({
-        where: {
-          status: 'DELIVERED',
-          deliveredAt: {
-            gte: today,
-            lt: tomorrow
-          }
-        }
-      });
+      // Last week dates
+      const lastWeekStart = new Date(today);
+      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+      const lastWeekEnd = new Date(today);
+      
+      const previousWeekStart = new Date(lastWeekStart);
+      previousWeekStart.setDate(previousWeekStart.getDate() - 7);
+      const previousWeekEnd = new Date(lastWeekStart);
 
-      // Get total inventory value
-      const inventoryItems = await prisma.inventoryItem.findMany({
-        select: { quantity: true, unitPrice: true }
-      });
-      const totalInventoryValue = inventoryItems.reduce((sum, item) => 
-        sum + (item.quantity * Number(item.unitPrice)), 0
-      );
-
-      const summary = {
-        totalOrders,
-        completedOrders,
-        pendingOrders,
-        totalRevenue,
-        deliveriesToday,
-        activeVehicles,
-        inMaintenance,
-        lowStockItems: Number(lowStockCount),
+      // Current week data
+      const [
         totalInventoryItems,
         totalInventoryValue,
-        totalDrivers,
+        deliveriesToday,
+        pendingDispatches,
+        inTransit,
+        lowStockItems
+      ] = await Promise.all([
+        prisma.inventoryItem.count(),
+        prisma.inventoryItem.findMany({ select: { quantity: true, unitPrice: true } }),
+        prisma.deliveryOrder.count({
+          where: {
+            status: 'DELIVERED',
+            deliveredAt: { gte: today, lt: tomorrow }
+          }
+        }),
+        prisma.deliveryOrder.count({ where: { status: 'PENDING' } }),
+        prisma.deliveryOrder.count({ where: { status: 'IN_TRANSIT' } }),
+        prisma.$queryRaw`SELECT COUNT(*)::int as count FROM inventory_items WHERE quantity < min_quantity`
+      ]);
+
+      // Previous week data for comparison
+      const [
+        prevInventoryItems,
+        prevDeliveries,
+        prevPendingDispatches,
+        prevInTransit,
+        prevLowStockItems
+      ] = await Promise.all([
+        prisma.inventoryItem.count({
+          where: {
+            createdAt: { lt: lastWeekEnd }
+          }
+        }),
+        prisma.deliveryOrder.count({
+          where: {
+            status: 'DELIVERED',
+            deliveredAt: { gte: previousWeekStart, lt: previousWeekEnd }
+          }
+        }),
+        prisma.deliveryOrder.count({
+          where: {
+            status: 'PENDING',
+            createdAt: { gte: previousWeekStart, lt: previousWeekEnd }
+          }
+        }),
+        prisma.deliveryOrder.count({
+          where: {
+            status: 'IN_TRANSIT',
+            createdAt: { gte: previousWeekStart, lt: previousWeekEnd }
+          }
+        }),
+        prisma.$queryRaw`SELECT COUNT(*)::int as count FROM inventory_items WHERE quantity < min_quantity AND created_at < ${lastWeekEnd}`
+      ]);
+
+      // Calculate percentages
+      const calculatePercentage = (current: number, previous: number) => {
+        if (previous === 0) return current > 0 ? 100 : 0;
+        return Math.round(((current - previous) / previous) * 100);
+      };
+
+      const inventoryValue = Array.isArray(totalInventoryValue) 
+        ? totalInventoryValue.reduce((sum, item) => sum + (item.quantity * Number(item.unitPrice)), 0)
+        : 0;
+
+      const lowStockCount = Array.isArray(lowStockItems) ? lowStockItems[0]?.count || 0 : 0;
+      const prevLowStockCount = Array.isArray(prevLowStockItems) ? prevLowStockItems[0]?.count || 0 : 0;
+
+      const summary = {
+        totalInventory: {
+          value: totalInventoryItems,
+          percentage: calculatePercentage(totalInventoryItems, prevInventoryItems),
+          currency: 'RWF'
+        },
+        deliveriesToday: {
+          value: deliveriesToday,
+          percentage: calculatePercentage(deliveriesToday, prevDeliveries)
+        },
+        pendingDispatches: {
+          value: pendingDispatches,
+          percentage: calculatePercentage(pendingDispatches, prevPendingDispatches)
+        },
+        inTransit: {
+          value: inTransit,
+          percentage: calculatePercentage(inTransit, prevInTransit)
+        },
+        lowStockAlerts: {
+          value: lowStockCount,
+          percentage: calculatePercentage(lowStockCount, prevLowStockCount)
+        },
+        totalInventoryValue: inventoryValue,
         currency: 'RWF'
       };
 
-      await cache.cacheDashboardStats(summary);
       res.json({ success: true, data: summary });
     } catch (error) {
+      console.error('Dashboard summary error:', error);
       res.status(500).json({ 
         success: false,
         error: {
@@ -193,19 +227,52 @@ export class DashboardController {
 
   static async getTrends(req: Request, res: Response) {
     try {
-      const { period = 'month' } = req.query;
+      const { period = '7' } = req.query;
+      const days = parseInt(period as string) || 7;
       
-      // Mock trend data - in production, calculate from actual data
-      const trends = [
-        { date: '2023-01-01', completed: 5, pending: 2, cancelled: 0 },
-        { date: '2023-01-02', completed: 8, pending: 3, cancelled: 1 },
-        { date: '2023-01-03', completed: 6, pending: 4, cancelled: 0 },
-        { date: '2023-01-04', completed: 10, pending: 2, cancelled: 1 },
-        { date: '2023-01-05', completed: 7, pending: 5, cancelled: 0 }
-      ];
+      const trends = [];
+      const today = new Date();
+      
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        date.setHours(0, 0, 0, 0);
+        
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        const [completed, pending, cancelled] = await Promise.all([
+          prisma.deliveryOrder.count({
+            where: {
+              status: 'DELIVERED',
+              deliveredAt: { gte: date, lt: nextDay }
+            }
+          }),
+          prisma.deliveryOrder.count({
+            where: {
+              status: 'PENDING',
+              createdAt: { gte: date, lt: nextDay }
+            }
+          }),
+          prisma.deliveryOrder.count({
+            where: {
+              status: 'CANCELLED',
+              updatedAt: { gte: date, lt: nextDay }
+            }
+          })
+        ]);
+        
+        trends.push({
+          date: date.toISOString().split('T')[0],
+          completed,
+          pending,
+          cancelled
+        });
+      }
 
       res.json({ success: true, data: trends });
     } catch (error) {
+      console.error('Trends error:', error);
       res.status(500).json({ 
         success: false,
         error: {
@@ -326,6 +393,72 @@ export class DashboardController {
       });
     }
   }
+
+  static async getInventoryByCategory(req: Request, res: Response) {
+    try {
+      const inventoryByCategory = await prisma.inventoryItem.groupBy({
+        by: ['category'],
+        _count: { id: true },
+        _sum: { quantity: true }
+      });
+
+      const categoryData = inventoryByCategory.map(item => ({
+        category: item.category || 'Uncategorized',
+        count: item._count.id,
+        totalQuantity: item._sum.quantity || 0
+      }));
+
+      res.json({ success: true, data: categoryData });
+    } catch (error) {
+      console.error('Inventory by category error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Server error'
+        }
+      });
+    }
+  }
+
+  static async getRecentOrders(req: Request, res: Response) {
+    try {
+      const { limit = 10 } = req.query;
+      
+      const recentOrders = await prisma.deliveryOrder.findMany({
+        take: parseInt(limit as string) || 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          driver: { select: { name: true } },
+          vehicle: { select: { plateNumber: true } },
+          createdByUser: { select: { name: true } }
+        }
+      });
+
+      const formattedOrders = recentOrders.map(order => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        status: order.status,
+        totalAmount: `RWF ${Number(order.totalAmount).toLocaleString()}`,
+        createdAt: order.createdAt,
+        driver: order.driver?.name || 'Not assigned',
+        vehicle: order.vehicle?.plateNumber || 'Not assigned',
+        createdBy: order.createdByUser?.name || 'System'
+      }));
+
+      res.json({ success: true, data: formattedOrders });
+    } catch (error) {
+      console.error('Recent orders error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Server error'
+        }
+      });
+    }
+  }
 }
 
 // Helper function to calculate time ago
@@ -340,5 +473,4 @@ function getTimeAgo(date: Date): string {
   if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
   if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
   return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
-}
 }

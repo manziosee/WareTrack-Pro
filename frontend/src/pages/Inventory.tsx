@@ -49,26 +49,30 @@ export default function Inventory() {
     }
   }, [realtimeInventory]);
 
-  const handleSearch = (searchTerm: string) => {
-    const filtered = inventory.filter(item =>
-      item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.code?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredInventory(filtered);
+  const handleSearch = async (searchTerm: string) => {
+    const newFilters = { ...filters, search: searchTerm };
+    setFilters(newFilters);
+    
+    try {
+      const response = await inventoryService.getInventory({ ...newFilters, page: currentPage, limit: 20 });
+      setInventory(response.data || []);
+      setFilteredInventory(response.data || []);
+    } catch (error) {
+      console.error('Search failed:', error);
+    }
   };
 
-  const handleFilter = (newFilters: any) => {
-    setFilters(newFilters);
-    let filtered = [...inventory];
+  const handleFilter = async (newFilters: any) => {
+    const updatedFilters = { ...filters, ...newFilters };
+    setFilters(updatedFilters);
     
-    if (newFilters.category) {
-      filtered = filtered.filter(item => item.category === newFilters.category);
+    try {
+      const response = await inventoryService.getInventory({ ...updatedFilters, page: currentPage, limit: 20 });
+      setInventory(response.data || []);
+      setFilteredInventory(response.data || []);
+    } catch (error) {
+      console.error('Filter failed:', error);
     }
-    if (newFilters.status) {
-      filtered = filtered.filter(item => item.status === newFilters.status);
-    }
-    
-    setFilteredInventory(filtered);
   };
 
   const handleExport = (format: 'csv' | 'pdf' | 'json') => {
@@ -173,7 +177,7 @@ export default function Inventory() {
         </Card>
         <Card>
           <p className="text-sm text-gray-600">Total Value</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">${stats?.totalValue?.toFixed(2) || '0.00'}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">RWF {stats?.totalValue?.toLocaleString() || '0'}</p>
         </Card>
         <Card>
           <p className="text-sm text-gray-600">Low Stock</p>
@@ -208,9 +212,9 @@ export default function Inventory() {
             label: 'Status',
             value: 'status',
             options: [
-              { label: 'Active', value: 'active' },
-              { label: 'Inactive', value: 'inactive' },
-              { label: 'Discontinued', value: 'discontinued' }
+              { label: 'Active', value: 'ACTIVE' },
+              { label: 'Inactive', value: 'INACTIVE' },
+              { label: 'Discontinued', value: 'DISCONTINUED' }
             ]
           }
         ]}

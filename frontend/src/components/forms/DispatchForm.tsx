@@ -1,7 +1,4 @@
 import { useState, useEffect } from 'react';
-import { ordersService } from '../../services/ordersService';
-import { driversService } from '../../services/driversService';
-import { vehiclesService } from '../../services/vehiclesService';
 import { dispatchService } from '../../services/dispatchService';
 import toast from 'react-hot-toast';
 
@@ -16,7 +13,11 @@ export default function DispatchForm({ onClose, onSave, dispatch }: DispatchForm
     orderId: dispatch?.orderId || '',
     driverId: dispatch?.driverId || '',
     vehicleId: dispatch?.vehicleId || '',
-    estimatedArrival: dispatch?.estimatedArrival || ''
+    scheduledDate: dispatch?.scheduledDate || '',
+    estimatedDelivery: dispatch?.estimatedDelivery || '',
+    fuelAllowance: dispatch?.fuelAllowance || '',
+    route: dispatch?.route || '',
+    notes: dispatch?.notes || ''
   });
   
   const [orders, setOrders] = useState<any[]>([]);
@@ -28,9 +29,9 @@ export default function DispatchForm({ onClose, onSave, dispatch }: DispatchForm
     const fetchData = async () => {
       try {
         const [ordersRes, driversRes, vehiclesRes] = await Promise.all([
-          ordersService.getOrders({ status: 'pending' }),
-          driversService.getDrivers(),
-          vehiclesService.getVehicles()
+          dispatchService.getAvailableOrders(),
+          dispatchService.getAvailableDrivers(),
+          dispatchService.getAvailableVehicles()
         ]);
         
         setOrders(ordersRes.data || []);
@@ -110,7 +111,7 @@ export default function DispatchForm({ onClose, onSave, dispatch }: DispatchForm
           required
         >
           <option value="">Select Driver</option>
-          {drivers.filter(d => d.status === 'available').map((driver) => (
+          {drivers.filter(d => d.status === 'AVAILABLE').map((driver) => (
             <option key={driver.id} value={driver.id}>
               {driver.name} - License: {driver.licenseNumber}
             </option>
@@ -129,23 +130,78 @@ export default function DispatchForm({ onClose, onSave, dispatch }: DispatchForm
           required
         >
           <option value="">Select Vehicle</option>
-          {vehicles.filter(v => v.status === 'available').map((vehicle) => (
+          {vehicles.filter(v => v.status === 'AVAILABLE').map((vehicle) => (
             <option key={vehicle.id} value={vehicle.id}>
-              {vehicle.registrationNumber} - {vehicle.make} {vehicle.model}
+              {vehicle.plateNumber} - {vehicle.type}
             </option>
           ))}
         </select>
       </div>
 
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Scheduled Date
+          </label>
+          <input
+            type="datetime-local"
+            value={formData.scheduledDate}
+            onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Estimated Delivery
+          </label>
+          <input
+            type="datetime-local"
+            value={formData.estimatedDelivery}
+            onChange={(e) => setFormData({ ...formData, estimatedDelivery: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Fuel Allowance (RWF)
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={formData.fuelAllowance}
+            onChange={(e) => setFormData({ ...formData, fuelAllowance: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="0"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Route
+          </label>
+          <input
+            type="text"
+            value={formData.route}
+            onChange={(e) => setFormData({ ...formData, route: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="Route description"
+          />
+        </div>
+      </div>
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Estimated Arrival
+          Notes
         </label>
-        <input
-          type="datetime-local"
-          value={formData.estimatedArrival}
-          onChange={(e) => setFormData({ ...formData, estimatedArrival: e.target.value })}
+        <textarea
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+          rows={3}
+          placeholder="Additional notes or instructions..."
         />
       </div>
 
