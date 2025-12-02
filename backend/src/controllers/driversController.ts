@@ -1,19 +1,36 @@
 import { Request, Response } from 'express';
-import { db, schema } from '../db';
-import { eq } from 'drizzle-orm';
+import { prisma } from '../lib/prisma';
 
 export class DriversController {
   static async getDrivers(req: Request, res: Response) {
     try {
       const { page = 1, limit = 10, status, search } = req.query;
-      const offset = (Number(page) - 1) * Number(limit);
+      const skip = (Number(page) - 1) * Number(limit);
 
-      const drivers = await db.select().from(schema.drivers).limit(Number(limit)).offset(offset);
+      const drivers = await prisma.driver.findMany({
+        skip,
+        take: Number(limit),
+        where: {
+          ...(status && { status: status as any }),
+          ...(search && {
+            OR: [
+              { name: { contains: search as string, mode: 'insensitive' } },
+              { licenseNumber: { contains: search as string, mode: 'insensitive' } }
+            ]
+          })
+        },
+        include: {
+          user: true,
+          currentVehicle: true
+        }
+      });
+
+      const total = await prisma.driver.count();
 
       res.json({
         success: true,
         data: drivers,
-        pagination: { page: Number(page), limit: Number(limit), total: drivers.length, totalPages: Math.ceil(drivers.length / Number(limit)) }
+        pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
       });
     } catch (error) {
       res.status(500).json({ 
@@ -25,25 +42,48 @@ export class DriversController {
 
   static async getAvailableDrivers(req: Request, res: Response) {
     try {
-      const drivers = await db.select().from(schema.drivers).where(eq(schema.drivers.status, 'available'));
-      res.json(drivers);
+      const drivers = await prisma.driver.findMany({
+        where: { status: 'AVAILABLE' },
+        include: {
+          user: true,
+          currentVehicle: true
+        }
+      });
+      res.json({ success: true, data: drivers });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
   static async getDriverById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const [driver] = await db.select().from(schema.drivers).where(eq(schema.drivers.id, Number(id))).limit(1);
+      const driver = await prisma.driver.findUnique({
+        where: { id: Number(id) },
+        include: {
+          user: true,
+          currentVehicle: true,
+          orders: true,
+          dispatches: true
+        }
+      });
       
       if (!driver) {
-        return res.status(404).json({ message: 'Driver not found' });
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'DRIVER_NOT_FOUND', message: 'Driver not found' }
+        });
       }
 
-      res.json(driver);
+      res.json({ success: true, data: driver });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -88,10 +128,12 @@ export class DriversController {
 
   static async createDriver(req: Request, res: Response) {
     try {
-      const { userId, licenseNumber, licenseExpiry, licenseClass, emergencyContact, address, status } = req.body;
+      const { userId, licenseNumber, licenseExpiry, licenseClass, emergencyContact, address, status, experience } = req.body;
 
       // Get user name from users table
-      const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId)).limit(1);
+      const user = await prisma.user.findUnique({
+        where: { id: Number(userId) }
+      });
       if (!user) {
         return res.status(400).json({ 
           success: false,
@@ -99,15 +141,17 @@ export class DriversController {
         });
       }
 
-      const [driver] = await db.insert(schema.drivers).values({
-        userId,
-        name: user.name,
-        licenseNumber,
-        phone: user.phone || '000-000-0000',
-        status: status || 'available',
-        experience: 0,
-        rating: '0'
-      }).returning();
+      const driver = await prisma.driver.create({
+        data: {
+          userId: Number(userId),
+          name: user.name,
+          licenseNumber,
+          phone: user.phone || '000-000-0000',
+          status: (status || 'AVAILABLE') as any,
+          experience: experience ? Number(experience) : 0,
+          rating: 0
+        }
+      });
 
       res.status(201).json({
         success: true,
@@ -119,7 +163,13 @@ export class DriversController {
           status: driver.status
         }
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        return res.status(400).json({ 
+          success: false,
+          error: { code: 'DUPLICATE_LICENSE', message: 'Driver with this license number already exists' }
+        });
+      }
       res.status(500).json({ 
         success: false,
         error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
@@ -130,20 +180,37 @@ export class DriversController {
   static async updateDriver(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { licenseNumber, phone, status, experience } = req.body;
+      const { licenseNumber, phone, status, experience, rating } = req.body;
 
-      const [driver] = await db.update(schema.drivers)
-        .set({ licenseNumber, phone, status, experience, updatedAt: new Date() })
-        .where(eq(schema.drivers.id, Number(id)))
-        .returning();
+      const driver = await prisma.driver.update({
+        where: { id: Number(id) },
+        data: {
+          licenseNumber,
+          phone,
+          status: status as any,
+          experience: experience ? Number(experience) : undefined,
+          rating: rating ? Number(rating) : undefined
+        }
+      });
 
-      if (!driver) {
-        return res.status(404).json({ message: 'Driver not found' });
+      res.json({ success: true, data: driver });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'DRIVER_NOT_FOUND', message: 'Driver not found' }
+        });
       }
-
-      res.json(driver);
-    } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      if (error.code === 'P2002') {
+        return res.status(400).json({ 
+          success: false,
+          error: { code: 'DUPLICATE_LICENSE', message: 'Driver with this license number already exists' }
+        });
+      }
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -151,11 +218,25 @@ export class DriversController {
     try {
       const { id } = req.params;
       
-      await db.delete(schema.drivers).where(eq(schema.drivers.id, Number(id)));
+      await prisma.driver.delete({
+        where: { id: Number(id) }
+      });
       
-      res.json({ message: 'Driver deleted successfully' });
-    } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.json({ 
+        success: true,
+        message: 'Driver deleted successfully' 
+      });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'DRIVER_NOT_FOUND', message: 'Driver not found' }
+        });
+      }
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 }

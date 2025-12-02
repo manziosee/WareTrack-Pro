@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { sql } from 'drizzle-orm';
+
 // Redis disabled in production
 // import { connectRedis } from './config/redis';
 import { specs, swaggerUi } from './config/swagger';
@@ -175,14 +175,16 @@ process.on('SIGINT', () => {
 // Redis completely disabled to prevent connection issues
 console.log('⚠️  Redis disabled - running without caching and queues');
 
-// Import database connection test
-import { testSimpleConnection } from './db/connection';
+// Import Prisma for database operations
+import { prisma } from './lib/prisma';
 
 // Start inventory alerts scheduler
 InventoryAlerts.startScheduledCheck();
 
-// Start server with database connection test
-testSimpleConnection().then((dbConnected) => {
+// Test Prisma connection and start server
+prisma.$connect().then(() => {
+  console.log('✅ Database connected successfully');
+  const dbConnected = true;
   if (!dbConnected) {
     console.warn('⚠️  Database connection failed, but starting server anyway...');
     console.log('🔄 Server will retry database connections on demand');
@@ -205,6 +207,14 @@ testSimpleConnection().then((dbConnected) => {
     });
   });
 }).catch((error) => {
-  console.error('❌ Failed to start server:', error);
-  process.exit(1);
+  console.error('❌ Database connection failed:', error);
+  console.warn('⚠️  Starting server anyway...');
+  
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
+    console.log(`⚡ Ready to handle requests!`);
+  });
 });

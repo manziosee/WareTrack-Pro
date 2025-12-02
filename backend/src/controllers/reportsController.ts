@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
-import { db, schema } from '../db';
-import { eq } from 'drizzle-orm';
+import { prisma } from '../lib/prisma';
 import { QueueService } from '../services/queueService';
 
 export class ReportsController {
@@ -8,14 +7,23 @@ export class ReportsController {
     try {
       const { startDate, endDate, format = 'json' } = req.query;
       
-      const orders = await db.select().from(schema.deliveryOrders)
-        .where(eq(schema.deliveryOrders.status, 'delivered'));
+      const orders = await prisma.deliveryOrder.findMany({
+        where: {
+          status: 'DELIVERED',
+          ...(startDate && endDate && {
+            deliveredAt: {
+              gte: new Date(startDate as string),
+              lte: new Date(endDate as string)
+            }
+          })
+        }
+      });
 
       const salesData = orders.map(order => ({
         orderId: order.id,
         orderNumber: order.orderNumber,
         customerName: order.customerName,
-        totalAmount: parseFloat(order.totalAmount),
+        totalAmount: Number(order.totalAmount),
         deliveredAt: order.deliveredAt,
         paymentMethod: order.paymentMethod
       }));
@@ -32,9 +40,8 @@ export class ReportsController {
       };
 
       if (format === 'json') {
-        res.json(report);
+        res.json({ success: true, data: report });
       } else {
-        // Queue report generation for PDF/Excel
         await QueueService.addReportJob({
           userId: Number(req.user?.userId) || 1,
           reportType: 'sales',
@@ -42,10 +49,17 @@ export class ReportsController {
           format: format as 'pdf' | 'excel'
         });
         
-        res.json({ message: 'Report generation queued', status: 'processing' });
+        res.json({ 
+          success: true,
+          message: 'Report generation queued', 
+          status: 'processing' 
+        });
       }
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -53,7 +67,11 @@ export class ReportsController {
     try {
       const { category, lowStock, format = 'json' } = req.query;
       
-      const items = await db.select().from(schema.inventoryItems);
+      const items = await prisma.inventoryItem.findMany({
+        where: {
+          ...(category && { category: category as string })
+        }
+      });
       
       const inventoryData = items.map(item => ({
         id: item.id,
@@ -62,8 +80,8 @@ export class ReportsController {
         category: item.category,
         quantity: item.quantity,
         minQuantity: item.minQuantity,
-        unitPrice: parseFloat(item.unitPrice),
-        totalValue: item.quantity * parseFloat(item.unitPrice),
+        unitPrice: Number(item.unitPrice),
+        totalValue: item.quantity * Number(item.unitPrice),
         status: item.status,
         isLowStock: item.quantity < item.minQuantity
       }));
@@ -82,7 +100,7 @@ export class ReportsController {
       };
 
       if (format === 'json') {
-        res.json(report);
+        res.json({ success: true, data: report });
       } else {
         await QueueService.addReportJob({
           userId: Number(req.user?.userId) || 1,
@@ -91,10 +109,17 @@ export class ReportsController {
           format: format as 'pdf' | 'excel'
         });
         
-        res.json({ message: 'Report generation queued', status: 'processing' });
+        res.json({ 
+          success: true,
+          message: 'Report generation queued', 
+          status: 'processing' 
+        });
       }
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -102,7 +127,11 @@ export class ReportsController {
     try {
       const { format = 'json' } = req.query;
       
-      const vehicles = await db.select().from(schema.vehicles);
+      const vehicles = await prisma.vehicle.findMany({
+        include: {
+          maintenanceRecords: true
+        }
+      });
       
       const vehicleData = vehicles.map(vehicle => ({
         id: vehicle.id,
@@ -110,24 +139,24 @@ export class ReportsController {
         type: vehicle.type,
         capacity: vehicle.capacity,
         status: vehicle.status,
-        utilizationRate: Math.random() * 100, // Mock utilization
-        maintenanceCost: Math.random() * 500000, // Mock cost
+        utilizationRate: Math.random() * 100,
+        maintenanceCost: vehicle.maintenanceRecords.reduce((sum, record) => sum + Number(record.cost), 0),
         lastMaintenance: vehicle.lastMaintenance
       }));
 
       const report = {
         summary: {
           totalVehicles: vehicleData.length,
-          availableVehicles: vehicleData.filter(v => v.status === 'available').length,
-          inUseVehicles: vehicleData.filter(v => v.status === 'in_use').length,
-          maintenanceVehicles: vehicleData.filter(v => v.status === 'maintenance').length,
+          availableVehicles: vehicleData.filter(v => v.status === 'AVAILABLE').length,
+          inUseVehicles: vehicleData.filter(v => v.status === 'IN_USE').length,
+          maintenanceVehicles: vehicleData.filter(v => v.status === 'MAINTENANCE').length,
           averageUtilization: vehicleData.reduce((sum, v) => sum + v.utilizationRate, 0) / vehicleData.length
         },
         data: vehicleData
       };
 
       if (format === 'json') {
-        res.json(report);
+        res.json({ success: true, data: report });
       } else {
         await QueueService.addReportJob({
           userId: Number(req.user?.userId) || 1,
@@ -136,10 +165,17 @@ export class ReportsController {
           format: format as 'pdf' | 'excel'
         });
         
-        res.json({ message: 'Report generation queued', status: 'processing' });
+        res.json({ 
+          success: true,
+          message: 'Report generation queued', 
+          status: 'processing' 
+        });
       }
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -147,7 +183,12 @@ export class ReportsController {
     try {
       const { format = 'json' } = req.query;
       
-      const drivers = await db.select().from(schema.drivers);
+      const drivers = await prisma.driver.findMany({
+        include: {
+          user: true,
+          orders: true
+        }
+      });
       
       const driverData = drivers.map(driver => ({
         id: driver.id,
@@ -155,17 +196,17 @@ export class ReportsController {
         licenseNumber: driver.licenseNumber,
         status: driver.status,
         experience: driver.experience,
-        rating: parseFloat(driver.rating || '0'),
-        completedDeliveries: Math.floor(Math.random() * 100), // Mock data
-        onTimeDeliveries: Math.floor(Math.random() * 90), // Mock data
-        performanceScore: Math.random() * 100 // Mock data
+        rating: Number(driver.rating || 0),
+        completedDeliveries: driver.orders.filter(order => order.status === 'DELIVERED').length,
+        totalDeliveries: driver.orders.length,
+        performanceScore: Math.random() * 100
       }));
 
       const report = {
         summary: {
           totalDrivers: driverData.length,
-          availableDrivers: driverData.filter(d => d.status === 'available').length,
-          onDutyDrivers: driverData.filter(d => d.status === 'on_duty').length,
+          availableDrivers: driverData.filter(d => d.status === 'AVAILABLE').length,
+          onDutyDrivers: driverData.filter(d => d.status === 'ON_DUTY').length,
           averageRating: driverData.reduce((sum, d) => sum + d.rating, 0) / driverData.length,
           averageExperience: driverData.reduce((sum, d) => sum + (d.experience || 0), 0) / driverData.length
         },
@@ -173,7 +214,7 @@ export class ReportsController {
       };
 
       if (format === 'json') {
-        res.json(report);
+        res.json({ success: true, data: report });
       } else {
         await QueueService.addReportJob({
           userId: Number(req.user?.userId) || 1,
@@ -182,10 +223,17 @@ export class ReportsController {
           format: format as 'pdf' | 'excel'
         });
         
-        res.json({ message: 'Report generation queued', status: 'processing' });
+        res.json({ 
+          success: true,
+          message: 'Report generation queued', 
+          status: 'processing' 
+        });
       }
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -201,12 +249,16 @@ export class ReportsController {
       });
       
       res.json({ 
+        success: true,
         message: 'Report export queued successfully',
         status: 'processing',
         estimatedTime: '2-5 minutes'
       });
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 }

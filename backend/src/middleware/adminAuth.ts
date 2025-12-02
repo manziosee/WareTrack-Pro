@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { db, schema } from '../db';
-import { eq } from 'drizzle-orm';
+import { prisma } from '../lib/prisma';
 
 export const adminAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -16,10 +15,9 @@ export const adminAuth = async (req: Request, res: Response, next: NextFunction)
     }
 
     // Get user details
-    const [user] = await db.select()
-      .from(schema.users)
-      .where(eq(schema.users.id, Number(req.user?.userId)))
-      .limit(1);
+    const user = await prisma.user.findUnique({
+      where: { id: Number(req.user?.userId) }
+    });
 
     if (!user) {
       return res.status(401).json({
@@ -32,7 +30,7 @@ export const adminAuth = async (req: Request, res: Response, next: NextFunction)
     }
 
     // Check if user is admin
-    if (user.role !== 'admin') {
+    if (user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         error: {

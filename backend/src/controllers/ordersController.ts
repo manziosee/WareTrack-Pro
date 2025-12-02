@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
-import { db, schema } from '../db';
-import { eq, ilike, or } from 'drizzle-orm';
+import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
 import { QueueService } from '../services/queueService';
 
@@ -10,14 +9,33 @@ export class OrdersController {
   static async getOrders(req: Request, res: Response) {
     try {
       const { page = 1, limit = 10, search, status } = req.query;
-      const offset = (Number(page) - 1) * Number(limit);
+      const skip = (Number(page) - 1) * Number(limit);
 
-      const orders = await db.select().from(schema.deliveryOrders).limit(Number(limit)).offset(offset);
+      const orders = await prisma.deliveryOrder.findMany({
+        skip,
+        take: Number(limit),
+        where: {
+          ...(status && { status: status as any }),
+          ...(search && {
+            OR: [
+              { orderNumber: { contains: search as string, mode: 'insensitive' } },
+              { customerName: { contains: search as string, mode: 'insensitive' } }
+            ]
+          })
+        },
+        include: {
+          driver: true,
+          vehicle: true,
+          items: true
+        }
+      });
+
+      const total = await prisma.deliveryOrder.count();
 
       res.json({
         success: true,
         data: orders,
-        pagination: { page: Number(page), limit: Number(limit), total: orders.length, totalPages: Math.ceil(orders.length / Number(limit)) }
+        pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
       });
     } catch (error) {
       res.status(500).json({ 
@@ -48,59 +66,100 @@ export class OrdersController {
   static async getOrdersByCustomer(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const orders = await db.select().from(schema.deliveryOrders).where(eq(schema.deliveryOrders.customerId, Number(id)));
-      res.json(orders);
+      const orders = await prisma.deliveryOrder.findMany({
+        where: { customerId: Number(id) },
+        include: {
+          driver: true,
+          vehicle: true,
+          items: true
+        }
+      });
+      res.json({ success: true, data: orders });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
   static async getOrderById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const [order] = await db.select().from(schema.deliveryOrders).where(eq(schema.deliveryOrders.id, Number(id))).limit(1);
+      const order = await prisma.deliveryOrder.findUnique({
+        where: { id: Number(id) },
+        include: {
+          driver: true,
+          vehicle: true,
+          items: {
+            include: {
+              item: true
+            }
+          }
+        }
+      });
       
       if (!order) {
-        return res.status(404).json({ message: 'Order not found' });
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'ORDER_NOT_FOUND', message: 'Order not found' }
+        });
       }
 
-      res.json(order);
+      res.json({ success: true, data: order });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
   static async createOrder(req: Request, res: Response) {
     try {
-      const { customerName, customerEmail, customerPhone, deliveryAddress, items, notes } = req.body;
+      const { customerName, customerEmail, customerPhone, deliveryAddress, items, notes, priority = 'MEDIUM' } = req.body;
 
       // Generate order number
-      const orderCount = await db.select().from(schema.deliveryOrders);
-      const orderNumber = `ORD-${String(orderCount.length + 1).padStart(3, '0')}`;
+      const orderCount = await prisma.deliveryOrder.count();
+      const orderNumber = `ORD-${String(orderCount + 1).padStart(3, '0')}`;
 
       // Calculate total amount from items
-      let totalAmount = '0';
+      let totalAmount = 0;
       if (items && items.length > 0) {
         totalAmount = items.reduce((sum: number, item: any) => {
-          return sum + (item.price * item.quantity);
-        }, 0).toString();
+          return sum + (item.unitPrice * item.quantity);
+        }, 0);
       }
 
-      const [order] = await db.insert(schema.deliveryOrders).values({
-        orderNumber,
-        customerId: 1,
-        customerName,
-        deliveryAddress,
-        contactNumber: customerPhone,
-        priority: 'medium',
-        status: 'pending',
-        orderType: 'delivery',
-        paymentMethod: 'cash',
-        totalAmount,
-        deliveryInstructions: notes,
-        scheduledDate: null,
-        createdBy: Number(req.user?.userId) || 1
-      }).returning();
+      const order = await prisma.deliveryOrder.create({
+        data: {
+          orderNumber,
+          customerId: 1,
+          customerName,
+          deliveryAddress,
+          contactNumber: customerPhone,
+          priority: priority as any,
+          status: 'PENDING',
+          orderType: 'delivery',
+          paymentMethod: 'cash',
+          totalAmount,
+          deliveryInstructions: notes,
+          createdBy: Number(req.user?.userId) || 1,
+          items: {
+            create: items?.map((item: any) => ({
+              itemId: item.itemId,
+              itemName: item.itemName,
+              quantity: item.quantity,
+              unit: item.unit || 'pcs',
+              unitPrice: item.unitPrice,
+              totalPrice: item.unitPrice * item.quantity
+            })) || []
+          }
+        },
+        include: {
+          items: true
+        }
+      });
 
       await cache.invalidateOrderCache();
       
@@ -110,7 +169,7 @@ export class OrdersController {
           id: order.id,
           orderNumber: order.orderNumber,
           status: order.status,
-          totalAmount: parseFloat(order.totalAmount),
+          totalAmount: Number(order.totalAmount),
           orderDate: order.createdAt
         }
       });
@@ -127,29 +186,22 @@ export class OrdersController {
       const { id } = req.params;
       const { status } = req.body;
 
-      const updateData: any = { status, updatedAt: new Date() };
+      const updateData: any = { status };
       
-      if (status === 'delivered') {
+      if (status === 'DELIVERED') {
         updateData.deliveredAt = new Date();
       }
 
-      const [order] = await db.update(schema.deliveryOrders)
-        .set(updateData)
-        .where(eq(schema.deliveryOrders.id, Number(id)))
-        .returning();
-
-      if (!order) {
-        return res.status(404).json({ 
-          success: false,
-          error: { message: 'Order not found' }
-        });
-      }
+      const order = await prisma.deliveryOrder.update({
+        where: { id: Number(id) },
+        data: updateData
+      });
 
       // Send email notifications based on status
-      if (status === 'delivered') {
+      if (status === 'DELIVERED') {
         console.log('✅ Order Delivered Successfully ✅ - Sent successfully');
         await QueueService.addEmailJob({
-          email: 'customer@example.com', // Replace with actual customer email
+          email: 'customer@example.com',
           title: 'Order Delivered Successfully ✅',
           name: order.customerName,
           message: `Your order ${order.orderNumber} has been delivered successfully.`,
@@ -158,7 +210,7 @@ export class OrdersController {
       } else {
         console.log(`✅ Order ${order.orderNumber} Status Update 📦 - Sent successfully`);
         await QueueService.addEmailJob({
-          email: 'customer@example.com', // Replace with actual customer email
+          email: 'customer@example.com',
           title: `Order ${order.orderNumber} Status Update 📦`,
           name: order.customerName,
           message: `Your order ${order.orderNumber} status has been updated to: ${status}`,
@@ -172,10 +224,16 @@ export class OrdersController {
         success: true,
         data: order
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'ORDER_NOT_FOUND', message: 'Order not found' }
+        });
+      }
       res.status(500).json({ 
         success: false,
-        error: { message: 'Server error' }
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
       });
     }
   }
@@ -185,30 +243,34 @@ export class OrdersController {
       const { id } = req.params;
       const { customerName, deliveryAddress, contactNumber, priority, orderType, paymentMethod, deliveryInstructions, scheduledDate } = req.body;
 
-      const [order] = await db.update(schema.deliveryOrders)
-        .set({ 
-          customerName, 
-          deliveryAddress, 
-          contactNumber, 
-          priority, 
-          orderType, 
-          paymentMethod, 
-          deliveryInstructions, 
-          scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
-          updatedAt: new Date() 
-        })
-        .where(eq(schema.deliveryOrders.id, Number(id)))
-        .returning();
-
-      if (!order) {
-        return res.status(404).json({ message: 'Order not found' });
-      }
+      const order = await prisma.deliveryOrder.update({
+        where: { id: Number(id) },
+        data: {
+          customerName,
+          deliveryAddress,
+          contactNumber,
+          priority: priority as any,
+          orderType,
+          paymentMethod,
+          deliveryInstructions,
+          scheduledDate: scheduledDate ? new Date(scheduledDate) : null
+        }
+      });
 
       await cache.invalidateOrderCache();
       
-      res.json(order);
-    } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.json({ success: true, data: order });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'ORDER_NOT_FOUND', message: 'Order not found' }
+        });
+      }
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -216,20 +278,28 @@ export class OrdersController {
     try {
       const { id } = req.params;
       
-      const [order] = await db.update(schema.deliveryOrders)
-        .set({ status: 'cancelled', updatedAt: new Date() })
-        .where(eq(schema.deliveryOrders.id, Number(id)))
-        .returning();
-
-      if (!order) {
-        return res.status(404).json({ message: 'Order not found' });
-      }
+      const order = await prisma.deliveryOrder.update({
+        where: { id: Number(id) },
+        data: { status: 'CANCELLED' }
+      });
 
       await cache.invalidateOrderCache();
       
-      res.json({ message: 'Order cancelled successfully' });
-    } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.json({ 
+        success: true,
+        message: 'Order cancelled successfully' 
+      });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'ORDER_NOT_FOUND', message: 'Order not found' }
+        });
+      }
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 }

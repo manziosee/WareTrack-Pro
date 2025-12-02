@@ -1,0 +1,274 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  firstName String?  @map("first_name")
+  lastName  String?  @map("last_name")
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?
+  role      UserRole @default(WAREHOUSE_STAFF)
+  status    UserStatus @default(ACTIVE)
+  lastLogin DateTime? @map("last_login")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  createdOrders    DeliveryOrder[] @relation("CreatedBy")
+  createdDispatches Dispatch[] @relation("CreatedBy")
+  driverProfile    Driver?
+  inventoryHistory InventoryHistory[]
+
+  @@map("users")
+}
+
+model InventoryItem {
+  id           Int      @id @default(autoincrement())
+  name         String
+  code         String   @unique
+  category     String
+  quantity     Int      @default(0)
+  minQuantity  Int      @default(0) @map("min_quantity")
+  unit         String
+  unitCategory String   @map("unit_category")
+  location     String
+  barcode      String?
+  unitPrice    Decimal  @default(0) @map("unit_price")
+  status       InventoryStatus @default(ACTIVE)
+  supplier     String?
+  description  String?
+  lastUpdated  DateTime @default(now()) @map("last_updated")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  orderItems       OrderItem[]
+  inventoryHistory InventoryHistory[]
+
+  @@map("inventory_items")
+}
+
+model Vehicle {
+  id              Int      @id @default(autoincrement())
+  plateNumber     String   @unique @map("plate_number")
+  type            String
+  capacity        Int
+  status          VehicleStatus @default(AVAILABLE)
+  lastMaintenance DateTime? @map("last_maintenance")
+  fuelType        String?  @map("fuel_type")
+  vehicleModel    String?  @map("vehicle_model")
+  year            Int?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  orders              DeliveryOrder[]
+  dispatches          Dispatch[]
+  currentDrivers      Driver[]
+  maintenanceRecords  MaintenanceRecord[]
+
+  @@map("vehicles")
+}
+
+model Driver {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @unique @map("user_id")
+  name              String
+  licenseNumber     String   @unique @map("license_number")
+  phone             String
+  status            DriverStatus @default(AVAILABLE)
+  currentVehicleId  Int?     @map("current_vehicle_id")
+  experience        Int?
+  rating            Decimal?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentVehicle Vehicle? @relation(fields: [currentVehicleId], references: [id])
+  orders         DeliveryOrder[]
+  dispatches     Dispatch[]
+
+  @@map("drivers")
+}
+
+model DeliveryOrder {
+  id                   Int      @id @default(autoincrement())
+  orderNumber          String   @unique @map("order_number")
+  customerId           Int      @map("customer_id")
+  customerName         String   @map("customer_name")
+  deliveryAddress      String   @map("delivery_address")
+  contactNumber        String   @map("contact_number")
+  priority             OrderPriority @default(MEDIUM)
+  status               OrderStatus @default(PENDING)
+  orderType            String   @map("order_type")
+  paymentMethod        String   @map("payment_method")
+  totalAmount          Decimal  @default(0) @map("total_amount")
+  deliveryInstructions String?  @map("delivery_instructions")
+  driverId             Int?     @map("driver_id")
+  vehicleId            Int?     @map("vehicle_id")
+  createdBy            Int      @map("created_by")
+  scheduledDate        DateTime? @map("scheduled_date")
+  deliveredAt          DateTime? @map("delivered_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  driver       Driver? @relation(fields: [driverId], references: [id])
+  vehicle      Vehicle? @relation(fields: [vehicleId], references: [id])
+  createdByUser User @relation("CreatedBy", fields: [createdBy], references: [id])
+  items        OrderItem[]
+  dispatches   Dispatch[]
+
+  @@map("delivery_orders")
+}
+
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  orderId   Int      @map("order_id")
+  itemId    Int      @map("item_id")
+  itemName  String   @map("item_name")
+  quantity  Int
+  unit      String
+  unitPrice Decimal  @map("unit_price")
+  totalPrice Decimal @map("total_price")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  order DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item  InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@map("order_items")
+}
+
+model Dispatch {
+  id                Int      @id @default(autoincrement())
+  orderId           Int      @map("order_id")
+  driverId          Int      @map("driver_id")
+  vehicleId         Int      @map("vehicle_id")
+  scheduledDate     DateTime @map("scheduled_date")
+  dispatchedAt      DateTime? @map("dispatched_at")
+  estimatedDelivery DateTime? @map("estimated_delivery")
+  actualDelivery    DateTime? @map("actual_delivery")
+  fuelAllowance     Decimal  @default(0) @map("fuel_allowance")
+  route             String?
+  notes             String?
+  status            DispatchStatus @default(PENDING)
+  createdBy         Int      @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  order         DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driver        Driver @relation(fields: [driverId], references: [id])
+  vehicle       Vehicle @relation(fields: [vehicleId], references: [id])
+  createdByUser User @relation("CreatedBy", fields: [createdBy], references: [id])
+
+  @@map("dispatches")
+}
+
+model MaintenanceRecord {
+  id                   Int      @id @default(autoincrement())
+  vehicleId            Int      @map("vehicle_id")
+  type                 String
+  description          String
+  cost                 Decimal  @default(0)
+  odometerReading      Int?     @map("odometer_reading")
+  nextServiceOdometer  Int?     @map("next_service_odometer")
+  nextServiceDate      DateTime? @map("next_service_date")
+  performedBy          String?  @map("performed_by")
+  notes                String?
+  scheduledDate        DateTime @map("scheduled_date")
+  completedDate        DateTime? @map("completed_date")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("maintenance_records")
+}
+
+model InventoryHistory {
+  id               Int      @id @default(autoincrement())
+  itemId           Int      @map("item_id")
+  action           String   // stock_in, stock_out, adjustment
+  quantity         Int
+  previousQuantity Int      @map("previous_quantity")
+  newQuantity      Int      @map("new_quantity")
+  orderId          Int?     @map("order_id")
+  notes            String?
+  performedBy      Int      @map("performed_by")
+  performedAt      DateTime @default(now()) @map("performed_at")
+
+  // Relations
+  item        InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  performedByUser User @relation(fields: [performedBy], references: [id])
+
+  @@map("inventory_history")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  WAREHOUSE_STAFF
+  DISPATCH_OFFICER
+  DRIVER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum OrderStatus {
+  PENDING
+  DISPATCHED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  UNAVAILABLE
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ON_DUTY
+  OFF_DUTY
+}
+
+enum InventoryStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+}
+
+enum DispatchStatus {
+  PENDING
+  DISPATCHED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
