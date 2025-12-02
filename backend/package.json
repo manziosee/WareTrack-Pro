@@ -4,9 +4,9 @@
   "description": "Backend API for WareTrack-Pro Warehouse Delivery & Dispatch Tracking System",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "npx prisma generate && tsc",
     "postbuild": "cp -r src/config/emailTemplates.ts dist/config/ 2>/dev/null || true",
-    "start": "node dist/server.js",
+    "start": "npx prisma migrate deploy && node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "seed": "ts-node src/scripts/seed.ts",
     "db:generate": "prisma generate",
@@ -25,7 +25,6 @@
     "@prisma/client": "^5.22.0",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
-    "bullmq": "^4.15.4",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -39,7 +38,6 @@
     "nodemailer": "^6.9.7",
     "pg": "^8.11.3",
     "prisma": "^5.22.0",
-    "redis": "^4.6.10",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0"
   },
