@@ -1,9 +1,9 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
-import { createDatabasePool } from '../utils/dbConnection';
+import { createProductionPool } from './connection';
 
 // Create database connection
-const pool = createDatabasePool();
+const pool = createProductionPool();
 
 export const db = drizzle(pool, { schema });
 export { schema };

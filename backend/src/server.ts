@@ -176,13 +176,13 @@ process.on('SIGINT', () => {
 console.log('⚠️  Redis disabled - running without caching and queues');
 
 // Import database connection test
-import { testConnection } from './utils/dbConnection';
+import { testSimpleConnection } from './db/connection';
 
 // Start inventory alerts scheduler
 InventoryAlerts.startScheduledCheck();
 
 // Start server with database connection test
-testConnection(3).then((dbConnected) => {
+testSimpleConnection().then((dbConnected) => {
   if (!dbConnected) {
     console.warn('⚠️  Database connection failed, but starting server anyway...');
     console.log('🔄 Server will retry database connections on demand');
