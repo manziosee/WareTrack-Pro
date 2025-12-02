@@ -1,17 +1,16 @@
-import { db, schema } from '../db';
-import { lt } from 'drizzle-orm';
+import { prisma } from '../lib/prisma';
 import { QueueService } from '../services/queueService';
 
 export class InventoryAlerts {
   static async checkLowStock() {
     try {
-      const lowStockItems = await db.select()
-        .from(schema.inventoryItems)
-        .where(lt(schema.inventoryItems.quantity, schema.inventoryItems.minQuantity));
+      const lowStockItems = await prisma.$queryRaw`
+        SELECT * FROM inventory_items WHERE quantity < min_quantity
+      `;
 
-      if (lowStockItems.length > 0) {
-        const itemsList = lowStockItems.map(item => 
-          `${item.name} (${item.code}): ${item.quantity}/${item.minQuantity}`
+      if (Array.isArray(lowStockItems) && lowStockItems.length > 0) {
+        const itemsList = (lowStockItems as any[]).map((item: any) => 
+          `${item.name} (${item.code}): ${item.quantity}/${item.min_quantity}`
         ).join('\n');
 
         await QueueService.addEmailJob({

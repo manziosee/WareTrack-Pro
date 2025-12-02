@@ -1,40 +1,38 @@
 import { Request, Response } from 'express';
-import { db, schema } from '../db';
-import { eq } from 'drizzle-orm';
+import { prisma } from '../lib/prisma';
 import { QueueService } from '../services/queueService';
 
 export class DispatchController {
   static async getDispatches(req: Request, res: Response) {
     try {
       const { page = 1, limit = 10, status, startDate, endDate } = req.query;
-      const offset = (Number(page) - 1) * Number(limit);
+      const skip = (Number(page) - 1) * Number(limit);
 
-      // Mock dispatch data - implement with actual dispatch table
-      const dispatches = [
-        {
-          id: '1',
-          orderId: '1',
-          driverId: '1',
-          vehicleId: '1',
-          status: 'in_progress',
-          startTime: new Date().toISOString(),
-          estimatedArrival: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-          actualArrival: null,
-          currentLocation: {
-            lat: 0,
-            lng: 0
-          },
-          route: [
-            { lat: 0, lng: 0 },
-            { lat: 1, lng: 1 }
-          ]
+      const dispatches = await prisma.dispatch.findMany({
+        skip,
+        take: Number(limit),
+        where: {
+          ...(status && { status: status as any }),
+          ...(startDate && endDate && {
+            scheduledDate: {
+              gte: new Date(startDate as string),
+              lte: new Date(endDate as string)
+            }
+          })
+        },
+        include: {
+          order: true,
+          driver: true,
+          vehicle: true
         }
-      ];
+      });
+
+      const total = await prisma.dispatch.count();
 
       res.json({
         success: true,
         data: dispatches,
-        pagination: { page: Number(page), limit: Number(limit), total: dispatches.length, totalPages: Math.ceil(dispatches.length / Number(limit)) }
+        pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
       });
     } catch (error) {
       res.status(500).json({ 
@@ -46,22 +44,18 @@ export class DispatchController {
 
   static async getActiveDispatches(req: Request, res: Response) {
     try {
-      // Mock active dispatches
-      const activeDispatches = [
-        {
-          id: '1',
-          orderId: '1',
-          driverName: 'David Brown',
-          vehicleRegistration: 'RAD 123A',
-          status: 'in_progress',
-          currentLocation: {
-            lat: 0,
-            lng: 0
-          },
-          nextStop: 'Customer Location',
-          estimatedArrival: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+      const activeDispatches = await prisma.dispatch.findMany({
+        where: {
+          status: {
+            in: ['DISPATCHED', 'IN_TRANSIT']
+          }
+        },
+        include: {
+          order: true,
+          driver: true,
+          vehicle: true
         }
-      ];
+      });
 
       res.json({ success: true, data: activeDispatches });
     } catch (error) {
@@ -114,49 +108,55 @@ export class DispatchController {
 
   static async createDispatch(req: Request, res: Response) {
     try {
-      const { orderId, driverId, vehicleId, scheduledAt, notes } = req.body;
+      const { orderId, driverId, vehicleId, scheduledDate, notes, estimatedDelivery, fuelAllowance, route } = req.body;
 
-      // Get order and driver details for email
-      const [order] = await db.select().from(schema.deliveryOrders).where(eq(schema.deliveryOrders.id, orderId)).limit(1);
-      const [driver] = await db.select().from(schema.drivers).where(eq(schema.drivers.id, driverId)).limit(1);
+      const dispatch = await prisma.dispatch.create({
+        data: {
+          orderId: Number(orderId),
+          driverId: Number(driverId),
+          vehicleId: Number(vehicleId),
+          scheduledDate: new Date(scheduledDate),
+          estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : null,
+          fuelAllowance: fuelAllowance ? Number(fuelAllowance) : 0,
+          route,
+          notes,
+          status: 'PENDING',
+          createdBy: Number(req.user?.userId) || 1
+        },
+        include: {
+          order: true,
+          driver: true,
+          vehicle: true
+        }
+      });
 
       // Update order status to dispatched
-      await db.update(schema.deliveryOrders)
-        .set({ status: 'dispatched', updatedAt: new Date() })
-        .where(eq(schema.deliveryOrders.id, orderId));
+      await prisma.deliveryOrder.update({
+        where: { id: Number(orderId) },
+        data: { status: 'DISPATCHED' }
+      });
 
       // Update driver status to on_duty
-      await db.update(schema.drivers)
-        .set({ status: 'on_duty' })
-        .where(eq(schema.drivers.id, driverId));
+      await prisma.driver.update({
+        where: { id: Number(driverId) },
+        data: { status: 'ON_DUTY' }
+      });
 
       // Update vehicle status to in_use
-      await db.update(schema.vehicles)
-        .set({ status: 'in_use' })
-        .where(eq(schema.vehicles.id, vehicleId));
+      await prisma.vehicle.update({
+        where: { id: Number(vehicleId) },
+        data: { status: 'IN_USE' }
+      });
 
-      // Send delivery assignment notification to driver
-      if (driver && order) {
-        console.log('✅ New Delivery Assignment 🚛 - Sent successfully');
-        await QueueService.addEmailJob({
-          email: 'driver@example.com',
-          title: 'New Delivery Assignment 🚛',
-          name: driver.name,
-          message: `You have been assigned a new delivery: Order ${order.orderNumber} to ${order.customerName}. Scheduled for ${new Date(scheduledAt).toLocaleString()}`,
-          template: 'delivery_assignment'
-        });
-      }
-
-      const dispatch = {
-        id: Date.now(), // Mock ID
-        orderId,
-        driverId,
-        vehicleId,
-        status: 'active',
-        scheduledAt: new Date(scheduledAt),
-        notes,
-        createdAt: new Date()
-      };
+      // Send delivery assignment notification
+      console.log('✅ New Delivery Assignment 🚛 - Sent successfully');
+      await QueueService.addEmailJob({
+        email: 'driver@example.com',
+        title: 'New Delivery Assignment 🚛',
+        name: dispatch.driver.name,
+        message: `You have been assigned a new delivery: Order ${dispatch.order.orderNumber} to ${dispatch.order.customerName}. Scheduled for ${new Date(scheduledDate).toLocaleString()}`,
+        template: 'delivery_assignment'
+      });
 
       res.status(201).json({ 
         success: true,
@@ -165,7 +165,7 @@ export class DispatchController {
     } catch (error) {
       res.status(500).json({ 
         success: false,
-        error: { message: 'Server error' }
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
       });
     }
   }
@@ -173,40 +173,74 @@ export class DispatchController {
   static async updateDispatchStatus(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { status, location, notes } = req.body;
+      const { status, notes } = req.body;
 
-      // Mock dispatch status update
-      const dispatch = {
-        id: Number(id),
-        status,
-        location,
-        notes,
-        updatedAt: new Date()
-      };
+      const updateData: any = { status, notes };
+      
+      if (status === 'DELIVERED') {
+        updateData.actualDelivery = new Date();
+      } else if (status === 'DISPATCHED') {
+        updateData.dispatchedAt = new Date();
+      }
 
-      res.json(dispatch);
-    } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      const dispatch = await prisma.dispatch.update({
+        where: { id: Number(id) },
+        data: updateData,
+        include: {
+          order: true,
+          driver: true,
+          vehicle: true
+        }
+      });
+
+      res.json({ success: true, data: dispatch });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'DISPATCH_NOT_FOUND', message: 'Dispatch not found' }
+        });
+      }
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
   static async updateDispatch(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { scheduledAt, notes, estimatedArrival } = req.body;
+      const { scheduledDate, notes, estimatedDelivery, fuelAllowance, route } = req.body;
 
-      // Mock dispatch update
-      const dispatch = {
-        id: Number(id),
-        scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
-        estimatedArrival: estimatedArrival ? new Date(estimatedArrival) : undefined,
-        notes,
-        updatedAt: new Date()
-      };
+      const dispatch = await prisma.dispatch.update({
+        where: { id: Number(id) },
+        data: {
+          scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
+          estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined,
+          fuelAllowance: fuelAllowance ? Number(fuelAllowance) : undefined,
+          route,
+          notes
+        },
+        include: {
+          order: true,
+          driver: true,
+          vehicle: true
+        }
+      });
 
-      res.json(dispatch);
-    } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.json({ success: true, data: dispatch });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'DISPATCH_NOT_FOUND', message: 'Dispatch not found' }
+        });
+      }
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 }

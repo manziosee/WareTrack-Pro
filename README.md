@@ -97,7 +97,7 @@ graph TD
 ### **Backend Architecture**
 ```mermaid
 graph TD
-    A[Node.js + Express] --> B[PostgreSQL + Drizzle ORM]
+    A[Node.js + Express] --> B[PostgreSQL + Prisma ORM]
     B --> C[Redis + BullMQ]
     C --> D[JWT Authentication]
     D --> E[EmailJS Integration]
@@ -112,13 +112,13 @@ graph TD
 |--------------|----------------|-------------|
 | **Frontend** | React 18 + TypeScript | Modern UI with type safety |
 | **Backend** | Node.js + Express | RESTful API server |
-| **Database** | PostgreSQL + Supabase | Production database |
-| **ORM** | Drizzle ORM | Type-safe database operations |
-| **Cache** | Redis + BullMQ | Caching and background jobs |
+| **Database** | PostgreSQL + Prisma | Production database |
+| **ORM** | Prisma ORM | Type-safe database operations |
 | **Auth** | JWT + bcrypt | Secure authentication |
 | **Email** | EmailJS | Notification system |
-| **Deployment** | Docker + Render + Vercel | Production deployment |
+| **Deployment** | Docker + Nginx | Production deployment |
 | **Documentation** | Swagger/OpenAPI 3.0 | Interactive API docs |
+| **Containerization** | Docker + Docker Compose | Easy deployment and scaling |
 
 ---
 
@@ -131,8 +131,16 @@ graph TD
 git clone https://github.com/manziosee/WareTrack-Pro.git
 cd WareTrack-Pro
 
+# Copy environment file
+cp .env.example .env
+# Edit .env with your configuration
+
 # Start with Docker Compose
 docker-compose up -d
+
+# Run database migrations
+docker-compose exec backend npx prisma migrate deploy
+docker-compose exec backend npx prisma db seed
 
 # Access the application
 # Frontend: http://localhost:3001
@@ -147,9 +155,10 @@ docker-compose up -d
 cd backend
 npm install
 cp .env.example .env
-# Configure your .env file
-npm run db:migrate
-npm run seed
+# Configure your .env file with PostgreSQL connection
+npx prisma generate
+npx prisma migrate dev
+npx prisma db seed
 npm run dev
 
 # Frontend setup (new terminal)
@@ -161,9 +170,13 @@ npm run dev
 ### **Option 3: Production Deployment**
 
 ```bash
-# Deploy backend to Render
-# Deploy frontend to Vercel
-# Both are configured for one-click deployment
+# Production with Docker
+docker-compose -f docker-compose.prod.yml up -d
+
+# Or deploy to cloud platforms:
+# Backend: Render, Railway, or any Node.js hosting
+# Frontend: Vercel, Netlify
+# Database: PostgreSQL on Render, Supabase, or AWS RDS
 ```
 
 ---
@@ -242,10 +255,9 @@ services:
       - "5000:5000"
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:password@db:5432/waretrack
+      - DATABASE_URL=postgresql://postgres:password123@db:5432/waretrack
     depends_on:
       - db
-      - redis
 
   frontend:
     build: ./frontend
@@ -255,18 +267,13 @@ services:
       - VITE_API_URL=http://localhost:5000/api
 
   db:
-    image: postgres:15
+    image: postgres:15-alpine
     environment:
       POSTGRES_DB: waretrack
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: password123
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
 ```
 
 ### **Production Environment**
@@ -281,34 +288,29 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - backend1
-      - backend2
+      - backend
 
-  backend1:
+  backend:
     build: 
       context: ./backend
       dockerfile: Dockerfile.prod
     environment:
       - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
-      - redis
+      - db
 
-  backend2:
-    build: 
-      context: ./backend
-      dockerfile: Dockerfile.prod
+  db:
+    image: postgres:15-alpine
     environment:
-      - NODE_ENV=production
-    depends_on:
-      - redis
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - redis_data:/data
+      - postgres_data:/var/lib/postgresql/data
 ```
 
 ---

@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
-import { db, schema } from '../db';
-import { eq, ilike, or, lt } from 'drizzle-orm';
+import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
 import { QueueService } from '../services/queueService';
 
@@ -10,14 +9,29 @@ export class InventoryController {
   static async getInventory(req: Request, res: Response) {
     try {
       const { page = 1, limit = 10, search, category, status } = req.query;
-      const offset = (Number(page) - 1) * Number(limit);
+      const skip = (Number(page) - 1) * Number(limit);
 
-      const items = await db.select().from(schema.inventoryItems).limit(Number(limit)).offset(offset);
+      const items = await prisma.inventoryItem.findMany({
+        skip,
+        take: Number(limit),
+        where: {
+          ...(category && { category: category as string }),
+          ...(status && { status: status as any }),
+          ...(search && {
+            OR: [
+              { name: { contains: search as string, mode: 'insensitive' } },
+              { code: { contains: search as string, mode: 'insensitive' } }
+            ]
+          })
+        }
+      });
+
+      const total = await prisma.inventoryItem.count();
 
       res.json({
         success: true,
         data: items,
-        pagination: { page: Number(page), limit: Number(limit), total: items.length, totalPages: Math.ceil(items.length / Number(limit)) }
+        pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
       });
     } catch (error) {
       res.status(500).json({ 
@@ -41,7 +55,7 @@ export class InventoryController {
 
   static async getLowStock(req: Request, res: Response) {
     try {
-      const items = await db.select().from(schema.inventoryItems);
+      const items = await prisma.inventoryItem.findMany();
       const lowStockItems = items.filter(item => item.quantity < item.minQuantity);
       res.json({ success: true, data: lowStockItems });
     } catch (error) {
@@ -54,9 +68,9 @@ export class InventoryController {
 
   static async getStats(req: Request, res: Response) {
     try {
-      const items = await db.select().from(schema.inventoryItems);
+      const items = await prisma.inventoryItem.findMany();
       const totalItems = items.length;
-      const totalValue = items.reduce((sum, item) => sum + (item.quantity * parseFloat(item.unitPrice)), 0);
+      const totalValue = items.reduce((sum, item) => sum + (item.quantity * Number(item.unitPrice)), 0);
       const outOfStock = items.filter(item => item.quantity === 0).length;
       const lowStock = items.filter(item => item.quantity < item.minQuantity && item.quantity > 0).length;
       
@@ -64,12 +78,12 @@ export class InventoryController {
         const existing = acc.find(cat => cat.name === item.category);
         if (existing) {
           existing.count += 1;
-          existing.value += item.quantity * parseFloat(item.unitPrice);
+          existing.value += item.quantity * Number(item.unitPrice);
         } else {
           acc.push({
             name: item.category,
             count: 1,
-            value: item.quantity * parseFloat(item.unitPrice)
+            value: item.quantity * Number(item.unitPrice)
           });
         }
         return acc;
@@ -96,15 +110,23 @@ export class InventoryController {
   static async getInventoryById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const [item] = await db.select().from(schema.inventoryItems).where(eq(schema.inventoryItems.id, Number(id))).limit(1);
+      const item = await prisma.inventoryItem.findUnique({
+        where: { id: Number(id) }
+      });
       
       if (!item) {
-        return res.status(404).json({ message: 'Item not found' });
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'ITEM_NOT_FOUND', message: 'Item not found' }
+        });
       }
 
-      res.json(item);
+      res.json({ success: true, data: item });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -125,27 +147,32 @@ export class InventoryController {
     try {
       const { name, code, category, quantity, minQuantity, unit, unitCategory, location, barcode, unitPrice, supplier, description } = req.body;
 
-      const [item] = await db.insert(schema.inventoryItems).values({
-        name,
-        code,
-        category,
-        quantity,
-        minQuantity,
-        unit,
-        unitCategory,
-        location,
-        barcode,
-        unitPrice,
-        supplier,
-        description,
-        status: 'active'
-      }).returning();
+      const item = await prisma.inventoryItem.create({
+        data: {
+          name,
+          code,
+          category,
+          quantity: Number(quantity),
+          minQuantity: Number(minQuantity),
+          unit,
+          unitCategory,
+          location,
+          barcode,
+          unitPrice: Number(unitPrice),
+          supplier,
+          description,
+          status: 'ACTIVE'
+        }
+      });
 
       await cache.invalidateInventoryCache();
       
-      res.status(201).json(item);
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
+      res.status(201).json({ success: true, data: item });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -153,12 +180,34 @@ export class InventoryController {
     try {
       const { items } = req.body;
       
-      const insertedItems = await db.insert(schema.inventoryItems).values(items).returning();
+      const insertedItems = await prisma.inventoryItem.createMany({
+        data: items.map((item: any) => ({
+          name: item.name,
+          code: item.code,
+          category: item.category,
+          quantity: item.quantity,
+          minQuantity: item.minQuantity,
+          unit: item.unit,
+          unitCategory: item.unitCategory,
+          location: item.location,
+          barcode: item.barcode,
+          unitPrice: item.unitPrice,
+          supplier: item.supplier,
+          description: item.description,
+          status: 'ACTIVE'
+        }))
+      });
       await cache.invalidateInventoryCache();
       
-      res.status(201).json({ message: `${insertedItems.length} items imported successfully`, items: insertedItems });
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
+      res.status(201).json({ 
+        success: true,
+        message: `${insertedItems.count} items imported successfully`
+      });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -167,23 +216,30 @@ export class InventoryController {
       const { id } = req.params;
       const { name, code, category, quantity, minQuantity, unit, unitCategory, location, barcode, unitPrice, supplier, description, status } = req.body;
 
-      const [item] = await db.update(schema.inventoryItems)
-        .set({ name, code, category, quantity, minQuantity, unit, unitCategory, location, barcode, unitPrice, supplier, description, status, updatedAt: new Date() })
-        .where(eq(schema.inventoryItems.id, Number(id)))
-        .returning();
-
-      if (!item) {
-        return res.status(404).json({ 
-          success: false,
-          error: { message: 'Item not found' }
-        });
-      }
+      const item = await prisma.inventoryItem.update({
+        where: { id: Number(id) },
+        data: {
+          name,
+          code,
+          category,
+          quantity: Number(quantity),
+          minQuantity: Number(minQuantity),
+          unit,
+          unitCategory,
+          location,
+          barcode,
+          unitPrice: Number(unitPrice),
+          supplier,
+          description,
+          status: status as any
+        }
+      });
 
       // Check for low stock and send alert
       if (quantity <= minQuantity) {
         console.log('✅ Inventory Alert - Low Stock ⚠️ - Sent successfully');
         await QueueService.addEmailJob({
-          email: 'warehouse@example.com', // Replace with actual warehouse manager email
+          email: 'warehouse@example.com',
           title: 'Inventory Alert - Low Stock ⚠️',
           name: 'Warehouse Manager',
           message: `Item "${name}" (${code}) is running low. Current stock: ${quantity}, Minimum required: ${minQuantity}`,
@@ -197,10 +253,16 @@ export class InventoryController {
         success: true,
         data: item
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'ITEM_NOT_FOUND', message: 'Item not found' }
+        });
+      }
       res.status(500).json({ 
         success: false,
-        error: { message: 'Server error' }
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
       });
     }
   }
@@ -209,12 +271,26 @@ export class InventoryController {
     try {
       const { id } = req.params;
       
-      await db.delete(schema.inventoryItems).where(eq(schema.inventoryItems.id, Number(id)));
+      await prisma.inventoryItem.delete({
+        where: { id: Number(id) }
+      });
       await cache.invalidateInventoryCache();
       
-      res.json({ message: 'Item deleted successfully' });
-    } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.json({ 
+        success: true,
+        message: 'Item deleted successfully' 
+      });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'ITEM_NOT_FOUND', message: 'Item not found' }
+        });
+      }
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 }

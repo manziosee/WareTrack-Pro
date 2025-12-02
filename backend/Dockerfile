@@ -8,10 +8,16 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy source code
 COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Run database migrations
+RUN npx prisma migrate deploy || echo "Migration failed, will retry at runtime"
 
 # Build the application
 RUN npm run build

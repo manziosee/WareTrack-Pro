@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { db, schema } from '../db';
-import { eq } from 'drizzle-orm';
+import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
 import { QueueService } from '../services/queueService';
 
@@ -14,8 +13,8 @@ export class AuthController {
       const { name, email, password, phone, role } = req.body;
 
       // Check if this is the first user registration
-      const allUsers = await db.select().from(schema.users);
-      const isFirstUser = allUsers.length === 0;
+      const userCount = await prisma.user.count();
+      const isFirstUser = userCount === 0;
       
       // If not first user, registration is disabled (only admins can create users)
       if (!isFirstUser) {
@@ -62,8 +61,10 @@ export class AuthController {
         });
       }
 
-      const existingUser = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
-      if (existingUser.length > 0) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email }
+      });
+      if (existingUser) {
         return res.status(400).json({ 
           success: false,
           error: {
@@ -83,16 +84,18 @@ export class AuthController {
       const userStatus = 'active';
 
       const hashedPassword = await bcrypt.hash(password, 12);
-      const [user] = await db.insert(schema.users).values({
-        firstName,
-        lastName,
-        name,
-        email,
-        password: hashedPassword,
-        phone: phone || '',
-        role: userRole,
-        status: userStatus
-      }).returning();
+      const user = await prisma.user.create({
+        data: {
+          firstName,
+          lastName,
+          name,
+          email,
+          password: hashedPassword,
+          phone: phone || '',
+          role: 'ADMIN',
+          status: 'ACTIVE'
+        }
+      });
 
       const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
       const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, process.env.JWT_SECRET!, { expiresIn: '30d' });
@@ -166,7 +169,9 @@ export class AuthController {
     try {
       const { email, password } = req.body;
 
-      const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
+      const user = await prisma.user.findUnique({
+        where: { email }
+      });
       if (!user) {
         return res.status(401).json({ 
           success: false,
@@ -189,7 +194,7 @@ export class AuthController {
       }
 
       // Check if user account is active
-      if (user.status === 'inactive') {
+      if (user.status === 'INACTIVE') {
         return res.status(403).json({ 
           success: false,
           error: {
@@ -202,7 +207,10 @@ export class AuthController {
       // Check if this is first login (lastLogin is null)
       const isFirstLogin = !user.lastLogin;
       
-      await db.update(schema.users).set({ lastLogin: new Date() }).where(eq(schema.users.id, user.id));
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date() }
+      });
 
       // Send welcome email for first-time users
       if (isFirstLogin) {
@@ -271,7 +279,9 @@ export class AuthController {
         });
       }
       
-      const [user] = await db.select().from(schema.users).where(eq(schema.users.id, decoded.userId)).limit(1);
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId }
+      });
       if (!user) {
         return res.status(401).json({ 
           success: false,
@@ -327,7 +337,9 @@ export class AuthController {
 
   static async getProfile(req: Request, res: Response) {
     try {
-      const [user] = await db.select().from(schema.users).where(eq(schema.users.id, Number(req.user?.userId))).limit(1);
+      const user = await prisma.user.findUnique({
+        where: { id: Number(req.user?.userId) }
+      });
       if (!user) {
         return res.status(404).json({ 
           success: false,

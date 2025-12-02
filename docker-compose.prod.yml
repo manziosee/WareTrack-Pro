@@ -1,7 +1,55 @@
 version: '3.8'
 
 services:
-  # Nginx Load Balancer
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: waretrack-db-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-waretrack}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - waretrack-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-waretrack}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: waretrack-backend-prod
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRE=${JWT_EXPIRE:-7d}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - EMAILJS_SERVICE_ID=${EMAILJS_SERVICE_ID}
+      - EMAILJS_TEMPLATE_ID=${EMAILJS_TEMPLATE_ID}
+      - EMAILJS_PUBLIC_KEY=${EMAILJS_PUBLIC_KEY}
+      - EMAILJS_PRIVATE_KEY=${EMAILJS_PRIVATE_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - waretrack-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
     container_name: waretrack-nginx
@@ -12,191 +60,13 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
-      - nginx_logs:/var/log/nginx
     depends_on:
-      - backend1
-      - backend2
-    networks:
-      - waretrack-network
-    healthcheck:
-      test: ["CMD", "nginx", "-t"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Backend Instance 1
-  backend1:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.prod
-    container_name: waretrack-backend-1
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - PORT=5000
-      - DATABASE_URL=${DATABASE_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRE=7d
-      - FRONTEND_URL=${FRONTEND_URL}
-      - REDIS_URL=${REDIS_URL}
-      - EMAILJS_SERVICE_ID=${EMAILJS_SERVICE_ID}
-      - EMAILJS_TEMPLATE_ID=${EMAILJS_TEMPLATE_ID}
-      - EMAILJS_PUBLIC_KEY=${EMAILJS_PUBLIC_KEY}
-      - EMAILJS_PRIVATE_KEY=${EMAILJS_PRIVATE_KEY}
-      - RATE_LIMIT_WINDOW_MS=900000
-      - RATE_LIMIT_MAX_REQUESTS=1000
-    depends_on:
-      - redis
-    networks:
-      - waretrack-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-
-  # Backend Instance 2
-  backend2:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.prod
-    container_name: waretrack-backend-2
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - PORT=5000
-      - DATABASE_URL=${DATABASE_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRE=7d
-      - FRONTEND_URL=${FRONTEND_URL}
-      - REDIS_URL=${REDIS_URL}
-      - EMAILJS_SERVICE_ID=${EMAILJS_SERVICE_ID}
-      - EMAILJS_TEMPLATE_ID=${EMAILJS_TEMPLATE_ID}
-      - EMAILJS_PUBLIC_KEY=${EMAILJS_PUBLIC_KEY}
-      - EMAILJS_PRIVATE_KEY=${EMAILJS_PRIVATE_KEY}
-      - RATE_LIMIT_WINDOW_MS=900000
-      - RATE_LIMIT_MAX_REQUESTS=1000
-    depends_on:
-      - redis
-    networks:
-      - waretrack-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-
-  # Redis Cache & Queue (Production)
-  redis:
-    image: redis:7-alpine
-    container_name: waretrack-redis-prod
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data:/data
-    networks:
-      - waretrack-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 128M
-
-  # Frontend (Production Build)
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
-    container_name: waretrack-frontend-prod
-    restart: unless-stopped
-    environment:
-      - VITE_API_URL=${BACKEND_URL}/api
-      - VITE_APP_NAME=WareTrack Pro
-    networks:
-      - waretrack-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 128M
-
-  # Monitoring (Optional)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: waretrack-prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-    networks:
-      - waretrack-network
-
-  # Grafana Dashboard (Optional)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: waretrack-grafana
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-    depends_on:
-      - prometheus
+      - backend
     networks:
       - waretrack-network
 
 volumes:
-  redis_data:
-    driver: local
-  nginx_logs:
-    driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
+  postgres_data:
     driver: local
 
 networks:

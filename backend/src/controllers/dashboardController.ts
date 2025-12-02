@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
-import { db, schema } from '../db';
-import { eq, count, lt } from 'drizzle-orm';
+import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
 
 const cache = CacheService.getInstance();
@@ -22,28 +21,39 @@ export class DashboardController {
         pendingOrders,
         activeVehicles,
         inMaintenance,
-        lowStockItems
+        lowStockItems,
+        totalInventoryItems,
+        totalDrivers
       ] = await Promise.all([
-        db.select({ count: count() }).from(schema.deliveryOrders),
-        db.select({ count: count() }).from(schema.deliveryOrders).where(eq(schema.deliveryOrders.status, 'delivered')),
-        db.select({ count: count() }).from(schema.deliveryOrders).where(eq(schema.deliveryOrders.status, 'pending')),
-        db.select({ count: count() }).from(schema.vehicles).where(eq(schema.vehicles.status, 'available')),
-        db.select({ count: count() }).from(schema.vehicles).where(eq(schema.vehicles.status, 'maintenance')),
-        db.select({ count: count() }).from(schema.inventoryItems).where(lt(schema.inventoryItems.quantity, schema.inventoryItems.minQuantity))
+        prisma.deliveryOrder.count(),
+        prisma.deliveryOrder.count({ where: { status: 'DELIVERED' } }),
+        prisma.deliveryOrder.count({ where: { status: 'PENDING' } }),
+        prisma.vehicle.count({ where: { status: 'AVAILABLE' } }),
+        prisma.vehicle.count({ where: { status: 'MAINTENANCE' } }),
+        prisma.$queryRaw`SELECT COUNT(*)::int as count FROM inventory_items WHERE quantity < min_quantity`,
+        prisma.inventoryItem.count(),
+        prisma.driver.count()
       ]);
 
       // Calculate total revenue from completed orders
-      const revenueResult = await db.select().from(schema.deliveryOrders).where(eq(schema.deliveryOrders.status, 'delivered'));
-      const totalRevenue = revenueResult.reduce((sum, order) => sum + parseFloat(order.totalAmount), 0);
+      const revenueResult = await prisma.deliveryOrder.findMany({
+        where: { status: 'DELIVERED' },
+        select: { totalAmount: true }
+      });
+      const totalRevenue = revenueResult.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+
+      const lowStockCount = Array.isArray(lowStockItems) ? lowStockItems[0]?.count || 0 : 0;
 
       const summary = {
-        totalOrders: totalOrders[0].count,
-        completedOrders: completedOrders[0].count,
-        pendingOrders: pendingOrders[0].count,
+        totalOrders,
+        completedOrders,
+        pendingOrders,
         totalRevenue,
-        activeVehicles: activeVehicles[0].count,
-        inMaintenance: inMaintenance[0].count,
-        lowStockItems: lowStockItems[0].count
+        activeVehicles,
+        inMaintenance,
+        lowStockItems: Number(lowStockCount),
+        totalInventoryItems,
+        totalDrivers
       };
 
       await cache.cacheDashboardStats(summary);
@@ -76,14 +86,22 @@ export class DashboardController {
 
   static async getUpcoming(req: Request, res: Response) {
     try {
-      const upcomingOrders = await db.select()
-        .from(schema.deliveryOrders)
-        .where(eq(schema.deliveryOrders.status, 'pending'))
-        .limit(5);
+      const upcomingOrders = await prisma.deliveryOrder.findMany({
+        where: { status: 'PENDING' },
+        take: 5,
+        include: {
+          driver: true,
+          vehicle: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
       
-      res.json(upcomingOrders);
+      res.json({ success: true, data: upcomingOrders });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
     }
   }
 
@@ -114,11 +132,11 @@ export class DashboardController {
 
   static async getAlerts(req: Request, res: Response) {
     try {
-      const lowStockItems = await db.select()
-        .from(schema.inventoryItems)
-        .where(lt(schema.inventoryItems.quantity, schema.inventoryItems.minQuantity));
+      const lowStockItems = await prisma.$queryRaw`
+        SELECT * FROM inventory_items WHERE quantity < min_quantity
+      `;
 
-      const alerts = lowStockItems.map(item => ({
+      const alerts = (lowStockItems as any[]).map((item: any) => ({
         id: item.id,
         type: 'low_stock',
         message: `Low stock alert: ${item.name} (${item.quantity} remaining)`,
