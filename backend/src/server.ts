@@ -67,7 +67,7 @@ app.use(globalLimiter);
 // CORS
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://ware-track-pro.vercel.app', process.env.FRONTEND_URL].filter(Boolean)
+    ? ['https://ware-track-pro.vercel.app', process.env.FRONTEND_URL, 'http://localhost:3001', 'http://localhost:3000'].filter(Boolean)
     : [process.env.FRONTEND_URL || 'http://localhost:3001', 'http://localhost:3000'],
   credentials: true
 }));
