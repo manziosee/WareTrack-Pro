@@ -128,7 +128,9 @@ export class DispatchController {
       // Update order status to dispatched
       await prisma.deliveryOrder.update({
         where: { id: Number(orderId) },
-        data: { status: 'DISPATCHED' }
+        data: { 
+          status: 'DISPATCHED'
+        }
       });
 
       // Update driver status to on_duty
@@ -187,6 +189,43 @@ export class DispatchController {
           vehicle: true
         }
       });
+
+      // Sync order status with dispatch status
+      let orderStatus = dispatch.order.status;
+      if (status === 'DISPATCHED') {
+        orderStatus = 'DISPATCHED';
+      } else if (status === 'IN_TRANSIT') {
+        orderStatus = 'IN_TRANSIT';
+      } else if (status === 'DELIVERED') {
+        orderStatus = 'DELIVERED';
+      }
+
+      // Update order status if it changed
+      if (orderStatus !== dispatch.order.status) {
+        await prisma.deliveryOrder.update({
+          where: { id: dispatch.orderId },
+          data: { 
+            status: orderStatus,
+            ...(status === 'DELIVERED' && { deliveredAt: new Date() })
+          }
+        });
+      }
+
+      // Sync vehicle status with dispatch status
+      let vehicleStatus = dispatch.vehicle.status;
+      if (status === 'DISPATCHED' || status === 'IN_TRANSIT') {
+        vehicleStatus = 'IN_USE';
+      } else if (status === 'DELIVERED') {
+        vehicleStatus = 'AVAILABLE';
+      }
+
+      // Update vehicle status if it changed
+      if (vehicleStatus !== dispatch.vehicle.status) {
+        await prisma.vehicle.update({
+          where: { id: dispatch.vehicleId },
+          data: { status: vehicleStatus }
+        });
+      }
 
       res.json({ success: true, data: dispatch });
     } catch (error: any) {
@@ -286,6 +325,32 @@ export class DispatchController {
       });
       res.json({ success: true, data: vehicles });
     } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
+
+  static async deleteDispatch(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      
+      await prisma.dispatch.delete({
+        where: { id: Number(id) }
+      });
+
+      res.json({ 
+        success: true,
+        message: 'Dispatch deleted successfully' 
+      });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'DISPATCH_NOT_FOUND', message: 'Dispatch not found' }
+        });
+      }
       res.status(500).json({ 
         success: false,
         error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }

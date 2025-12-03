@@ -19,13 +19,13 @@ interface EditVehicleFormProps {
 
 const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => {
   const [formData, setFormData] = useState({
-    plateNumber: vehicle.plateNumber,
-    type: vehicle.type,
-    capacity: vehicle.capacity.toString(),
+    plateNumber: vehicle.plateNumber || '',
+    type: vehicle.type || 'Truck',
+    capacity: vehicle.capacity?.toString() || '0',
     model: vehicle.model || '',
     year: vehicle.year?.toString() || '',
     fuelType: vehicle.fuelType || 'Diesel',
-    status: vehicle.status
+    status: vehicle.status || 'AVAILABLE'
   });
   const [loading, setLoading] = useState(false);
 
@@ -45,8 +45,8 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
       });
       
       toast.success(`Vehicle ${formData.plateNumber} updated successfully!`);
-      if (onSave) onSave();
       onClose();
+      if (onSave) onSave();
     } catch (error: any) {
       console.error('Failed to update vehicle:', error);
       toast.error(error.response?.data?.error?.message || 'Failed to update vehicle');

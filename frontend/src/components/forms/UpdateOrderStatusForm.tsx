@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { ordersService } from '@/services/ordersService';
+import toast from 'react-hot-toast';
 
 interface UpdateOrderStatusFormProps {
   orderId: string;
   currentStatus: string;
   onClose: () => void;
+  onUpdate?: () => void;
 }
 
 const UpdateOrderStatusForm = ({ orderId, currentStatus, onClose }: UpdateOrderStatusFormProps) => {
@@ -17,16 +20,25 @@ const UpdateOrderStatusForm = ({ orderId, currentStatus, onClose }: UpdateOrderS
   });
 
   const statusOptions = [
-    { value: 'pending', label: 'Pending' },
-    { value: 'dispatched', label: 'Dispatched' },
-    { value: 'in_transit', label: 'In Transit' },
-    { value: 'delivered', label: 'Delivered' }
+    { value: 'PENDING', label: 'Pending' },
+    { value: 'DISPATCHED', label: 'Dispatched' },
+    { value: 'IN_TRANSIT', label: 'In Transit' },
+    { value: 'DELIVERED', label: 'Delivered' }
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Order ${orderId} status updated to ${formData.status}!`);
-    onClose();
+    try {
+      await ordersService.updateOrderStatus(Number(orderId), {
+        status: formData.status
+      });
+      toast.success(`Order status updated to ${formData.status}`);
+      onClose();
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to update order status:', error);
+      toast.error('Failed to update order status');
+    }
   };
 
   return (
@@ -57,19 +69,9 @@ const UpdateOrderStatusForm = ({ orderId, currentStatus, onClose }: UpdateOrderS
         />
       </div>
       
-      {formData.status === 'in_transit' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Delivery</label>
-          <input
-            type="datetime-local"
-            value={formData.estimatedDelivery}
-            onChange={(e) => setFormData({ ...formData, estimatedDelivery: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-      )}
+
       
-      {formData.status === 'delivered' && (
+      {formData.status === 'DELIVERED' && (
         <>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Proof</label>

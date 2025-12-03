@@ -45,8 +45,8 @@ export const ordersService = {
     return response.data;
   },
 
-  async updateOrderStatus(id: number, status: string) {
-    const response = await api.post(`/orders/${id}/status`, { status });
+  async updateOrderStatus(id: number, data: { status: string; [key: string]: any }) {
+    const response = await api.post(`/orders/${id}/status`, data);
     return response.data;
   },
 

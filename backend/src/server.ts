@@ -19,6 +19,7 @@ import dashboardRoutes from './routes/dashboard';
 import reportRoutes from './routes/reports';
 import testEmailRoutes from './routes/test-email';
 import settingsRoutes from './routes/settings';
+import notificationRoutes from './routes/notifications';
 import { errorHandler } from './middleware/errorHandler';
 import { InventoryAlerts } from './middleware/inventoryAlerts';
 
@@ -82,9 +83,11 @@ app.use(cors({
       'https://ware-track-pro.vercel.app',
       'https://waretrack-pro.onrender.com',
       'http://localhost:3001',
+      'http://localhost:3002',
       'http://localhost:3000',
       'http://localhost:5000',
       'http://127.0.0.1:3001',
+      'http://127.0.0.1:3002',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5000'
     ];
@@ -145,6 +148,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/test', testEmailRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check with detailed information
 app.get('/health', (req, res) => {

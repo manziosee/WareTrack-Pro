@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { dispatchService } from '../../services/dispatchService';
+import { ordersService } from '../../services/ordersService';
+import { driversService } from '../../services/driversService';
+import { vehiclesService } from '../../services/vehiclesService';
 import toast from 'react-hot-toast';
 
 interface DispatchFormProps {
@@ -10,12 +13,12 @@ interface DispatchFormProps {
 
 export default function DispatchForm({ onClose, onSave, dispatch }: DispatchFormProps) {
   const [formData, setFormData] = useState({
-    orderId: dispatch?.orderId || '',
-    driverId: dispatch?.driverId || '',
-    vehicleId: dispatch?.vehicleId || '',
-    scheduledDate: dispatch?.scheduledDate || '',
-    estimatedDelivery: dispatch?.estimatedDelivery || '',
-    fuelAllowance: dispatch?.fuelAllowance || '',
+    orderId: dispatch?.orderId?.toString() || '',
+    driverId: dispatch?.driverId?.toString() || '',
+    vehicleId: dispatch?.vehicleId?.toString() || '',
+    scheduledDate: dispatch?.scheduledDate ? new Date(dispatch.scheduledDate).toISOString().slice(0, 16) : '',
+    estimatedDelivery: dispatch?.estimatedDelivery ? new Date(dispatch.estimatedDelivery).toISOString().slice(0, 16) : '',
+    fuelAllowance: dispatch?.fuelAllowance?.toString() || '',
     route: dispatch?.route || '',
     notes: dispatch?.notes || ''
   });
@@ -29,9 +32,9 @@ export default function DispatchForm({ onClose, onSave, dispatch }: DispatchForm
     const fetchData = async () => {
       try {
         const [ordersRes, driversRes, vehiclesRes] = await Promise.all([
-          dispatchService.getAvailableOrders(),
-          dispatchService.getAvailableDrivers(),
-          dispatchService.getAvailableVehicles()
+          dispatch ? ordersService.getOrders() : dispatchService.getAvailableOrders(),
+          dispatch ? driversService.getDrivers() : dispatchService.getAvailableDrivers(),
+          dispatch ? vehiclesService.getVehicles() : dispatchService.getAvailableVehicles()
         ]);
         
         setOrders(ordersRes.data || []);
@@ -89,7 +92,6 @@ export default function DispatchForm({ onClose, onSave, dispatch }: DispatchForm
           onChange={(e) => setFormData({ ...formData, orderId: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           required
-          disabled={!!dispatch}
         >
           <option value="">Select Order</option>
           {orders.map((order) => (
@@ -111,9 +113,9 @@ export default function DispatchForm({ onClose, onSave, dispatch }: DispatchForm
           required
         >
           <option value="">Select Driver</option>
-          {drivers.filter(d => d.status === 'AVAILABLE').map((driver) => (
+          {drivers.map((driver) => (
             <option key={driver.id} value={driver.id}>
-              {driver.name} - License: {driver.licenseNumber}
+              {driver.name} - License: {driver.licenseNumber} ({driver.status})
             </option>
           ))}
         </select>
@@ -130,9 +132,9 @@ export default function DispatchForm({ onClose, onSave, dispatch }: DispatchForm
           required
         >
           <option value="">Select Vehicle</option>
-          {vehicles.filter(v => v.status === 'AVAILABLE').map((vehicle) => (
+          {vehicles.map((vehicle) => (
             <option key={vehicle.id} value={vehicle.id}>
-              {vehicle.plateNumber} - {vehicle.type}
+              {vehicle.plateNumber} - {vehicle.type} ({vehicle.status})
             </option>
           ))}
         </select>

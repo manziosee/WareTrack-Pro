@@ -15,7 +15,7 @@ export class OrdersController {
         skip,
         take: Number(limit),
         where: {
-          ...(status && { status: status as any }),
+          ...(status && { status: (status as string).toUpperCase() as any }),
           ...(search && {
             OR: [
               { orderNumber: { contains: search as string, mode: 'insensitive' } },
@@ -55,11 +55,11 @@ export class OrdersController {
   static async getStatuses(req: Request, res: Response) {
     try {
       const statuses = [
-        { value: 'pending', label: 'Pending' },
-        { value: 'dispatched', label: 'Dispatched' },
-        { value: 'in_transit', label: 'In Transit' },
-        { value: 'delivered', label: 'Delivered' },
-        { value: 'cancelled', label: 'Cancelled' }
+        { value: 'PENDING', label: 'Pending' },
+        { value: 'DISPATCHED', label: 'Dispatched' },
+        { value: 'IN_TRANSIT', label: 'In Transit' },
+        { value: 'DELIVERED', label: 'Delivered' },
+        { value: 'CANCELLED', label: 'Cancelled' }
       ];
       res.json({ success: true, data: statuses });
     } catch (error) {

@@ -387,6 +387,74 @@ export class AuthController {
     }
   }
 
+  static async updateProfile(req: Request, res: Response) {
+    try {
+      const { name, email, phone } = req.body;
+      const userId = Number(req.user?.userId);
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          name,
+          email,
+          phone
+        }
+      });
+
+      const { password: _, ...userWithoutPassword } = updatedUser;
+      res.json({ 
+        success: true,
+        data: userWithoutPassword
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update profile'
+        }
+      });
+    }
+  }
+
+  static async getUserActivity(req: Request, res: Response) {
+    try {
+      const userId = Number(req.user?.userId);
+
+      const [ordersProcessed, totalOrders, deliveredOrders] = await Promise.all([
+        prisma.deliveryOrder.count({
+          where: { createdBy: userId }
+        }),
+        prisma.deliveryOrder.count(),
+        prisma.deliveryOrder.count({
+          where: { 
+            createdBy: userId,
+            status: 'DELIVERED'
+          }
+        })
+      ]);
+
+      const successRate = ordersProcessed > 0 ? Math.round((deliveredOrders / ordersProcessed) * 100) : 0;
+
+      res.json({ 
+        success: true,
+        data: {
+          ordersProcessed,
+          tasksCompleted: deliveredOrders,
+          successRate
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch user activity'
+        }
+      });
+    }
+  }
+
   static async getDashboardUrl(req: Request, res: Response) {
     try {
       const user = await prisma.user.findUnique({
@@ -435,6 +503,57 @@ export class AuthController {
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Server error'
         }
+      });
+    }
+  }
+
+  static async changePassword(req: Request, res: Response) {
+    try {
+      const userId = Number(req.user?.userId);
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Current password and new password are required' }
+        });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'New password must be at least 6 characters long' }
+        });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+        });
+      }
+
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isCurrentPasswordValid) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_PASSWORD', message: 'Current password is incorrect' }
+        });
+      }
+
+      const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+      await prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedNewPassword }
+      });
+
+      res.json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
       });
     }
   }

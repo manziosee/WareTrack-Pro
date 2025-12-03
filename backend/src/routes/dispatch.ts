@@ -14,5 +14,6 @@ router.get('/driver/:id', auth, DispatchController.getDriverDispatch);
 router.post('/', auth, DispatchController.createDispatch);
 router.post('/:id/status', auth, DispatchController.updateDispatchStatus);
 router.put('/:id', auth, DispatchController.updateDispatch);
+router.delete('/:id', auth, DispatchController.deleteDispatch);
 
 export default router;

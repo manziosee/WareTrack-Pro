@@ -25,6 +25,15 @@ class SimpleCache {
   clear() {
     this.cache.clear();
   }
+
+  clearPattern(pattern: string) {
+    const keys = Array.from(this.cache.keys());
+    keys.forEach(key => {
+      if (key.includes(pattern)) {
+        this.cache.delete(key);
+      }
+    });
+  }
 }
 
 export const cache = new SimpleCache();

@@ -19,7 +19,7 @@ export default function Tracking() {
       try {
         const response = await ordersService.getOrders();
         const orders = response.data || [];
-        setActiveOrders(orders.filter((o: any) => o.status !== 'delivered' && o.status !== 'cancelled'));
+        setActiveOrders(orders.filter((o: any) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'));
       } catch (error) {
         console.error('Failed to fetch orders:', error);
       } finally {
@@ -36,19 +36,19 @@ export default function Tracking() {
 
   const getStageIcon = (stage: string) => {
     switch (stage) {
-      case 'pending': return Clock;
-      case 'dispatched': return Package;
-      case 'in_transit': return Truck;
-      case 'delivered': return CheckCircle;
+      case 'PENDING': return Clock;
+      case 'DISPATCHED': return Package;
+      case 'IN_TRANSIT': return Truck;
+      case 'DELIVERED': return CheckCircle;
       default: return Clock;
     }
   };
 
   const stages = [
-    { key: 'pending', label: 'Pending', color: 'bg-gray-400' },
-    { key: 'dispatched', label: 'Dispatched', color: 'bg-warning-500' },
-    { key: 'in_transit', label: 'In Transit', color: 'bg-accent-500' },
-    { key: 'delivered', label: 'Delivered', color: 'bg-success-500' },
+    { key: 'PENDING', label: 'Pending', color: 'bg-gray-500', textColor: 'text-gray-700' },
+    { key: 'DISPATCHED', label: 'Dispatched', color: 'bg-orange-500', textColor: 'text-orange-700' },
+    { key: 'IN_TRANSIT', label: 'In Transit', color: 'bg-blue-500', textColor: 'text-blue-700' },
+    { key: 'DELIVERED', label: 'Delivered', color: 'bg-green-500', textColor: 'text-green-700' },
   ];
 
   const getCurrentStageIndex = (status: string) => {
@@ -114,13 +114,13 @@ export default function Tracking() {
                           {/* Icon */}
                           <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                             isCompleted ? stage.color : 'bg-gray-200'
-                          } ${isCurrent ? 'ring-4 ring-offset-2 ring-primary-200' : ''} transition-all`}>
+                          } ${isCurrent ? 'ring-4 ring-offset-2 ring-opacity-30' : ''} transition-all duration-300 shadow-lg`}>
                             <Icon className={`w-6 h-6 ${isCompleted ? 'text-white' : 'text-gray-400'}`} />
                           </div>
                           
                           {/* Label */}
                           <p className={`mt-2 text-sm font-medium ${
-                            isCompleted ? 'text-gray-900' : 'text-gray-500'
+                            isCompleted ? stage.textColor : 'text-gray-500'
                           }`}>
                             {stage.label}
                           </p>
@@ -135,7 +135,7 @@ export default function Tracking() {
 
                         {/* Connector Line */}
                         {index < stages.length - 1 && (
-                          <div className={`absolute top-6 left-1/2 w-full h-0.5 ${
+                          <div className={`absolute top-6 left-1/2 w-full h-1 rounded-full transition-all duration-500 ${
                             index < currentStageIndex ? stage.color : 'bg-gray-200'
                           }`} style={{ transform: 'translateY(-50%)' }} />
                         )}

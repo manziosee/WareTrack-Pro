@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Wrench } from 'lucide-react';
+import { Plus, Edit, Wrench, Eye, Trash2 } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -7,6 +7,7 @@ import Modal from '@/components/ui/Modal';
 import AddVehicleForm from '@/components/forms/AddVehicleForm';
 import AddDriverForm from '@/components/forms/AddDriverForm';
 import EditVehicleForm from '@/components/forms/EditVehicleForm';
+import EditDriverForm from '@/components/forms/EditDriverForm';
 import ScheduleMaintenanceForm from '@/components/forms/ScheduleMaintenanceForm';
 import { vehiclesService } from '@/services/vehiclesService';
 import { driversService } from '@/services/driversService';
@@ -18,7 +19,11 @@ export default function Vehicles() {
   const [showAddDriverModal, setShowAddDriverModal] = useState(false);
   const [showEditVehicleModal, setShowEditVehicleModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [showViewVehicleModal, setShowViewVehicleModal] = useState(false);
+  const [showViewDriverModal, setShowViewDriverModal] = useState(false);
+  const [showEditDriverModal, setShowEditDriverModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+  const [selectedDriver, setSelectedDriver] = useState<any>(null);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +61,52 @@ export default function Vehicles() {
     setShowMaintenanceModal(true);
   };
 
+  const handleViewVehicle = (vehicle: any) => {
+    setSelectedVehicle(vehicle);
+    setShowViewVehicleModal(true);
+  };
+
+  const handleDeleteVehicle = async (vehicle: any) => {
+    if (window.confirm(`Are you sure you want to delete vehicle ${vehicle.plateNumber}?`)) {
+      try {
+        await vehiclesService.deleteVehicle(vehicle.id);
+        toast.success('Vehicle deleted successfully');
+        fetchData();
+      } catch (error) {
+        toast.error('Failed to delete vehicle');
+      }
+    }
+  };
+
+  const handleViewDriver = (driver: any) => {
+    setSelectedDriver(driver);
+    setShowViewDriverModal(true);
+  };
+
+  const handleEditDriver = (driver: any) => {
+    setSelectedDriver(driver);
+    setShowEditDriverModal(true);
+  };
+
+  const handleDeleteDriver = async (driver: any) => {
+    if (window.confirm(`Are you sure you want to delete driver ${driver.name}?`)) {
+      try {
+        await driversService.deleteDriver(driver.id);
+        toast.success('Driver deleted successfully');
+        fetchData();
+      } catch (error) {
+        toast.error('Failed to delete driver');
+      }
+    }
+  };
+
+  const handleSaveDriver = () => {
+    setShowAddDriverModal(false);
+    setShowEditDriverModal(false);
+    setSelectedDriver(null);
+    fetchData();
+  };
+
   const getStatusBadgeVariant = (status: string) => {
     switch (status.toUpperCase()) {
       case 'AVAILABLE': return 'success';
@@ -71,20 +122,14 @@ export default function Vehicles() {
     setShowEditVehicleModal(false);
     setSelectedVehicle(null);
     fetchData();
-    toast.success('Vehicle saved successfully');
   };
 
-  const handleSaveDriver = () => {
-    setShowAddDriverModal(false);
-    fetchData();
-    toast.success('Driver saved successfully');
-  };
+
 
   const handleSaveMaintenance = () => {
     setShowMaintenanceModal(false);
     setSelectedVehicle(null);
     fetchData();
-    toast.success('Maintenance scheduled successfully');
   };
 
   if (loading) {
@@ -146,11 +191,18 @@ export default function Vehicles() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
+              <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-gray-200">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleViewVehicle(vehicle)}
+                >
+                  <Eye className="w-4 h-4 mr-1" />
+                  View
+                </Button>
                 <Button 
                   variant="secondary" 
                   size="sm" 
-                  className="flex-1"
                   onClick={() => handleEditVehicle(vehicle)}
                 >
                   <Edit className="w-4 h-4 mr-1" />
@@ -159,11 +211,19 @@ export default function Vehicles() {
                 <Button 
                   variant="warning" 
                   size="sm" 
-                  className="flex-1"
                   onClick={() => handleScheduleMaintenance(vehicle)}
                 >
                   <Wrench className="w-4 h-4 mr-1" />
                   Maintain
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleDeleteVehicle(vehicle)}
+                  className="text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Delete
                 </Button>
               </div>
             </Card>
@@ -211,9 +271,29 @@ export default function Vehicles() {
                       {driver.currentVehicleId ? vehicles.find((v: any) => v.id === driver.currentVehicleId)?.plateNumber : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <button className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors">
-                        <Edit className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handleViewDriver(driver)}
+                          className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                          title="View driver details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleEditDriver(driver)}
+                          className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                          title="Edit driver"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteDriver(driver)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete driver"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -268,8 +348,110 @@ export default function Vehicles() {
               onSave={handleSaveMaintenance}
             />
           </Modal>
+
+          <Modal 
+            isOpen={showViewVehicleModal} 
+            onClose={() => {
+              setShowViewVehicleModal(false);
+              setSelectedVehicle(null);
+            }} 
+            title="Vehicle Details"
+          >
+            {selectedVehicle && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Plate Number</label>
+                    <p className="text-lg font-semibold">{selectedVehicle.plateNumber}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Type</label>
+                    <p className="text-lg">{selectedVehicle.type}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Capacity</label>
+                    <p className="text-lg">{selectedVehicle.capacity} kg</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Status</label>
+                    <Badge variant={getStatusBadgeVariant(selectedVehicle.status)}>
+                      {selectedVehicle.status.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                  {selectedVehicle.model && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Model</label>
+                      <p className="text-lg">{selectedVehicle.model}</p>
+                    </div>
+                  )}
+                  {selectedVehicle.year && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Year</label>
+                      <p className="text-lg">{selectedVehicle.year}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </Modal>
         </>
       )}
+
+      {selectedDriver && (
+        <Modal 
+          isOpen={showViewDriverModal} 
+          onClose={() => {
+            setShowViewDriverModal(false);
+            setSelectedDriver(null);
+          }} 
+          title="Driver Details"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Name</label>
+                <p className="text-lg font-semibold">{selectedDriver.name}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">License Number</label>
+                <p className="text-lg">{selectedDriver.licenseNumber}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Phone</label>
+                <p className="text-lg">{selectedDriver.phone}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Status</label>
+                <Badge variant={selectedDriver.status === 'AVAILABLE' ? 'success' : selectedDriver.status === 'ON_DUTY' ? 'warning' : 'gray'}>
+                  {selectedDriver.status.replace('_', ' ')}
+                </Badge>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Current Vehicle</label>
+                <p className="text-lg">
+                  {selectedDriver.currentVehicleId 
+                    ? vehicles.find((v: any) => v.id === selectedDriver.currentVehicleId)?.plateNumber || 'Unknown Vehicle'
+                    : 'No vehicle assigned'
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      <Modal isOpen={showEditDriverModal} onClose={() => setShowEditDriverModal(false)} title="Edit Driver">
+        {selectedDriver && (
+          <EditDriverForm 
+            driver={selectedDriver} 
+            onClose={() => {
+              setShowEditDriverModal(false);
+              setSelectedDriver(null);
+            }}
+            onSave={handleSaveDriver}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

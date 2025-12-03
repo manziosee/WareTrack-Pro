@@ -11,6 +11,7 @@ import { formatDate, formatStockLevel } from '../utils/formatters';
 import { inventoryService } from '../services/inventoryService';
 import { useRealTimeData } from '../hooks/useRealTimeData';
 import { exportToCSV, exportToPDF, exportToJSON } from '../utils/exportUtils';
+import { cache } from '../utils/cache';
 import toast from 'react-hot-toast';
 
 export default function Inventory() {
@@ -128,14 +129,24 @@ export default function Inventory() {
         await inventoryService.createInventoryItem(itemData);
         toast.success('Item created successfully');
       }
+      
+      // Clear cache to ensure fresh data
+      cache.clearPattern('inventory');
+      cache.clearPattern('/api/');
+      
       setShowEditModal(false);
       setShowAddModal(false);
       setSelectedItem(null);
-      refetch();
-      fetchStats();
+      
+      // Force refresh data with delay to ensure backend is updated
+      setTimeout(async () => {
+        await refetch();
+        await fetchStats();
+      }, 1000);
     } catch (error) {
       console.error('Failed to save item:', error);
       toast.error('Failed to save item');
+      throw error; // Re-throw to let form handle the error
     }
   };
 

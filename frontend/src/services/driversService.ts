@@ -41,6 +41,11 @@ export const driversService = {
     return response.data;
   },
 
+  async deleteDriver(id: number) {
+    const response = await api.delete(`/drivers/${id}`);
+    return response.data;
+  },
+
   async getDriverAssignments(id: number) {
     const response = await api.get(`/drivers/${id}/assignments`);
     return response.data;

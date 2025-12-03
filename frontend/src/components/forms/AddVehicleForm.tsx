@@ -35,8 +35,8 @@ const AddVehicleForm = ({ onClose, onSave }: AddVehicleFormProps) => {
       });
       
       toast.success(`Vehicle ${formData.plateNumber} added successfully!`);
-      if (onSave) onSave();
       onClose();
+      if (onSave) onSave();
     } catch (error: any) {
       console.error('Failed to create vehicle:', error);
       toast.error(error.response?.data?.error?.message || 'Failed to add vehicle');

@@ -128,7 +128,8 @@ export default function Orders() {
 
 
   const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
+    const normalizedStatus = status.toLowerCase();
+    switch (normalizedStatus) {
       case 'delivered': return 'success';
       case 'in_transit': return 'info';
       case 'dispatched': return 'warning';
@@ -139,7 +140,8 @@ export default function Orders() {
   };
 
   const getPriorityBadgeVariant = (priority: string) => {
-    switch (priority) {
+    const normalizedPriority = priority.toLowerCase();
+    switch (normalizedPriority) {
       case 'high': return 'error';
       case 'medium': return 'warning';
       case 'low': return 'gray';
@@ -169,19 +171,19 @@ export default function Orders() {
         </Card>
         <Card>
           <p className="text-sm text-gray-600">Pending</p>
-          <p className="text-2xl font-bold text-gray-600 mt-1">{orders.filter(o => o.status === 'pending').length}</p>
+          <p className="text-2xl font-bold text-gray-600 mt-1">{orders.filter(o => o.status === 'PENDING').length}</p>
         </Card>
         <Card>
           <p className="text-sm text-gray-600">Dispatched</p>
-          <p className="text-2xl font-bold text-warning-600 mt-1">{orders.filter(o => o.status === 'dispatched').length}</p>
+          <p className="text-2xl font-bold text-warning-600 mt-1">{orders.filter(o => o.status === 'DISPATCHED').length}</p>
         </Card>
         <Card>
           <p className="text-sm text-gray-600">In Transit</p>
-          <p className="text-2xl font-bold text-accent-600 mt-1">{orders.filter(o => o.status === 'in_transit').length}</p>
+          <p className="text-2xl font-bold text-accent-600 mt-1">{orders.filter(o => o.status === 'IN_TRANSIT').length}</p>
         </Card>
         <Card>
           <p className="text-sm text-gray-600">Delivered</p>
-          <p className="text-2xl font-bold text-success-600 mt-1">{orders.filter(o => o.status === 'delivered').length}</p>
+          <p className="text-2xl font-bold text-success-600 mt-1">{orders.filter(o => o.status === 'DELIVERED').length}</p>
         </Card>
       </div>
 
@@ -196,11 +198,11 @@ export default function Orders() {
             label: 'Status',
             value: 'status',
             options: [
-              { label: 'Pending', value: 'pending' },
-              { label: 'Dispatched', value: 'dispatched' },
-              { label: 'In Transit', value: 'in_transit' },
-              { label: 'Delivered', value: 'delivered' },
-              { label: 'Cancelled', value: 'cancelled' }
+              { label: 'Pending', value: 'PENDING' },
+              { label: 'Dispatched', value: 'DISPATCHED' },
+              { label: 'In Transit', value: 'IN_TRANSIT' },
+              { label: 'Delivered', value: 'DELIVERED' },
+              { label: 'Cancelled', value: 'CANCELLED' }
             ]
           },
           {
@@ -248,12 +250,12 @@ export default function Orders() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Badge variant={getPriorityBadgeVariant(order.priority)}>
-                      {order.priority}
+                      {order.priority.charAt(0).toUpperCase() + order.priority.slice(1).toLowerCase()}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Badge variant={getStatusBadgeVariant(order.status)}>
-                      {order.status.replace('_', ' ')}
+                      {order.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

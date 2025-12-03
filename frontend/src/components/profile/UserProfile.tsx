@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Mail, Phone, Shield, Edit } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
+import { authService } from '../../services/authService';
+import toast from 'react-hot-toast';
 
 export default function UserProfile() {
   const { user } = useAuth();
@@ -14,8 +16,43 @@ export default function UserProfile() {
     phone: user?.phone || '',
   });
 
-  const handleSave = () => {
-    setIsEditing(false);
+  const [activitySummary, setActivitySummary] = useState({
+    ordersProcessed: 0,
+    tasksCompleted: 0,
+    successRate: 0
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchActivitySummary = async () => {
+      try {
+        const response = await authService.getUserActivity();
+        setActivitySummary(response.data);
+      } catch (error) {
+        console.error('Failed to fetch activity summary:', error);
+        // Set default values if API fails
+        setActivitySummary({
+          ordersProcessed: 0,
+          tasksCompleted: 0,
+          successRate: 0
+        });
+      }
+    };
+    fetchActivitySummary();
+  }, []);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      await authService.updateProfile(formData);
+      toast.success('Profile updated successfully');
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      toast.error('Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -114,7 +151,9 @@ export default function UserProfile() {
 
             {isEditing && (
               <div className="flex gap-3 pt-4">
-                <Button onClick={handleSave}>Save Changes</Button>
+                <Button onClick={handleSave} disabled={loading}>
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </Button>
                 <Button variant="secondary" onClick={() => setIsEditing(false)}>
                   Cancel
                 </Button>
@@ -128,15 +167,15 @@ export default function UserProfile() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Activity Summary</h3>
           <div className="space-y-4">
             <div className="text-center p-4 bg-primary-50 rounded-lg">
-              <p className="text-2xl font-bold text-primary-600">47</p>
+              <p className="text-2xl font-bold text-primary-600">{activitySummary.ordersProcessed}</p>
               <p className="text-sm text-gray-600">Orders Processed</p>
             </div>
             <div className="text-center p-4 bg-success-50 rounded-lg">
-              <p className="text-2xl font-bold text-success-600">23</p>
+              <p className="text-2xl font-bold text-success-600">{activitySummary.tasksCompleted}</p>
               <p className="text-sm text-gray-600">Tasks Completed</p>
             </div>
             <div className="text-center p-4 bg-accent-50 rounded-lg">
-              <p className="text-2xl font-bold text-accent-600">98%</p>
+              <p className="text-2xl font-bold text-accent-600">{activitySummary.successRate}%</p>
               <p className="text-sm text-gray-600">Success Rate</p>
             </div>
           </div>

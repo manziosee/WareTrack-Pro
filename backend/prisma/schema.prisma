@@ -31,6 +31,9 @@ model User {
   managedDrivers   Driver[] @relation("ManagerDrivers")
   managedVehicles  Vehicle[] @relation("ManagerVehicles")
   inventoryHistory InventoryHistory[]
+  notificationPreferences NotificationPreferences?
+  systemConfiguration SystemConfiguration?
+  reportSettings ReportSettings?
 
   @@map("users")
 }
@@ -230,6 +233,54 @@ model InventoryHistory {
   performedByUser User @relation(fields: [performedBy], references: [id])
 
   @@map("inventory_history")
+}
+
+model NotificationPreferences {
+  id              Int     @id @default(autoincrement())
+  userId          Int     @unique @map("user_id")
+  emailEnabled    Boolean @default(true) @map("email_enabled")
+  smsEnabled      Boolean @default(false) @map("sms_enabled")
+  orderUpdates    Boolean @default(true) @map("order_updates")
+  lowStockAlerts  Boolean @default(true) @map("low_stock_alerts")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model SystemConfiguration {
+  id          Int     @id @default(autoincrement())
+  userId      Int     @unique @map("user_id")
+  language    String  @default("en")
+  timezone    String  @default("UTC")
+  dateFormat  String  @default("MM/DD/YYYY") @map("date_format")
+  currency    String  @default("RWF")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("system_configuration")
+}
+
+model ReportSettings {
+  id                Int     @id @default(autoincrement())
+  userId            Int     @unique @map("user_id")
+  autoReportsEnabled Boolean @default(false) @map("auto_reports_enabled")
+  reportFrequency   String  @default("weekly") @map("report_frequency")
+  reportFormat      String  @default("pdf") @map("report_format")
+  emailReports      Boolean @default(true) @map("email_reports")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("report_settings")
 }
 
 // Enums

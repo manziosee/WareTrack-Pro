@@ -12,7 +12,7 @@ const AddUserForm = ({ onClose, onSave }: AddUserFormProps) => {
     email: '',
     password: '',
     phone: '',
-    role: 'warehouse_staff'
+    role: 'WAREHOUSE_STAFF'
   });
   const [showPassword, setShowPassword] = useState(false);
 
@@ -87,10 +87,10 @@ const AddUserForm = ({ onClose, onSave }: AddUserFormProps) => {
           onChange={(e) => setFormData({ ...formData, role: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
         >
-          <option value="warehouse_staff">Warehouse Staff</option>
-          <option value="dispatch_officer">Dispatch Officer</option>
-          <option value="driver">Driver</option>
-          <option value="admin">Admin</option>
+          <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
+          <option value="DISPATCH_OFFICER">Dispatch Officer</option>
+          <option value="DRIVER">Driver</option>
+          <option value="ADMIN">Admin</option>
         </select>
       </div>
 
