@@ -283,6 +283,34 @@ export class DashboardController {
     }
   }
 
+  static async getNotifications(req: Request, res: Response) {
+    try {
+      // Get low stock items as notifications
+      const lowStockItems = await prisma.$queryRaw`
+        SELECT id, name, quantity, min_quantity as "minQuantity"
+        FROM inventory_items 
+        WHERE quantity < min_quantity 
+        LIMIT 5
+      `;
+
+      const formattedNotifications = Array.isArray(lowStockItems) 
+        ? lowStockItems.map((item: any) => ({
+            id: `low-stock-${item.id}`,
+            type: 'low_stock',
+            title: 'Low Stock Alert',
+            message: `${item.name} is running low (${item.quantity} remaining)`,
+            timestamp: new Date().toISOString(),
+            read: false
+          }))
+        : [];
+
+      res.json({ success: true, data: formattedNotifications });
+    } catch (error) {
+      console.error('Notifications error:', error);
+      res.json({ success: true, data: [] }); // Return empty array on error
+    }
+  }
+
   static async getAlerts(req: Request, res: Response) {
     try {
       const lowStockItems = await prisma.$queryRaw`
@@ -311,88 +339,7 @@ export class DashboardController {
     }
   }
 
-  static async getNotifications(req: Request, res: Response) {
-    try {
-      const [lowStockItems, recentOrders, deliveredOrders] = await Promise.all([
-        prisma.$queryRaw`SELECT * FROM inventory_items WHERE quantity < min_quantity ORDER BY last_updated DESC LIMIT 5`,
-        prisma.deliveryOrder.findMany({
-          where: { 
-            createdAt: {
-              gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
-            }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 5
-        }),
-        prisma.deliveryOrder.findMany({
-          where: { 
-            status: 'DELIVERED',
-            deliveredAt: {
-              gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
-            }
-          },
-          orderBy: { deliveredAt: 'desc' },
-          take: 5
-        })
-      ]);
 
-      const notifications = [];
-
-      // Low stock notifications
-      (lowStockItems as any[]).forEach(item => {
-        notifications.push({
-          id: `low_stock_${item.id}`,
-          type: 'low_stock',
-          title: 'Low Stock Alert',
-          message: `${item.name} is running low (${item.quantity} units left)`,
-          timestamp: item.last_updated || new Date(),
-          timeAgo: getTimeAgo(item.last_updated || new Date()),
-          severity: 'warning'
-        });
-      });
-
-      // New order notifications
-      recentOrders.forEach(order => {
-        notifications.push({
-          id: `new_order_${order.id}`,
-          type: 'new_order',
-          title: 'New Order',
-          message: `New order ${order.orderNumber} from ${order.customerName}`,
-          timestamp: order.createdAt,
-          timeAgo: getTimeAgo(order.createdAt),
-          severity: 'info'
-        });
-      });
-
-      // Delivery notifications
-      deliveredOrders.forEach(order => {
-        notifications.push({
-          id: `delivered_${order.id}`,
-          type: 'order_delivered',
-          title: 'Order Delivered',
-          message: `Order ${order.orderNumber} has been delivered successfully`,
-          timestamp: order.deliveredAt || order.updatedAt,
-          timeAgo: getTimeAgo(order.deliveredAt || order.updatedAt),
-          severity: 'success'
-        });
-      });
-
-      // Sort by timestamp and take latest 10
-      const sortedNotifications = notifications
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 10);
-
-      res.json({ success: true, data: sortedNotifications });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Server error'
-        }
-      });
-    }
-  }
 
   static async getInventoryByCategory(req: Request, res: Response) {
     try {

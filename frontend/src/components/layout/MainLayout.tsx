@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import OfflineIndicator from '../ui/OfflineIndicator';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -51,6 +52,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
           {children}
         </main>
       </div>
+      
+      {/* Offline Indicator */}
+      <OfflineIndicator />
     </div>
   );
 }

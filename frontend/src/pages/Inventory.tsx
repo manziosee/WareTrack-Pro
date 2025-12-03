@@ -25,8 +25,7 @@ export default function Inventory() {
   
   // Real-time data fetching
   const { data: realtimeInventory, loading, refetch } = useRealTimeData(
-    () => inventoryService.getInventory({ ...filters, page: currentPage, limit: 20 }),
-    30000 // Update every 30 seconds
+    () => inventoryService.getInventory({ ...filters, page: currentPage, limit: 20 })
   );
 
   const fetchStats = async () => {

@@ -100,8 +100,8 @@ export default function Vehicles() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-gray-900">Vehicle & Driver Management</h1>
-          <p className="text-gray-600 mt-1">Manage fleet and driver assignments</p>
+          <h1 className="font-heading text-3xl font-bold text-gray-900">Fleet & Driver Management</h1>
+          <p className="text-gray-600 mt-1">Manage your vehicles and drivers. Drivers created here will be assigned to you as their manager.</p>
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setShowAddDriverModal(true)}>
@@ -117,7 +117,7 @@ export default function Vehicles() {
 
       {/* Vehicles Section */}
       <div>
-        <h2 className="font-heading text-xl font-semibold text-gray-900 mb-4">Vehicles</h2>
+        <h2 className="font-heading text-xl font-semibold text-gray-900 mb-4">Your Fleet</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {vehicles.map((vehicle: any) => (
             <Card key={vehicle.id} className="hover:shadow-lg transition-shadow">
@@ -173,7 +173,7 @@ export default function Vehicles() {
 
       {/* Drivers Section */}
       <div>
-        <h2 className="font-heading text-xl font-semibold text-gray-900 mb-4">Drivers</h2>
+        <h2 className="font-heading text-xl font-semibold text-gray-900 mb-4">Your Drivers</h2>
         <Card padding="none">
           <div className="overflow-x-auto">
             <table className="w-full">

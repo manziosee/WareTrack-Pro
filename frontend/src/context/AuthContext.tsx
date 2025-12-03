@@ -27,14 +27,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Check if user is already logged in
-    const initAuth = async () => {
+    const initAuth = () => {
       const token = authService.getToken();
-      if (token) {
+      const storedUser = localStorage.getItem('user');
+      
+      if (token && storedUser) {
         try {
-          const userData = await authService.getProfile();
-          setUser(userData);
+          setUser(JSON.parse(storedUser));
         } catch (error) {
-          // Token is invalid, clear it
           authService.logout();
         }
       }
@@ -47,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const { user: userData } = await authService.login({ email, password });
+      localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
     } catch (error) {
       throw error;
@@ -54,13 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    try {
-      await authService.logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      setUser(null);
-    }
+    // Immediate logout without waiting for API
+    setUser(null);
+    authService.logout();
   };
 
   return (

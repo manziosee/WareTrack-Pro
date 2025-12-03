@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { vehiclesService } from '../../services/vehiclesService';
+import toast from 'react-hot-toast';
 
 interface EditVehicleFormProps {
   vehicle: {
@@ -22,15 +24,35 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
     capacity: vehicle.capacity.toString(),
     model: vehicle.model || '',
     year: vehicle.year?.toString() || '',
-    fuelType: vehicle.fuelType || 'diesel',
+    fuelType: vehicle.fuelType || 'Diesel',
     status: vehicle.status
   });
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Vehicle ${formData.plateNumber} updated successfully!`);
-    if (onSave) onSave();
-    onClose();
+    setLoading(true);
+    
+    try {
+      await vehiclesService.updateVehicle(Number(vehicle.id), {
+        plateNumber: formData.plateNumber,
+        type: formData.type,
+        capacity: Number(formData.capacity),
+        vehicleModel: formData.model,
+        year: Number(formData.year),
+        fuelType: formData.fuelType,
+        status: formData.status
+      });
+      
+      toast.success(`Vehicle ${formData.plateNumber} updated successfully!`);
+      if (onSave) onSave();
+      onClose();
+    } catch (error: any) {
+      console.error('Failed to update vehicle:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to update vehicle');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,10 +75,10 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
             onChange={(e) => setFormData({ ...formData, type: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            <option value="truck">Truck</option>
-            <option value="van">Van</option>
-            <option value="motorcycle">Motorcycle</option>
-            <option value="car">Car</option>
+            <option value="Truck">Truck</option>
+            <option value="Van">Van</option>
+            <option value="Motorcycle">Motorcycle</option>
+            <option value="Car">Car</option>
           </select>
         </div>
       </div>
@@ -102,10 +124,10 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
             onChange={(e) => setFormData({ ...formData, fuelType: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            <option value="diesel">Diesel</option>
-            <option value="gasoline">Gasoline</option>
-            <option value="electric">Electric</option>
-            <option value="hybrid">Hybrid</option>
+            <option value="Diesel">Diesel</option>
+            <option value="Gasoline">Gasoline</option>
+            <option value="Electric">Electric</option>
+            <option value="Hybrid">Hybrid</option>
           </select>
         </div>
         <div>
@@ -115,10 +137,10 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            <option value="available">Available</option>
-            <option value="in_use">In Use</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="unavailable">Unavailable</option>
+            <option value="AVAILABLE">Available</option>
+            <option value="IN_USE">In Use</option>
+            <option value="MAINTENANCE">Maintenance</option>
+            <option value="UNAVAILABLE">Unavailable</option>
           </select>
         </div>
       </div>
@@ -126,9 +148,10 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
       <div className="flex gap-3 pt-4">
         <button
           type="submit"
-          className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+          disabled={loading}
+          className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Update Vehicle
+          {loading ? 'Updating...' : 'Update Vehicle'}
         </button>
         <button
           type="button"

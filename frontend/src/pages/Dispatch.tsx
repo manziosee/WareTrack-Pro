@@ -23,8 +23,7 @@ export default function Dispatch() {
   
   // Real-time data fetching
   const { data: realtimeDispatches, loading, refetch } = useRealTimeData(
-    () => dispatchService.getDispatches(filters),
-    30000 // Update every 30 seconds
+    () => dispatchService.getDispatches(filters)
   );
 
   const fetchStats = async () => {

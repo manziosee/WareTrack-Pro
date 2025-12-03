@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { driversService } from '../../services/driversService';
+import toast from 'react-hot-toast';
 
 interface AddDriverFormProps {
   onClose: () => void;
@@ -17,14 +19,38 @@ const AddDriverForm = ({ onClose, onSave }: AddDriverFormProps) => {
     emergencyContactName: '',
     dateOfBirth: '',
     hireDate: '',
-    status: 'available'
+    status: 'AVAILABLE'
   });
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Driver ${formData.name} added successfully!`);
-    if (onSave) onSave();
-    onClose();
+    setLoading(true);
+    
+    try {
+      await driversService.createDriver({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        licenseNumber: formData.licenseNumber,
+        licenseExpiry: formData.licenseExpiry,
+        address: formData.address,
+        emergencyContact: formData.emergencyContact,
+        emergencyContactName: formData.emergencyContactName,
+        dateOfBirth: formData.dateOfBirth,
+        hireDate: formData.hireDate,
+        status: formData.status
+      });
+      
+      toast.success(`Driver ${formData.name} added successfully!`);
+      if (onSave) onSave();
+      onClose();
+    } catch (error: any) {
+      console.error('Failed to create driver:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to add driver');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -120,9 +146,9 @@ const AddDriverForm = ({ onClose, onSave }: AddDriverFormProps) => {
             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            <option value="available">Available</option>
-            <option value="on_duty">On Duty</option>
-            <option value="off_duty">Off Duty</option>
+            <option value="AVAILABLE">Available</option>
+            <option value="ON_DUTY">On Duty</option>
+            <option value="OFF_DUTY">Off Duty</option>
           </select>
         </div>
       </div>
@@ -167,9 +193,10 @@ const AddDriverForm = ({ onClose, onSave }: AddDriverFormProps) => {
       <div className="flex gap-3 pt-4">
         <button
           type="submit"
-          className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+          disabled={loading}
+          className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Add Driver
+          {loading ? 'Adding...' : 'Add Driver'}
         </button>
         <button
           type="button"

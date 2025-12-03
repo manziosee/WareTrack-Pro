@@ -25,8 +25,7 @@ export default function Orders() {
   
   // Real-time data fetching
   const { data: realtimeOrders, loading, refetch } = useRealTimeData(
-    () => ordersService.getOrders(filters),
-    30000 // Update every 30 seconds
+    () => ordersService.getOrders(filters)
   );
 
   useEffect(() => {

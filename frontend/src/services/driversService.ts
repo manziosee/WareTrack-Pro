@@ -12,11 +12,17 @@ export interface Driver {
 }
 
 export interface CreateDriver {
-  userId: number;
   name: string;
-  licenseNumber: string;
+  email?: string;
   phone: string;
-  experience: number;
+  licenseNumber: string;
+  licenseExpiry?: string;
+  address?: string;
+  emergencyContact?: string;
+  emergencyContactName?: string;
+  dateOfBirth?: string;
+  hireDate?: string;
+  status?: string;
 }
 
 export const driversService = {

@@ -53,20 +53,21 @@ app.use(compression({
   threshold: 1024,
 }));
 
-// Global rate limiting - More permissive for development
+// Very permissive rate limiting
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5000, // Much higher limit for development
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 1000, // 1000 requests per minute
   message: {
-    error: 'Too many requests from this IP, please try again later.',
-    retryAfter: '15 minutes'
+    error: 'Too many requests, please slow down.',
+    retryAfter: '1 minute'
   },
-  standardHeaders: true,
+  standardHeaders: false,
   legacyHeaders: false,
   skip: (req) => {
-    // Skip rate limiting for development origins
+    // Skip rate limiting for localhost and health checks
     const origin = req.get('Origin');
-    return origin && (origin.includes('localhost') || origin.includes('127.0.0.1'));
+    return req.path === '/health' || 
+           (origin && (origin.includes('localhost') || origin.includes('127.0.0.1')));
   }
 });
 app.use(globalLimiter);

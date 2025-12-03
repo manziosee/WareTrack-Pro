@@ -28,6 +28,8 @@ model User {
   createdOrders    DeliveryOrder[] @relation("CreatedBy")
   createdDispatches Dispatch[] @relation("CreatedBy")
   driverProfile    Driver?
+  managedDrivers   Driver[] @relation("ManagerDrivers")
+  managedVehicles  Vehicle[] @relation("ManagerVehicles")
   inventoryHistory InventoryHistory[]
 
   @@map("users")
@@ -61,6 +63,7 @@ model InventoryItem {
 
 model Vehicle {
   id              Int      @id @default(autoincrement())
+  managerId       Int?     @map("manager_id")
   plateNumber     String   @unique @map("plate_number")
   type            String
   capacity        Int
@@ -73,6 +76,7 @@ model Vehicle {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Relations
+  manager             User? @relation("ManagerVehicles", fields: [managerId], references: [id])
   orders              DeliveryOrder[]
   dispatches          Dispatch[]
   currentDrivers      Driver[]
@@ -83,19 +87,28 @@ model Vehicle {
 
 model Driver {
   id                Int      @id @default(autoincrement())
-  userId            Int      @unique @map("user_id")
+  userId            Int?     @unique @map("user_id")
+  managerId         Int?     @map("manager_id")
   name              String
+  email             String?
   licenseNumber     String   @unique @map("license_number")
   phone             String
   status            DriverStatus @default(AVAILABLE)
   currentVehicleId  Int?     @map("current_vehicle_id")
   experience        Int?
   rating            Decimal?
+  address           String?
+  dateOfBirth       DateTime? @map("date_of_birth")
+  hireDate          DateTime? @map("hire_date")
+  licenseExpiry     DateTime? @map("license_expiry")
+  emergencyContact  String?  @map("emergency_contact")
+  emergencyContactName String? @map("emergency_contact_name")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   // Relations
-  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  manager        User? @relation("ManagerDrivers", fields: [managerId], references: [id])
   currentVehicle Vehicle? @relation(fields: [currentVehicleId], references: [id])
   orders         DeliveryOrder[]
   dispatches     Dispatch[]

@@ -107,12 +107,12 @@ export default function Users() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-600 mt-1">Manage users, roles, and permissions</p>
+          <h1 className="font-heading text-3xl font-bold text-gray-900">Manager Management</h1>
+          <p className="text-gray-600 mt-1">Create managers who can manage drivers, vehicles, and dispatch operations</p>
         </div>
         <Button variant="primary" onClick={() => setShowAddModal(true)}>
           <Plus className="w-5 h-5 mr-2" />
-          Add User
+          Add Manager
         </Button>
       </div>
 

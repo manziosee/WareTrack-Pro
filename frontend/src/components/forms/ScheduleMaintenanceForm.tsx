@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { vehiclesService } from '../../services/vehiclesService';
+import toast from 'react-hot-toast';
 
 interface ScheduleMaintenanceFormProps {
   vehicle: {
@@ -20,12 +22,32 @@ const ScheduleMaintenanceForm = ({ vehicle, onClose, onSave }: ScheduleMaintenan
     serviceProvider: '',
     notes: ''
   });
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Maintenance scheduled for vehicle ${vehicle.plateNumber}!`);
-    if (onSave) onSave();
-    onClose();
+    setLoading(true);
+    
+    try {
+      await vehiclesService.scheduleMaintenance(Number(vehicle.id), {
+        maintenanceType: formData.maintenanceType,
+        scheduledDate: formData.scheduledDate,
+        description: formData.description,
+        estimatedCost: formData.estimatedCost ? Number(formData.estimatedCost) : null,
+        priority: formData.priority,
+        serviceProvider: formData.serviceProvider,
+        notes: formData.notes
+      });
+      
+      toast.success(`Maintenance scheduled for vehicle ${vehicle.plateNumber}!`);
+      if (onSave) onSave();
+      onClose();
+    } catch (error: any) {
+      console.error('Failed to schedule maintenance:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to schedule maintenance');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -126,9 +148,10 @@ const ScheduleMaintenanceForm = ({ vehicle, onClose, onSave }: ScheduleMaintenan
       <div className="flex gap-3 pt-4">
         <button
           type="submit"
-          className="flex-1 bg-warning-600 text-white px-4 py-2 rounded-lg hover:bg-warning-700 transition-colors font-medium"
+          disabled={loading}
+          className="flex-1 bg-warning-600 text-white px-4 py-2 rounded-lg hover:bg-warning-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Schedule Maintenance
+          {loading ? 'Scheduling...' : 'Schedule Maintenance'}
         </button>
         <button
           type="button"

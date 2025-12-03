@@ -1,6 +1,7 @@
 import { Package, Truck, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
+import RefreshButton from '@/components/ui/RefreshButton';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import Badge from '@/components/ui/Badge';
 
@@ -29,16 +30,25 @@ export default function Dashboard() {
         setInventoryByCategory(categoryData || []);
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
+        
+        // Fallback to mock data when backend is unavailable
+        setStats({
+          totalInventory: { value: 0, percentage: 0 },
+          deliveriesToday: { value: 0, percentage: 0 },
+          pendingDispatches: { value: 0, percentage: 0 },
+          inTransit: { value: 0, percentage: 0 },
+          lowStockAlerts: { value: 0, percentage: 0 }
+        });
+        setTrends([]);
+        setRecentOrders([]);
+        setInventoryByCategory([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchDashboardData();
-    
-    // Set up real-time updates every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000);
-    return () => clearInterval(interval);
+    // No automatic refresh - only manual refresh
   }, []);
 
   if (loading) {
@@ -52,7 +62,17 @@ export default function Dashboard() {
   if (!stats) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-500">Failed to load dashboard data</p>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
+          <AlertTriangle className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
+          <p className="text-yellow-800 font-medium">Backend Service Unavailable</p>
+          <p className="text-yellow-700 text-sm mt-1">The backend service is temporarily down. Please try again later.</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-3 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -103,9 +123,31 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="font-heading text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600 mt-1">Welcome back! Here's what's happening today.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-heading text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600 mt-1">Welcome back! Here's what's happening today.</p>
+        </div>
+        <RefreshButton onRefresh={async () => {
+          setLoading(true);
+          try {
+            const [dashboardStats, dashboardTrends, dashboardOrders, categoryData] = await Promise.all([
+              dashboardService.getStats(),
+              dashboardService.getTrends(),
+              dashboardService.getRecentOrders(5),
+              dashboardService.getInventoryByCategory()
+            ]);
+
+            setStats(dashboardStats);
+            setTrends(dashboardTrends);
+            setRecentOrders(dashboardOrders || []);
+            setInventoryByCategory(categoryData || []);
+          } catch (error) {
+            console.error('Failed to refresh dashboard data:', error);
+          } finally {
+            setLoading(false);
+          }
+        }} />
       </div>
 
       {/* Stats Grid */}

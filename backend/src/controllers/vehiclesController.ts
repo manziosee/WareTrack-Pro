@@ -7,10 +7,14 @@ export class VehiclesController {
       const { page = 1, limit = 10, status, type, search } = req.query;
       const skip = (Number(page) - 1) * Number(limit);
 
+      // Get current user's managed vehicles
+      const managerId = (req as any).user?.id;
+      
       const vehicles = await prisma.vehicle.findMany({
         skip,
         take: Number(limit),
         where: {
+          managerId, // Only show vehicles managed by current user
           ...(status && { status: status as any }),
           ...(type && { type: type as string }),
           ...(search && {
@@ -19,10 +23,16 @@ export class VehiclesController {
               { type: { contains: search as string, mode: 'insensitive' } }
             ]
           })
+        },
+        include: {
+          manager: true,
+          currentDrivers: true
         }
       });
 
-      const total = await prisma.vehicle.count();
+      const total = await prisma.vehicle.count({
+        where: { managerId }
+      });
 
       res.json({
         success: true,
@@ -100,32 +110,34 @@ export class VehiclesController {
 
   static async createVehicle(req: Request, res: Response) {
     try {
-      const { registrationNumber, make, model, year, type, capacity, status, purchaseDate, lastMaintenance, nextMaintenance, fuelType } = req.body;
+      const { plateNumber, vehicleModel, year, type, capacity, status, fuelType } = req.body;
+      
+      // Get manager ID from authenticated user
+      const managerId = (req as any).user?.id;
 
       const vehicle = await prisma.vehicle.create({
         data: {
-          plateNumber: registrationNumber,
+          managerId,
+          plateNumber,
           type,
           capacity: Number(capacity),
           status: (status || 'AVAILABLE') as any,
-          vehicleModel: model,
+          vehicleModel,
           year: year ? Number(year) : null,
-          fuelType,
-          lastMaintenance: lastMaintenance ? new Date(lastMaintenance) : null
+          fuelType
+        },
+        include: {
+          manager: true,
+          currentDrivers: true
         }
       });
 
       res.status(201).json({
         success: true,
-        data: {
-          id: vehicle.id,
-          registrationNumber: vehicle.plateNumber,
-          type: vehicle.type,
-          status: vehicle.status,
-          createdAt: vehicle.createdAt
-        }
+        data: vehicle
       });
     } catch (error: any) {
+      console.error('Create vehicle error:', error);
       if (error.code === 'P2002') {
         return res.status(400).json({ 
           success: false,
@@ -134,7 +146,7 @@ export class VehiclesController {
       }
       res.status(500).json({ 
         success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+        error: { code: 'INTERNAL_SERVER_ERROR', message: error.message || 'Server error' }
       });
     }
   }

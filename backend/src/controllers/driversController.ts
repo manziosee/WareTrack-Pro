@@ -7,10 +7,14 @@ export class DriversController {
       const { page = 1, limit = 10, status, search } = req.query;
       const skip = (Number(page) - 1) * Number(limit);
 
+      // Get current user's managed drivers
+      const managerId = (req as any).user?.id;
+      
       const drivers = await prisma.driver.findMany({
         skip,
         take: Number(limit),
         where: {
+          managerId, // Only show drivers managed by current user
           ...(status && { status: status as any }),
           ...(search && {
             OR: [
@@ -20,12 +24,14 @@ export class DriversController {
           })
         },
         include: {
-          user: true,
+          manager: true,
           currentVehicle: true
         }
       });
 
-      const total = await prisma.driver.count();
+      const total = await prisma.driver.count({
+        where: { managerId }
+      });
 
       res.json({
         success: true,
@@ -128,42 +134,44 @@ export class DriversController {
 
   static async createDriver(req: Request, res: Response) {
     try {
-      const { userId, licenseNumber, licenseExpiry, licenseClass, emergencyContact, address, status, experience } = req.body;
-
-      // Get user name from users table
-      const user = await prisma.user.findUnique({
-        where: { id: Number(userId) }
-      });
-      if (!user) {
-        return res.status(400).json({ 
-          success: false,
-          error: { code: 'USER_NOT_FOUND', message: 'User not found' }
-        });
-      }
+      const { 
+        name, email, phone, licenseNumber, licenseExpiry, 
+        address, emergencyContact, emergencyContactName, 
+        dateOfBirth, hireDate, status 
+      } = req.body;
+      
+      // Get manager ID from authenticated user
+      const managerId = (req as any).user?.id;
 
       const driver = await prisma.driver.create({
         data: {
-          userId: Number(userId),
-          name: user.name,
+          managerId,
+          name,
+          email,
           licenseNumber,
-          phone: user.phone || '000-000-0000',
+          phone,
           status: (status || 'AVAILABLE') as any,
-          experience: experience ? Number(experience) : 0,
+          address,
+          emergencyContact,
+          emergencyContactName,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+          hireDate: hireDate ? new Date(hireDate) : null,
+          licenseExpiry: licenseExpiry ? new Date(licenseExpiry) : null,
+          experience: 0,
           rating: 0
+        },
+        include: {
+          manager: true,
+          currentVehicle: true
         }
       });
 
       res.status(201).json({
         success: true,
-        data: {
-          id: driver.id,
-          userId: driver.userId,
-          name: driver.name,
-          licenseNumber: driver.licenseNumber,
-          status: driver.status
-        }
+        data: driver
       });
     } catch (error: any) {
+      console.error('Create driver error:', error);
       if (error.code === 'P2002') {
         return res.status(400).json({ 
           success: false,
@@ -172,7 +180,7 @@ export class DriversController {
       }
       res.status(500).json({ 
         success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+        error: { code: 'INTERNAL_SERVER_ERROR', message: error.message || 'Server error' }
       });
     }
   }

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export function useRealTimeData<T>(
-  fetchFunction: () => Promise<T>,
-  interval: number = 30000 // 30 seconds default
+  fetchFunction: () => Promise<T>
 ) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -14,8 +13,8 @@ export function useRealTimeData<T>(
       const result = await fetchFunction();
       setData(result);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch data');
-      console.error('Real-time data fetch error:', err);
+      setError('Service temporarily unavailable');
+      console.warn('Data fetch failed, using cached data');
     } finally {
       setLoading(false);
     }
@@ -23,9 +22,8 @@ export function useRealTimeData<T>(
 
   useEffect(() => {
     fetchData();
-    const intervalId = setInterval(fetchData, interval);
-    return () => clearInterval(intervalId);
-  }, [fetchData, interval]);
+    // No automatic intervals - only manual refresh
+  }, [fetchData]);
 
   const refetch = useCallback(() => {
     setLoading(true);

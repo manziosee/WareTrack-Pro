@@ -113,12 +113,42 @@ export class UsersController {
       console.log('Creating user with data:', { name, email, phone, role, status });
 
       // Validate required fields
-      if (!name || !email || !password || !role) {
+      const missingFields = [];
+      if (!name?.trim()) missingFields.push('name');
+      if (!email?.trim()) missingFields.push('email');
+      if (!password?.trim()) missingFields.push('password');
+      if (!role?.trim()) missingFields.push('role');
+      
+      if (missingFields.length > 0) {
         return res.status(400).json({ 
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: 'Name, email, password, and role are required'
+            message: `Missing required fields: ${missingFields.join(', ')}`,
+            details: { missingFields }
+          }
+        });
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'INVALID_EMAIL',
+            message: 'Please provide a valid email address'
+          }
+        });
+      }
+
+      // Validate password length
+      if (password.length < 6) {
+        return res.status(400).json({ 
+          success: false,
+          error: {
+            code: 'WEAK_PASSWORD',
+            message: 'Password must be at least 6 characters long'
           }
         });
       }
