@@ -46,10 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const { user: userData } = await authService.login({ email, password });
+      const response = await authService.login({ email, password });
+      const userData = response.user;
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
     } catch (error) {
+      console.error('Login error in context:', error);
       throw error;
     }
   };

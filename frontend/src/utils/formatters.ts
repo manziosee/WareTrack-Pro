@@ -1,14 +1,29 @@
-export const formatDate = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+export const formatDate = (date: Date | string | null | undefined): string => {
+  if (!date) return 'N/A';
+  
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return 'Invalid Date';
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch (error) {
+    return 'N/A';
+  }
 };
 
-export const formatTime = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+export const formatTime = (date: Date | string | null | undefined): string => {
+  if (!date) return 'N/A';
+  
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return 'Invalid Time';
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  } catch (error) {
+    return 'N/A';
+  }
 };
 
-export const formatDateTime = (date: Date | string): string => {
+export const formatDateTime = (date: Date | string | null | undefined): string => {
+  if (!date) return 'N/A';
   return `${formatDate(date)} ${formatTime(date)}`;
 };
 

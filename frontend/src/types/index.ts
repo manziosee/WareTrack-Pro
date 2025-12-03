@@ -146,3 +146,15 @@ export interface DeliveryTrend {
   pending: number;
   inTransit: number;
 }
+
+// Notification Types
+export interface NotificationPreferences {
+  id: number;
+  userId: number;
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  orderUpdates: boolean;
+  lowStockAlerts: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -43,20 +43,27 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
     };
     fetchInventory();
 
-    if (order) {
-      const mappedItems = order.items?.map((item: any) => ({
-        inventoryId: item.itemId || item.inventoryId || '',
-        quantity: item.quantity || 1,
-        name: item.itemName || item.name || '',
-        code: item.code || '',
-        unit: item.unit || 'pcs'
-      })) || [];
+    if (order && inventory.length > 0) {
+      const mappedItems = order.items?.map((item: any) => {
+        const inventoryItem = inventory.find((inv: any) => 
+          inv.id === item.itemId || inv.name === item.itemName
+        );
+        
+        return {
+          inventoryId: inventoryItem?.id?.toString() || item.itemId?.toString() || '',
+          quantity: item.quantity || 1,
+          name: item.itemName || item.name || inventoryItem?.name || '',
+          code: item.code || inventoryItem?.code || '',
+          unit: item.unit || inventoryItem?.unit || 'pcs',
+          price: item.unitPrice || inventoryItem?.unitPrice || 0
+        };
+      }) || [];
       
       setFormData({
-        customerName: order.customerName,
-        contactNumber: order.contactNumber,
-        deliveryAddress: order.deliveryAddress,
-        priority: order.priority,
+        customerName: order.customerName || '',
+        contactNumber: order.contactNumber || '',
+        deliveryAddress: order.deliveryAddress || '',
+        priority: order.priority || 'medium',
         scheduledDate: order.scheduledDate ? new Date(order.scheduledDate).toISOString().split('T')[0] : '',
         deliveryInstructions: order.deliveryInstructions || '',
         orderType: order.orderType || 'delivery',

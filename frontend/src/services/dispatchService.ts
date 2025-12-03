@@ -37,6 +37,11 @@ export const dispatchService = {
     return response.data;
   },
 
+  async deleteDispatch(id: number) {
+    const response = await api.delete(`/dispatch/${id}`);
+    return response.data;
+  },
+
   async getActiveDispatches() {
     const response = await api.get('/dispatch/active');
     return response.data;

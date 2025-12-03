@@ -1,20 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Truck } from 'lucide-react';
+import { Plus, Edit, Truck, Eye, Trash2 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import SearchFilter from '../components/ui/SearchFilter';
 import DispatchForm from '../components/forms/DispatchForm';
+import ErrorBoundary from '../components/ui/ErrorBoundary';
 import { formatDate } from '../utils/formatters';
 import { dispatchService } from '../services/dispatchService';
 import { useRealTimeData } from '../hooks/useRealTimeData';
 import { exportToCSV, exportToPDF, exportToJSON } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
 
-export default function Dispatch() {
+function DispatchContent() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [selectedDispatch, setSelectedDispatch] = useState<any>(null);
   const [dispatches, setDispatches] = useState<any[]>([]);
   const [filteredDispatches, setFilteredDispatches] = useState<any[]>([]);
@@ -65,7 +67,9 @@ export default function Dispatch() {
     }
     if (newFilters.start && newFilters.end) {
       filtered = filtered.filter(dispatch => {
-        const dispatchDate = new Date(dispatch.startTime);
+        const dateToCheck = dispatch.startTime || dispatch.scheduledDate || dispatch.createdAt;
+        if (!dateToCheck) return false;
+        const dispatchDate = new Date(dateToCheck);
         return dispatchDate >= new Date(newFilters.start) && dispatchDate <= new Date(newFilters.end);
       });
     }
@@ -79,8 +83,8 @@ export default function Dispatch() {
       'Driver': dispatch.driver?.name || 'N/A',
       'Vehicle': dispatch.vehicle?.registrationNumber || 'N/A',
       'Status': dispatch.status,
-      'Start Time': formatDate(dispatch.startTime),
-      'Estimated Arrival': dispatch.estimatedArrival ? formatDate(dispatch.estimatedArrival) : 'N/A'
+      'Start Time': formatDate(dispatch.startTime || dispatch.scheduledDate || dispatch.createdAt),
+      'Estimated Arrival': formatDate(dispatch.estimatedArrival || dispatch.estimatedDelivery)
     }));
 
     switch (format) {
@@ -97,25 +101,34 @@ export default function Dispatch() {
     toast.success(`Dispatches exported as ${format.toUpperCase()}`);
   };
 
+  const handleView = (dispatch: any) => {
+    setSelectedDispatch(dispatch);
+    setShowViewModal(true);
+  };
+
   const handleEdit = (dispatch: any) => {
     setSelectedDispatch(dispatch);
     setShowEditModal(true);
   };
 
-  const handleUpdateStatus = async (dispatchId: number, status: string) => {
-    try {
-      await dispatchService.updateDispatchStatus(dispatchId, status);
-      toast.success('Dispatch status updated successfully');
-      refetch();
-    } catch (error) {
-      console.error('Failed to update dispatch status:', error);
-      toast.error('Failed to update dispatch status');
+  const handleDelete = async (dispatch: any) => {
+    if (window.confirm(`Are you sure you want to delete dispatch for order ${dispatch.order?.orderNumber}?`)) {
+      try {
+        await dispatchService.deleteDispatch(dispatch.id);
+        toast.success('Dispatch deleted successfully');
+        refetch();
+      } catch (error) {
+        toast.error('Failed to delete dispatch');
+      }
     }
   };
+
+
 
   const handleSaveDispatch = () => {
     setShowEditModal(false);
     setShowCreateModal(false);
+    setShowViewModal(false);
     setSelectedDispatch(null);
     refetch();
   };
@@ -129,11 +142,17 @@ export default function Dispatch() {
   }
 
   const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'completed': return 'success';
-      case 'in_progress': return 'info';
-      case 'pending': return 'warning';
-      case 'cancelled': return 'error';
+    const normalizedStatus = status.toUpperCase();
+    switch (normalizedStatus) {
+      case 'DELIVERED': return 'success';
+      case 'IN_TRANSIT': return 'info';
+      case 'DISPATCHED': return 'warning';
+      case 'PENDING': return 'gray';
+      case 'CANCELLED': return 'error';
+      case 'AVAILABLE': return 'success';
+      case 'IN_USE': return 'warning';
+      case 'MAINTENANCE': return 'error';
+      case 'UNAVAILABLE': return 'gray';
       default: return 'gray';
     }
   };
@@ -232,27 +251,39 @@ export default function Dispatch() {
                       <Truck className="w-4 h-4 text-gray-400 mr-2" />
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {dispatch.vehicle?.registrationNumber || 'N/A'}
+                          {dispatch.vehicle?.plateNumber || dispatch.vehicle?.registrationNumber || 'N/A'}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {dispatch.vehicle?.make} {dispatch.vehicle?.model}
+                          {dispatch.vehicle?.type} - {dispatch.vehicle?.capacity}kg
                         </div>
+                        {dispatch.vehicle?.status && (
+                          <Badge variant={getStatusBadgeVariant(dispatch.vehicle.status)} size="sm" className="mt-1">
+                            {dispatch.vehicle.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Badge variant={getStatusBadgeVariant(dispatch.status)}>
-                      {dispatch.status.replace('_', ' ')}
+                      {dispatch.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(dispatch.startTime)}
+                    {formatDate(dispatch.startTime || dispatch.scheduledDate || dispatch.createdAt)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {dispatch.estimatedArrival ? formatDate(dispatch.estimatedArrival) : 'N/A'}
+                    {formatDate(dispatch.estimatedArrival || dispatch.estimatedDelivery)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => handleView(dispatch)}
+                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        title="View dispatch details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                       <button 
                         onClick={() => handleEdit(dispatch)}
                         className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
@@ -260,22 +291,13 @@ export default function Dispatch() {
                       >
                         <Edit className="w-4 h-4" />
                       </button>
-                      {dispatch.status === 'pending' && (
-                        <button
-                          onClick={() => handleUpdateStatus(dispatch.id, 'in_progress')}
-                          className="px-2 py-1 text-xs bg-info-100 text-info-700 rounded hover:bg-info-200"
-                        >
-                          Start
-                        </button>
-                      )}
-                      {dispatch.status === 'in_progress' && (
-                        <button
-                          onClick={() => handleUpdateStatus(dispatch.id, 'completed')}
-                          className="px-2 py-1 text-xs bg-success-100 text-success-700 rounded hover:bg-success-200"
-                        >
-                          Complete
-                        </button>
-                      )}
+                      <button 
+                        onClick={() => handleDelete(dispatch)}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete dispatch"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -298,6 +320,85 @@ export default function Dispatch() {
           />
         )}
       </Modal>
+
+      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Dispatch Details" size="lg">
+        {selectedDispatch && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Information</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Order Number</label>
+                    <p className="text-lg font-semibold">{selectedDispatch.order?.orderNumber || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Customer</label>
+                    <p className="text-lg">{selectedDispatch.order?.customerName || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Delivery Address</label>
+                    <p className="text-lg">{selectedDispatch.order?.deliveryAddress || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Assignment Details</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Driver</label>
+                    <p className="text-lg font-semibold">{selectedDispatch.driver?.name || 'N/A'}</p>
+                    <p className="text-sm text-gray-500">{selectedDispatch.driver?.phone || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Vehicle</label>
+                    <p className="text-lg font-semibold">{selectedDispatch.vehicle?.plateNumber || 'N/A'}</p>
+                    <p className="text-sm text-gray-500">{selectedDispatch.vehicle?.type} - {selectedDispatch.vehicle?.capacity}kg</p>
+                    {selectedDispatch.vehicle?.status && (
+                      <Badge variant={getStatusBadgeVariant(selectedDispatch.vehicle.status)} className="mt-1">
+                        {selectedDispatch.vehicle.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                      </Badge>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Status</label>
+                    <Badge variant={getStatusBadgeVariant(selectedDispatch.status)}>
+                      {selectedDispatch.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Scheduled Date</label>
+                  <p className="text-lg">{formatDate(selectedDispatch.scheduledDate)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Estimated Delivery</label>
+                  <p className="text-lg">{formatDate(selectedDispatch.estimatedDelivery) || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+            {selectedDispatch.notes && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedDispatch.notes}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
+  );
+}
+
+export default function Dispatch() {
+  return (
+    <ErrorBoundary>
+      <DispatchContent />
+    </ErrorBoundary>
   );
 }

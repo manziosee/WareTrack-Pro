@@ -6,7 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://waretrack-pro.onre
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000, // 10 second timeout
+  timeout: 15000, // 15 second timeout
   headers: {
     'Content-Type': 'application/json',
   },
@@ -54,8 +54,12 @@ api.interceptors.response.use(
     }
     
     // Return empty data for network errors to prevent crashes
-    if (error.code === 'ECONNABORTED' || error.message?.includes('ERR_INSUFFICIENT_RESOURCES')) {
-      return Promise.resolve({ data: { success: false, data: [] } });
+    if (error.code === 'ECONNABORTED' || 
+        error.message?.includes('ERR_INSUFFICIENT_RESOURCES') ||
+        error.message?.includes('ERR_CONNECTION_CLOSED') ||
+        error.message?.includes('Network Error')) {
+      console.warn('Network error, returning empty response:', error.message);
+      return Promise.resolve({ data: { success: false, data: [], error: 'Network unavailable' } });
     }
     
     return Promise.reject(error);

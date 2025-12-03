@@ -10,6 +10,7 @@ interface EditInventoryFormProps {
 }
 
 export default function EditInventoryForm({ item, onClose, onSave }: EditInventoryFormProps) {
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -60,13 +61,21 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
     }
   }, [item]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Updating inventory item:', formData);
-    if (onSave) {
-      onSave(formData);
+    setLoading(true);
+    
+    try {
+      console.log('Updating inventory item:', formData);
+      if (onSave) {
+        await onSave(formData);
+      }
+      // Don't call onClose() here - let the parent handle it after successful save
+    } catch (error) {
+      console.error('Failed to save item:', error);
+    } finally {
+      setLoading(false);
     }
-    onClose();
   };
 
   return (
@@ -228,9 +237,9 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
         <Button variant="secondary" type="button" onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit">
+        <Button variant="primary" type="submit" disabled={loading}>
           <Save className="w-4 h-4 mr-2" />
-          Save Changes
+          {loading ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </form>
