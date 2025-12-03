@@ -53,31 +53,57 @@ app.use(compression({
   threshold: 1024,
 }));
 
-// Global rate limiting
+// Global rate limiting - More permissive for development
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Increased for API usage
+  max: 5000, // Much higher limit for development
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: '15 minutes'
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for development origins
+    const origin = req.get('Origin');
+    return origin && (origin.includes('localhost') || origin.includes('127.0.0.1'));
+  }
 });
 app.use(globalLimiter);
 
-// CORS
+// CORS - More permissive configuration
 app.use(cors({
-  origin: [
-    'https://ware-track-pro.vercel.app',
-    'https://waretrack-pro.onrender.com',
-    'http://localhost:3001',
-    'http://localhost:3000',
-    'http://localhost:5000'
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'https://ware-track-pro.vercel.app',
+      'https://waretrack-pro.onrender.com',
+      'http://localhost:3001',
+      'http://localhost:3000',
+      'http://localhost:5000',
+      'http://127.0.0.1:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5000'
+    ];
+    
+    // Allow localhost and 127.0.0.1 with any port for development
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 }));
 
 // Body parsing with optimization
