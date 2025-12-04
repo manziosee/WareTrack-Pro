@@ -16,13 +16,13 @@ export class AuthController {
       const userCount = await prisma.user.count();
       const isFirstUser = userCount === 0;
       
-      // If not first user, registration is disabled (only admins can create users)
-      if (!isFirstUser) {
+      // If not first user, ensure role is not ADMIN
+      if (!isFirstUser && role === 'ADMIN') {
         return res.status(403).json({ 
           success: false,
           error: {
-            code: 'REGISTRATION_DISABLED',
-            message: 'Public registration is disabled. Please contact an administrator to create your account.'
+            code: 'ADMIN_REGISTRATION_DISABLED',
+            message: 'Admin registration is restricted.'
           }
         });
       }
@@ -79,8 +79,14 @@ export class AuthController {
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      // First user is always admin
-      const userRole = 'admin';
+      // Determine user role
+      let userRole = 'WAREHOUSE_STAFF'; // Default role
+      
+      if (isFirstUser) {
+        userRole = 'ADMIN';
+      } else if (role && ['WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'].includes(role)) {
+        userRole = role;
+      }
       const userStatus = 'active';
 
       const hashedPassword = await bcrypt.hash(password, 12);
@@ -92,7 +98,7 @@ export class AuthController {
           email,
           password: hashedPassword,
           phone: phone || '',
-          role: 'ADMIN',
+          role: userRole as any,
           status: 'ACTIVE'
         }
       });

@@ -9,12 +9,13 @@ export default function Register() {
     name: '',
     email: '',
     password: '',
-    phone: ''
+    phone: '',
+    role: 'WAREHOUSE_STAFF'
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
@@ -149,6 +150,23 @@ export default function Register() {
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors"
                   placeholder="Enter your phone number"
                 />
+              </div>
+
+              <div>
+                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
+                  Role
+                </label>
+                <select
+                  id="role"
+                  name="role"
+                  value={formData.role}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors bg-white"
+                >
+                  <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
+                  <option value="DISPATCH_OFFICER">Dispatch Officer</option>
+                  <option value="DRIVER">Driver</option>
+                </select>
               </div>
 
               <div>
