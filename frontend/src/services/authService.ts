@@ -10,6 +10,7 @@ export interface RegisterData {
   email: string;
   password: string;
   phone?: string;
+  role?: string;
 }
 
 export interface User {
