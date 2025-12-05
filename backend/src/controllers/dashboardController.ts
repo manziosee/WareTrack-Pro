@@ -195,19 +195,196 @@ export class DashboardController {
       };
 
       // Add role-specific data
-      if (user.role === 'DRIVER') {
+      if (user.role === 'DISPATCH_OFFICER') {
+        const [pendingDispatches, inTransitDispatches, completedTodayDispatches, availableDrivers, availableVehicles, onRouteVehicles, maintenanceVehicles, urgentOrders, scheduledPickups] = await Promise.all([
+          // Pending dispatches
+          prisma.dispatch.count({
+            where: { status: 'PENDING' }
+          }),
+          // In transit dispatches
+          prisma.dispatch.count({
+            where: { status: 'IN_TRANSIT' }
+          }),
+          // Completed today
+          prisma.dispatch.count({
+            where: {
+              status: 'DELIVERED',
+              actualDelivery: { gte: today, lt: tomorrow }
+            }
+          }),
+          // Available drivers
+          prisma.driver.count({
+            where: { status: 'AVAILABLE' }
+          }),
+          // Available vehicles
+          prisma.vehicle.count({
+            where: { status: 'AVAILABLE' }
+          }),
+          // On route vehicles
+          prisma.vehicle.count({
+            where: { status: 'IN_USE' }
+          }),
+          // Maintenance vehicles
+          prisma.vehicle.count({
+            where: { status: 'MAINTENANCE' }
+          }),
+          // Urgent orders
+          prisma.deliveryOrder.count({
+            where: {
+              priority: 'HIGH',
+              status: { in: ['PENDING', 'DISPATCHED'] }
+            }
+          }),
+          // Scheduled pickups
+          prisma.deliveryOrder.count({
+            where: {
+              status: 'PENDING',
+              scheduledDate: { gte: today, lt: tomorrow }
+            }
+          })
+        ]);
+
+        // Calculate previous day counts for percentage changes
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        const [prevPendingDispatches, prevInTransitDispatches, prevCompletedDispatches, prevAvailableDrivers] = await Promise.all([
+          prisma.dispatch.count({
+            where: {
+              status: 'PENDING',
+              createdAt: { gte: yesterday, lt: today }
+            }
+          }),
+          prisma.dispatch.count({
+            where: {
+              status: 'IN_TRANSIT',
+              createdAt: { gte: yesterday, lt: today }
+            }
+          }),
+          prisma.dispatch.count({
+            where: {
+              status: 'DELIVERED',
+              actualDelivery: { gte: yesterday, lt: today }
+            }
+          }),
+          prisma.driver.count({
+            where: {
+              status: 'AVAILABLE',
+              createdAt: { lt: today }
+            }
+          })
+        ]);
+
+        summary.dispatchStats = {
+          pendingDispatches: {
+            value: pendingDispatches,
+            percentage: calculatePercentage(pendingDispatches, prevPendingDispatches)
+          },
+          inTransit: {
+            value: inTransitDispatches,
+            percentage: calculatePercentage(inTransitDispatches, prevInTransitDispatches)
+          },
+          completedToday: {
+            value: completedTodayDispatches,
+            percentage: calculatePercentage(completedTodayDispatches, prevCompletedDispatches)
+          },
+          availableDrivers: {
+            value: availableDrivers,
+            percentage: calculatePercentage(availableDrivers, prevAvailableDrivers)
+          },
+          fleetStatus: {
+            availableVehicles,
+            onRouteVehicles,
+            maintenanceVehicles
+          },
+          todayPriority: {
+            urgentDeliveries: urgentOrders,
+            scheduledPickups,
+            routeOptimizations: Math.floor(Math.random() * 3) + 1 // Mock data for route optimizations
+          }
+        };
+      } else if (user.role === 'DRIVER') {
         const driverRecord = await prisma.driver.findFirst({ where: { userId: user.id } });
         if (driverRecord) {
-          const driverStats = await prisma.dispatch.findMany({
-            where: { 
-              driverId: driverRecord.id,
-              createdAt: { gte: today, lt: tomorrow }
-            }
-          });
-          
+          const [todayDeliveries, remainingDeliveries, currentDelivery, todaySchedule] = await Promise.all([
+            // Completed today
+            prisma.dispatch.count({
+              where: {
+                driverId: driverRecord.id,
+                status: 'DELIVERED',
+                actualDelivery: { gte: today, lt: tomorrow }
+              }
+            }),
+            // Remaining deliveries
+            prisma.dispatch.count({
+              where: {
+                driverId: driverRecord.id,
+                status: { in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT'] }
+              }
+            }),
+            // Current delivery
+            prisma.dispatch.findFirst({
+              where: {
+                driverId: driverRecord.id,
+                status: 'IN_TRANSIT'
+              },
+              include: {
+                order: {
+                  include: {
+                    items: {
+                      include: { item: true }
+                    }
+                  }
+                }
+              }
+            }),
+            // Today's schedule
+            prisma.dispatch.findMany({
+              where: {
+                driverId: driverRecord.id,
+                scheduledDate: { gte: today, lt: tomorrow }
+              },
+              include: { order: true },
+              orderBy: { scheduledDate: 'asc' }
+            })
+          ]);
+
+          // Calculate total distance and earnings for today
+          const todayDistance = todaySchedule.reduce((total, dispatch) => {
+            return total + (Math.random() * 20 + 5); // Mock distance calculation
+          }, 0);
+
+          const todayEarnings = todaySchedule
+            .filter(d => d.status === 'DELIVERED')
+            .reduce((total, dispatch) => {
+              return total + (Number(dispatch.order.totalAmount) * 0.1); // 10% commission
+            }, 0);
+
           summary.driverStats = {
-            todayDeliveries: driverStats.filter(d => d.status === 'DELIVERED').length,
-            pendingDeliveries: driverStats.filter(d => d.status !== 'DELIVERED' && d.status !== 'CANCELLED').length
+            completedToday: todayDeliveries,
+            remaining: remainingDeliveries,
+            distance: Math.round(todayDistance),
+            earnings: Math.round(todayEarnings),
+            currentDelivery: currentDelivery ? {
+              status: currentDelivery.status,
+              orderNumber: currentDelivery.order.orderNumber,
+              customerName: currentDelivery.order.customerName,
+              deliveryAddress: currentDelivery.order.deliveryAddress,
+              customerPhone: currentDelivery.order.contactNumber,
+              eta: currentDelivery.estimatedDelivery,
+              items: currentDelivery.order.items?.map(item => ({
+                name: item.item.name,
+                quantity: item.quantity
+              })) || []
+            } : null,
+            todaySchedule: todaySchedule.map(dispatch => ({
+              orderNumber: dispatch.order.orderNumber,
+              status: dispatch.status,
+              time: dispatch.status === 'DELIVERED' ? dispatch.actualDelivery : 
+                    dispatch.status === 'IN_TRANSIT' ? dispatch.estimatedDelivery :
+                    dispatch.scheduledDate,
+              customerName: dispatch.order.customerName
+            }))
           };
         }
       }
