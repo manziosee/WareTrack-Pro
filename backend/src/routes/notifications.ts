@@ -10,5 +10,7 @@ router.get('/system-config', auth, NotificationController.getSystemConfig);
 router.put('/system-config', auth, NotificationController.updateSystemConfig);
 router.get('/report-settings', auth, NotificationController.getReportSettings);
 router.put('/report-settings', auth, NotificationController.updateReportSettings);
+router.put('/:id/read', auth, NotificationController.markNotificationAsRead);
+router.delete('/:id', auth, NotificationController.deleteNotification);
 
 export default router;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye, Edit } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -96,6 +96,24 @@ export default function Orders() {
   const handleEdit = (order: any) => {
     setSelectedOrder(order);
     setShowEditModal(true);
+  };
+
+  const handleDelete = async (orderId: number) => {
+    if (window.confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
+      try {
+        // Optimistic update - remove order from UI immediately
+        setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+        setFilteredOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+        
+        await ordersService.deleteOrder(orderId);
+        toast.success('Order deleted successfully');
+      } catch (error) {
+        console.error('Failed to delete order:', error);
+        toast.error('Failed to delete order');
+        // Revert optimistic update on error
+        refetch();
+      }
+    }
   };
 
   const handleSaveOrder = async (orderData: any) => {
@@ -279,6 +297,13 @@ export default function Orders() {
                         title="Edit order"
                       >
                         <Edit className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(order.id)}
+                        className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors"
+                        title="Delete order"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>

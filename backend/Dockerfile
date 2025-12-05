@@ -1,32 +1,57 @@
-# Use Node.js 18 Alpine as base image
-FROM node:18-alpine
+# Multi-stage build for production optimization
+FROM node:18-alpine AS base
+
+# Install system dependencies
+RUN apk add --no-cache curl
 
 # Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY prisma ./prisma/
 
 # Install dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Development stage
+FROM base AS development
 RUN npm ci
-
-# Copy source code
 COPY . .
-
-# Generate Prisma client
 RUN npx prisma generate
+EXPOSE 5000
+CMD ["npm", "run", "dev"]
 
-# Run database migrations
-RUN npx prisma migrate deploy || echo "Migration failed, will retry at runtime"
-
-# Build the application
+# Production build stage
+FROM base AS builder
+RUN npm ci
+COPY . .
+RUN npx prisma generate
 RUN npm run build
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S waretrack -u 1001
+# Production stage
+FROM node:18-alpine AS production
 
-# Change ownership of the app directory
+# Install system dependencies
+RUN apk add --no-cache curl dumb-init
+
+# Create app directory
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S waretrack -u 1001 -G nodejs
+
+# Copy package files and install production dependencies
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy built application and prisma files
+COPY --from=builder --chown=waretrack:nodejs /app/dist ./dist
+COPY --from=builder --chown=waretrack:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=waretrack:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+
+# Change ownership and switch to non-root user
 RUN chown -R waretrack:nodejs /app
 USER waretrack
 
@@ -34,8 +59,9 @@ USER waretrack
 EXPOSE 5000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:5000/health || exit 1
 
-# Start the application
-CMD ["npm", "start"]
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/server.js"]

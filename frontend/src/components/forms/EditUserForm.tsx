@@ -13,8 +13,8 @@ export default function EditUserForm({ user, onClose, onSave }: EditUserFormProp
     name: '',
     email: '',
     phone: '',
-    role: 'warehouse_staff',
-    status: 'active'
+    role: 'WAREHOUSE_STAFF',
+    status: 'ACTIVE'
   });
 
   useEffect(() => {
@@ -79,10 +79,10 @@ export default function EditUserForm({ user, onClose, onSave }: EditUserFormProp
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             required
           >
-            <option value="admin">Admin</option>
-            <option value="warehouse_staff">Warehouse Staff</option>
-            <option value="dispatch_officer">Dispatch Officer</option>
-            <option value="driver">Driver</option>
+            <option value="ADMIN">Admin</option>
+            <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
+            <option value="DISPATCH_OFFICER">Dispatch Officer</option>
+            <option value="DRIVER">Driver</option>
           </select>
         </div>
         <div>
@@ -93,8 +93,8 @@ export default function EditUserForm({ user, onClose, onSave }: EditUserFormProp
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             required
           >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
           </select>
         </div>
       </div>

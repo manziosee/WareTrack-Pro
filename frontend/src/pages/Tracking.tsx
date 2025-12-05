@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, Clock, Truck, Package, Edit } from 'lucide-react';
+import { CheckCircle, Clock, Truck, Package, Edit, Eye, EyeOff } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -12,6 +12,7 @@ export default function Tracking() {
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
+  const [showCompleted, setShowCompleted] = useState(true);
   const [, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,7 +20,7 @@ export default function Tracking() {
       try {
         const response = await ordersService.getOrders();
         const orders = response.data || [];
-        setActiveOrders(orders.filter((o: any) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'));
+        setActiveOrders(orders.filter((o: any) => o.status !== 'CANCELLED'));
       } catch (error) {
         console.error('Failed to fetch orders:', error);
       } finally {
@@ -58,14 +59,24 @@ export default function Tracking() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="font-heading text-3xl font-bold text-gray-900">Delivery Tracking</h1>
-        <p className="text-gray-600 mt-1">Real-time tracking of delivery orders</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-heading text-3xl font-bold text-gray-900">Delivery Tracking</h1>
+          <p className="text-gray-600 mt-1">Real-time tracking of delivery orders</p>
+        </div>
+        <Button
+          variant={showCompleted ? "primary" : "secondary"}
+          onClick={() => setShowCompleted(!showCompleted)}
+          className="flex items-center gap-2"
+        >
+          {showCompleted ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          {showCompleted ? 'Hide Completed' : 'Show Completed'}
+        </Button>
       </div>
 
-      {/* Active Deliveries */}
+      {/* Deliveries */}
       <div className="space-y-4">
-        {activeOrders.map((order) => {
+        {activeOrders.filter(order => showCompleted || order.status !== 'DELIVERED').map((order) => {
           const currentStageIndex = getCurrentStageIndex(order.status);
 
           return (
@@ -84,15 +95,17 @@ export default function Tracking() {
                   <p className="text-sm text-gray-600">{order.deliveryAddress}</p>
                 </div>
                 <div className="text-right">
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    onClick={() => handleUpdateStatus(order.id)}
-                    className="mb-2"
-                  >
-                    <Edit className="w-4 h-4 mr-1" />
-                    Update Status
-                  </Button>
+                  {order.status !== 'DELIVERED' && (
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      onClick={() => handleUpdateStatus(order.id)}
+                      className="mb-2"
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      Update Status
+                    </Button>
+                  )}
                   <div>
                     <p className="text-sm text-gray-600">Created</p>
                     <p className="text-sm font-medium text-gray-900">{formatDateTime(order.createdAt)}</p>

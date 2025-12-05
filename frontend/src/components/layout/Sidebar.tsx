@@ -47,25 +47,27 @@ export default function Sidebar() {
 
   // Filter navigation based on user role
   const getFilteredNavigation = () => {
-    if (!user) return navigation;
+    if (!user) return [];
 
     switch (user.role) {
-      case 'admin':
-        return navigation;
-      case 'warehouse_staff':
+      case 'ADMIN':
+        return navigation; // Admin sees everything
+      case 'WAREHOUSE_STAFF':
         return navigation.filter(item => 
-          ['Dashboard', 'Inventory', 'Orders'].includes(item.name)
+          ['Dashboard', 'Inventory', 'Orders', 'Reports'].includes(item.name)
         );
-      case 'dispatch_officer':
+      case 'DISPATCH_OFFICER':
         return navigation.filter(item => 
-          ['Dashboard', 'Orders', 'Dispatch', 'Vehicles', 'Tracking'].includes(item.name)
+          ['Dashboard', 'Orders', 'Dispatch', 'Vehicles', 'Tracking', 'Reports'].includes(item.name)
         );
-      case 'driver':
+      case 'DRIVER':
         return navigation.filter(item => 
           ['Dashboard', 'Tracking'].includes(item.name)
         );
       default:
-        return navigation;
+        return navigation.filter(item => 
+          ['Dashboard'].includes(item.name)
+        ); // Fallback: only dashboard
     }
   };
 
@@ -125,25 +127,28 @@ export default function Sidebar() {
 
       {/* Bottom Actions */}
       <div className="px-2 py-4 border-t border-gray-200 space-y-1">
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group relative ${
-              isActive
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-            }`
-          }
-          title={isCollapsed ? 'Settings' : ''}
-        >
-          <Settings className="w-5 h-5 flex-shrink-0" />
-          {!isCollapsed && <span className="truncate">Settings</span>}
-          {isCollapsed && (
-            <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
-              Settings
-            </div>
-          )}
-        </NavLink>
+        {/* Settings - Only for Admin and Dispatch Officers */}
+        {(user?.role === 'ADMIN' || user?.role === 'DISPATCH_OFFICER') && (
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group relative ${
+                isActive
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+              }`
+            }
+            title={isCollapsed ? 'Settings' : ''}
+          >
+            <Settings className="w-5 h-5 flex-shrink-0" />
+            {!isCollapsed && <span className="truncate">Settings</span>}
+            {isCollapsed && (
+              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                Settings
+              </div>
+            )}
+          </NavLink>
+        )}
         <button 
           onClick={handleLogout}
           className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} w-full px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors group relative`}

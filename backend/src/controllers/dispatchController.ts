@@ -125,11 +125,13 @@ export class DispatchController {
         }
       });
 
-      // Update order status to dispatched
+      // Update order status to pending initially (will be dispatched when dispatch is activated)
       await prisma.deliveryOrder.update({
         where: { id: Number(orderId) },
         data: { 
-          status: 'DISPATCHED'
+          status: 'PENDING',
+          driverId: Number(driverId),
+          vehicleId: Number(vehicleId)
         }
       });
 
@@ -211,12 +213,16 @@ export class DispatchController {
         });
       }
 
-      // Sync vehicle status with dispatch status
+      // Sync vehicle and driver status with dispatch status
       let vehicleStatus = dispatch.vehicle.status;
+      let driverStatus = dispatch.driver.status;
+      
       if (status === 'DISPATCHED' || status === 'IN_TRANSIT') {
         vehicleStatus = 'IN_USE';
+        driverStatus = 'ON_DUTY';
       } else if (status === 'DELIVERED') {
         vehicleStatus = 'AVAILABLE';
+        driverStatus = 'AVAILABLE';
       }
 
       // Update vehicle status if it changed
@@ -224,6 +230,14 @@ export class DispatchController {
         await prisma.vehicle.update({
           where: { id: dispatch.vehicleId },
           data: { status: vehicleStatus }
+        });
+      }
+
+      // Update driver status if it changed
+      if (driverStatus !== dispatch.driver.status) {
+        await prisma.driver.update({
+          where: { id: dispatch.driverId },
+          data: { status: driverStatus }
         });
       }
 
@@ -376,6 +390,45 @@ export class DispatchController {
           inTransitDispatches,
           currency: 'RWF'
         }
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
+
+  static async syncStatuses(req: Request, res: Response) {
+    try {
+      // Get all dispatches with their orders
+      const dispatches = await prisma.dispatch.findMany({
+        include: {
+          order: true,
+          driver: true,
+          vehicle: true
+        }
+      });
+
+      let syncedCount = 0;
+
+      for (const dispatch of dispatches) {
+        // Sync order status with dispatch status if they don't match
+        if (dispatch.order.status !== dispatch.status) {
+          await prisma.deliveryOrder.update({
+            where: { id: dispatch.orderId },
+            data: { 
+              status: dispatch.status,
+              ...(dispatch.status === 'DELIVERED' && { deliveredAt: dispatch.actualDelivery })
+            }
+          });
+          syncedCount++;
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Synced ${syncedCount} order statuses with dispatch statuses`
       });
     } catch (error) {
       res.status(500).json({ 

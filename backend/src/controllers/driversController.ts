@@ -7,14 +7,10 @@ export class DriversController {
       const { page = 1, limit = 10, status, search } = req.query;
       const skip = (Number(page) - 1) * Number(limit);
 
-      // Get current user's managed drivers
-      const managerId = (req as any).user?.id;
-      
       const drivers = await prisma.driver.findMany({
         skip,
         take: Number(limit),
         where: {
-          managerId, // Only show drivers managed by current user
           ...(status && { status: status as any }),
           ...(search && {
             OR: [
@@ -24,18 +20,47 @@ export class DriversController {
           })
         },
         include: {
-          manager: true,
-          currentVehicle: true
+          currentVehicle: true,
+          dispatches: {
+            where: {
+              status: {
+                in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT']
+              }
+            },
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 1
+          }
         }
       });
 
-      const total = await prisma.driver.count({
-        where: { managerId }
-      });
+      // Update driver status based on current dispatch
+      const updatedDrivers = await Promise.all(drivers.map(async (driver) => {
+        const activeDispatch = driver.dispatches[0];
+        let correctStatus = 'AVAILABLE';
+        
+        if (activeDispatch) {
+          correctStatus = 'ON_DUTY';
+        }
+        
+        // Update driver status if it doesn't match
+        if (driver.status !== correctStatus) {
+          await prisma.driver.update({
+            where: { id: driver.id },
+            data: { status: correctStatus as any }
+          });
+          driver.status = correctStatus as any;
+        }
+        
+        return driver;
+      }));
+
+      const total = await prisma.driver.count();
 
       res.json({
         success: true,
-        data: drivers,
+        data: updatedDrivers,
         pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
       });
     } catch (error) {

@@ -39,110 +39,186 @@ const options = {
         User: {
           type: 'object',
           properties: {
-            id: { type: 'string' },
-            firstName: { type: 'string' },
-            lastName: { type: 'string' },
-            email: { type: 'string' },
+            id: { type: 'integer' },
+            name: { type: 'string' },
+            email: { type: 'string', format: 'email' },
             phone: { type: 'string' },
             role: { 
               type: 'string',
-              enum: ['admin', 'warehouse_staff', 'dispatch_officer', 'driver']
+              enum: ['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'],
+              description: 'User role with specific permissions'
             },
             status: {
               type: 'string',
-              enum: ['active', 'inactive']
+              enum: ['ACTIVE', 'INACTIVE'],
+              description: 'Account activation status'
             },
+            isActive: { type: 'boolean' },
             lastLogin: { type: 'string', format: 'date-time' },
-            createdAt: { type: 'string', format: 'date-time' }
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
           }
         },
-        Order: {
+        DeliveryOrder: {
           type: 'object',
           properties: {
-            id: { type: 'string' },
-            orderNumber: { type: 'string' },
+            id: { type: 'integer' },
+            orderNumber: { type: 'string', description: 'Unique order identifier' },
             customerName: { type: 'string' },
-            customerEmail: { type: 'string' },
+            customerEmail: { type: 'string', format: 'email' },
+            customerPhone: { type: 'string' },
             deliveryAddress: { type: 'string' },
             status: {
               type: 'string',
-              enum: ['pending', 'dispatched', 'in_transit', 'delivered', 'cancelled']
+              enum: ['PENDING', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'],
+              description: 'Current order status'
             },
-            totalAmount: { type: 'number' },
-            orderDate: { type: 'string', format: 'date-time' },
-            deliveryDate: { type: 'string', format: 'date-time' }
+            priority: {
+              type: 'string',
+              enum: ['LOW', 'MEDIUM', 'HIGH'],
+              description: 'Order priority level'
+            },
+            totalAmount: { type: 'number', format: 'decimal' },
+            paymentMethod: { type: 'string' },
+            paymentStatus: { type: 'string' },
+            scheduledDate: { type: 'string', format: 'date-time' },
+            deliveredAt: { type: 'string', format: 'date-time' },
+            notes: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+            createdById: { type: 'integer' },
+            driverId: { type: 'integer' },
+            vehicleId: { type: 'integer' }
           }
         },
         InventoryItem: {
           type: 'object',
           properties: {
-            id: { type: 'string' },
+            id: { type: 'integer' },
             name: { type: 'string' },
-            code: { type: 'string' },
+            code: { type: 'string', description: 'Unique item code/SKU' },
             category: { type: 'string' },
-            quantity: { type: 'number' },
-            minQuantity: { type: 'number' },
-            unitPrice: { type: 'number' },
+            quantity: { type: 'integer', minimum: 0 },
+            minQuantity: { type: 'integer', minimum: 0, description: 'Minimum stock threshold' },
+            unitPrice: { type: 'number', format: 'decimal', minimum: 0 },
             status: {
               type: 'string',
-              enum: ['active', 'inactive', 'discontinued']
+              enum: ['ACTIVE', 'INACTIVE', 'DISCONTINUED'],
+              description: 'Item availability status'
             },
-            location: { type: 'string' },
-            supplier: { type: 'string' }
+            location: { type: 'string', description: 'Warehouse location' },
+            supplier: { type: 'string' },
+            description: { type: 'string' },
+            barcode: { type: 'string' },
+            weight: { type: 'number', format: 'decimal' },
+            dimensions: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+            lastUpdated: { type: 'string', format: 'date-time' }
           }
         },
         Vehicle: {
           type: 'object',
           properties: {
-            id: { type: 'string' },
-            registrationNumber: { type: 'string' },
+            id: { type: 'integer' },
+            plateNumber: { type: 'string', description: 'Vehicle registration/plate number' },
             make: { type: 'string' },
             model: { type: 'string' },
-            year: { type: 'number' },
-            type: { type: 'string' },
-            capacity: { type: 'number' },
+            year: { type: 'integer', minimum: 1900, maximum: 2030 },
+            type: { 
+              type: 'string',
+              enum: ['TRUCK', 'VAN', 'MOTORCYCLE', 'CAR'],
+              description: 'Vehicle type for delivery'
+            },
+            capacity: { type: 'number', format: 'decimal', minimum: 0, description: 'Load capacity in kg' },
             status: {
               type: 'string',
-              enum: ['available', 'in_use', 'maintenance', 'unavailable']
-            }
+              enum: ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'OUT_OF_SERVICE'],
+              description: 'Current vehicle status'
+            },
+            fuelType: { type: 'string' },
+            mileage: { type: 'number', format: 'decimal' },
+            lastMaintenance: { type: 'string', format: 'date' },
+            nextMaintenance: { type: 'string', format: 'date' },
+            insuranceExpiry: { type: 'string', format: 'date' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
           }
         },
         Driver: {
           type: 'object',
           properties: {
-            id: { type: 'string' },
-            userId: { type: 'string' },
+            id: { type: 'integer' },
+            userId: { type: 'integer', description: 'Reference to User table' },
             name: { type: 'string' },
-            licenseNumber: { type: 'string' },
+            licenseNumber: { type: 'string', description: 'Driver license number' },
             phone: { type: 'string' },
             status: {
               type: 'string',
-              enum: ['available', 'on_duty', 'off_duty']
+              enum: ['AVAILABLE', 'ON_DUTY', 'OFF_DUTY'],
+              description: 'Current driver availability status'
             },
-            experience: { type: 'number' },
-            rating: { type: 'string' }
+            experience: { type: 'integer', minimum: 0, description: 'Years of driving experience' },
+            rating: { type: 'number', format: 'decimal', minimum: 0, maximum: 5 },
+            licenseExpiry: { type: 'string', format: 'date' },
+            emergencyContact: { type: 'string' },
+            address: { type: 'string' },
+            dateOfBirth: { type: 'string', format: 'date' },
+            hireDate: { type: 'string', format: 'date' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
           }
         },
         Dispatch: {
           type: 'object',
           properties: {
-            id: { type: 'string' },
-            orderId: { type: 'string' },
-            driverId: { type: 'string' },
-            vehicleId: { type: 'string' },
+            id: { type: 'integer' },
+            orderId: { type: 'integer', description: 'Reference to DeliveryOrder' },
+            driverId: { type: 'integer', description: 'Assigned driver ID' },
+            vehicleId: { type: 'integer', description: 'Assigned vehicle ID' },
             status: {
               type: 'string',
-              enum: ['pending', 'in_progress', 'completed', 'cancelled']
+              enum: ['PENDING', 'IN_PROGRESS', 'DELIVERED', 'CANCELLED'],
+              description: 'Current dispatch status'
             },
-            startTime: { type: 'string', format: 'date-time' },
+            dispatchTime: { type: 'string', format: 'date-time' },
             estimatedArrival: { type: 'string', format: 'date-time' },
+            actualArrival: { type: 'string', format: 'date-time' },
+            notes: { type: 'string' },
+            confirmationCode: { type: 'string', description: 'Delivery confirmation code' },
             currentLocation: {
               type: 'object',
               properties: {
-                lat: { type: 'number' },
-                lng: { type: 'number' }
+                latitude: { type: 'number', format: 'decimal' },
+                longitude: { type: 'number', format: 'decimal' },
+                address: { type: 'string' }
               }
-            }
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+            createdById: { type: 'integer' }
+          }
+        },
+        Notification: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            userId: { type: 'integer', description: 'Target user ID (null for global notifications)' },
+            type: {
+              type: 'string',
+              enum: ['ORDER_UPDATE', 'LOW_STOCK', 'DELIVERY_ASSIGNMENT', 'SYSTEM_ALERT', 'WELCOME'],
+              description: 'Notification type'
+            },
+            severity: {
+              type: 'string',
+              enum: ['INFO', 'WARNING', 'ERROR', 'SUCCESS'],
+              description: 'Notification severity level'
+            },
+            title: { type: 'string' },
+            message: { type: 'string' },
+            read: { type: 'boolean', default: false },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
           }
         },
         ApiResponse: {
@@ -196,6 +272,12 @@ const options = {
             phone: {
               type: 'string',
               example: '+1234567890'
+            },
+            role: {
+              type: 'string',
+              enum: ['WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'],
+              example: 'WAREHOUSE_STAFF',
+              description: 'User role (ADMIN role is restricted to first user only)'
             }
           }
         },
@@ -274,16 +356,18 @@ const options = {
       }
     ],
     tags: [
-      { name: 'Authentication', description: 'User authentication and authorization' },
-      { name: 'Dashboard', description: 'Dashboard statistics and metrics' },
-      { name: 'Orders', description: 'Order management operations' },
-      { name: 'Inventory', description: 'Inventory management operations' },
-      { name: 'Dispatch', description: 'Dispatch and delivery operations' },
-      { name: 'Users', description: 'User management operations' },
-      { name: 'Vehicles', description: 'Vehicle management operations' },
-      { name: 'Drivers', description: 'Driver management operations' },
-      { name: 'Reports', description: 'Reporting and analytics' },
-      { name: 'Email Testing', description: 'Email notification testing' }
+      { name: 'Authentication', description: 'User authentication, registration, and JWT token management' },
+      { name: 'Dashboard', description: 'Real-time dashboard statistics, metrics, and role-based data' },
+      { name: 'Orders', description: 'Delivery order management with full CRUD operations' },
+      { name: 'Inventory', description: 'Inventory management with stock tracking and alerts' },
+      { name: 'Dispatch', description: 'Dispatch operations with real-time tracking and status updates' },
+      { name: 'Users', description: 'User management with role-based access control (RBAC)' },
+      { name: 'Vehicles', description: 'Fleet management with maintenance tracking' },
+      { name: 'Drivers', description: 'Driver management with availability and performance tracking' },
+      { name: 'Notifications', description: 'Real-time notification system with database storage' },
+      { name: 'Reports', description: 'Advanced reporting and analytics with export capabilities' },
+      { name: 'Email Testing', description: 'Email notification testing and template validation' },
+      { name: 'Health Check', description: 'System health monitoring and status endpoints' }
     ]
   },
   apis: ['./src/routes/*.ts', './src/controllers/*.ts']

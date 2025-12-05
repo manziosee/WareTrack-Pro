@@ -124,7 +124,20 @@ export class OrdersController {
 
   static async createOrder(req: Request, res: Response) {
     try {
-      const { customerName, customerEmail, customerPhone, deliveryAddress, items, notes, priority = 'MEDIUM' } = req.body;
+      const { 
+        customerName, 
+        customerEmail, 
+        customerPhone, 
+        contactNumber,
+        deliveryAddress, 
+        items, 
+        notes,
+        deliveryInstructions,
+        priority = 'MEDIUM',
+        orderType = 'delivery',
+        paymentMethod = 'cash',
+        scheduledDate
+      } = req.body;
 
       console.log('Creating order with items:', items);
 
@@ -195,13 +208,14 @@ export class OrdersController {
             customerId: 1,
             customerName,
             deliveryAddress,
-            contactNumber: customerPhone || '',
+            contactNumber: contactNumber || customerPhone || '',
             priority: priority as any,
             status: 'PENDING',
-            orderType: 'delivery',
-            paymentMethod: 'cash',
+            orderType: orderType || 'delivery',
+            paymentMethod: paymentMethod || 'cash',
             totalAmount,
-            deliveryInstructions: notes,
+            deliveryInstructions: deliveryInstructions || notes,
+            scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
             createdBy: Number(req.user?.userId) || 1,
             items: {
               create: orderItems
@@ -291,6 +305,39 @@ export class OrdersController {
         where: { id: Number(id) },
         data: updateData
       });
+
+      // Sync dispatch status with order status
+      const dispatch = await prisma.dispatch.findFirst({
+        where: { orderId: Number(id) }
+      });
+
+      if (dispatch) {
+        const dispatchUpdateData: any = { status };
+        
+        if (status === 'DELIVERED') {
+          dispatchUpdateData.actualDelivery = new Date();
+        } else if (status === 'DISPATCHED') {
+          dispatchUpdateData.dispatchedAt = new Date();
+        }
+
+        await prisma.dispatch.update({
+          where: { id: dispatch.id },
+          data: dispatchUpdateData
+        });
+
+        // Update vehicle status based on dispatch status
+        if (status === 'DELIVERED') {
+          await prisma.vehicle.update({
+            where: { id: dispatch.vehicleId },
+            data: { status: 'AVAILABLE' }
+          });
+        } else if (status === 'DISPATCHED' || status === 'IN_TRANSIT') {
+          await prisma.vehicle.update({
+            where: { id: dispatch.vehicleId },
+            data: { status: 'IN_USE' }
+          });
+        }
+      }
 
       // Send email notifications based on status
       if (status === 'DELIVERED') {
@@ -383,6 +430,48 @@ export class OrdersController {
       res.json({ 
         success: true,
         message: 'Order cancelled successfully' 
+      });
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'ORDER_NOT_FOUND', message: 'Order not found' }
+        });
+      }
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
+
+  static async deleteOrder(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      
+      // Delete order with transaction to handle related records
+      await prisma.$transaction(async (tx) => {
+        // Delete order items first
+        await tx.orderItem.deleteMany({
+          where: { orderId: Number(id) }
+        });
+        
+        // Delete related dispatch records
+        await tx.dispatch.deleteMany({
+          where: { orderId: Number(id) }
+        });
+        
+        // Delete the order
+        await tx.deliveryOrder.delete({
+          where: { id: Number(id) }
+        });
+      });
+
+      await cache.invalidateOrderCache();
+      
+      res.json({ 
+        success: true,
+        message: 'Order deleted successfully' 
       });
     } catch (error: any) {
       if (error.code === 'P2025') {

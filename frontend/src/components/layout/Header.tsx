@@ -132,7 +132,13 @@ export default function Header() {
                   )}
                 </div>
                 <div className="p-3 border-t border-gray-200">
-                  <button className="w-full text-center text-sm text-primary-600 hover:text-primary-700 font-medium">
+                  <button 
+                    onClick={() => {
+                      navigate('/notifications');
+                      setShowNotifications(false);
+                    }}
+                    className="w-full text-center text-sm text-primary-600 hover:text-primary-700 font-medium"
+                  >
                     View All Notifications
                   </button>
                 </div>

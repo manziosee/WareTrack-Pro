@@ -5,8 +5,86 @@ import { CacheService } from '../services/cacheService';
 const cache = CacheService.getInstance();
 
 export class DashboardController {
+  // Create system notifications
+  static async createSystemNotifications() {
+    try {
+      // Check if welcome notification exists
+      const existingWelcome = await prisma.notification.findFirst({
+        where: { type: 'WELCOME' }
+      });
+
+      if (!existingWelcome) {
+        await prisma.notification.create({
+          data: {
+            type: 'WELCOME',
+            title: 'Welcome to WareTrack Pro!',
+            message: 'Your warehouse management system is ready to use.',
+            severity: 'INFO'
+          }
+        });
+      }
+
+      // Check if system update notification exists
+      const existingUpdate = await prisma.notification.findFirst({
+        where: { type: 'SYSTEM', title: 'System Update Complete' }
+      });
+
+      if (!existingUpdate) {
+        await prisma.notification.create({
+          data: {
+            type: 'SYSTEM',
+            title: 'System Update Complete',
+            message: 'All system components have been successfully updated.',
+            severity: 'SUCCESS',
+            createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours ago
+          }
+        });
+      }
+
+      // Create low stock notifications
+      const lowStockItems = await prisma.$queryRaw`
+        SELECT id, name, quantity, min_quantity as "minQuantity"
+        FROM inventory_items 
+        WHERE quantity < min_quantity
+      `;
+
+      if (Array.isArray(lowStockItems)) {
+        for (const item of lowStockItems) {
+          const existingLowStock = await prisma.notification.findFirst({
+            where: {
+              type: 'LOW_STOCK',
+              message: { contains: (item as any).name }
+            }
+          });
+
+          if (!existingLowStock) {
+            await prisma.notification.create({
+              data: {
+                type: 'LOW_STOCK',
+                title: 'Low Stock Alert',
+                message: `${(item as any).name} is running low (${(item as any).quantity} remaining)`,
+                severity: 'WARNING'
+              }
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error creating system notifications:', error);
+    }
+  }
   static async getSummary(req: Request, res: Response) {
     try {
+      const userId = Number(req.user?.userId);
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+        });
+      }
+
       const now = new Date();
       const today = new Date(now);
       today.setHours(0, 0, 0, 0);
@@ -27,8 +105,8 @@ export class DashboardController {
         totalInventoryItems,
         totalInventoryValue,
         deliveriesToday,
-        pendingDispatches,
-        inTransit,
+        activeUsers,
+        totalVehicles,
         lowStockItems
       ] = await Promise.all([
         prisma.inventoryItem.count(),
@@ -39,8 +117,8 @@ export class DashboardController {
             deliveredAt: { gte: today, lt: tomorrow }
           }
         }),
-        prisma.deliveryOrder.count({ where: { status: 'PENDING' } }),
-        prisma.deliveryOrder.count({ where: { status: 'IN_TRANSIT' } }),
+        prisma.user.count({ where: { status: 'ACTIVE' } }),
+        prisma.vehicle.count(),
         prisma.$queryRaw`SELECT COUNT(*)::int as count FROM inventory_items WHERE quantity < min_quantity`
       ]);
 
@@ -48,8 +126,8 @@ export class DashboardController {
       const [
         prevInventoryItems,
         prevDeliveries,
-        prevPendingDispatches,
-        prevInTransit,
+        prevActiveUsers,
+        prevTotalVehicles,
         prevLowStockItems
       ] = await Promise.all([
         prisma.inventoryItem.count({
@@ -63,16 +141,15 @@ export class DashboardController {
             deliveredAt: { gte: previousWeekStart, lt: previousWeekEnd }
           }
         }),
-        prisma.deliveryOrder.count({
+        prisma.user.count({
           where: {
-            status: 'PENDING',
-            createdAt: { gte: previousWeekStart, lt: previousWeekEnd }
+            status: 'ACTIVE',
+            createdAt: { lt: lastWeekEnd }
           }
         }),
-        prisma.deliveryOrder.count({
+        prisma.vehicle.count({
           where: {
-            status: 'IN_TRANSIT',
-            createdAt: { gte: previousWeekStart, lt: previousWeekEnd }
+            createdAt: { lt: lastWeekEnd }
           }
         }),
         prisma.$queryRaw`SELECT COUNT(*)::int as count FROM inventory_items WHERE quantity < min_quantity AND created_at < ${lastWeekEnd}`
@@ -91,31 +168,49 @@ export class DashboardController {
       const lowStockCount = Array.isArray(lowStockItems) ? lowStockItems[0]?.count || 0 : 0;
       const prevLowStockCount = Array.isArray(prevLowStockItems) ? prevLowStockItems[0]?.count || 0 : 0;
 
-      const summary = {
+      let summary: any = {
         totalInventory: {
           value: totalInventoryItems,
-          percentage: calculatePercentage(totalInventoryItems, prevInventoryItems),
-          currency: 'RWF'
+          percentage: calculatePercentage(totalInventoryItems, prevInventoryItems)
         },
         deliveriesToday: {
           value: deliveriesToday,
           percentage: calculatePercentage(deliveriesToday, prevDeliveries)
         },
-        pendingDispatches: {
-          value: pendingDispatches,
-          percentage: calculatePercentage(pendingDispatches, prevPendingDispatches)
+        activeUsers: {
+          value: activeUsers,
+          percentage: calculatePercentage(activeUsers, prevActiveUsers)
         },
-        inTransit: {
-          value: inTransit,
-          percentage: calculatePercentage(inTransit, prevInTransit)
+        fleetStatus: {
+          value: totalVehicles,
+          percentage: calculatePercentage(totalVehicles, prevTotalVehicles)
         },
-        lowStockAlerts: {
+        systemAlerts: {
           value: lowStockCount,
           percentage: calculatePercentage(lowStockCount, prevLowStockCount)
         },
         totalInventoryValue: inventoryValue,
-        currency: 'RWF'
+        currency: 'RWF',
+        userRole: user.role
       };
+
+      // Add role-specific data
+      if (user.role === 'DRIVER') {
+        const driverRecord = await prisma.driver.findFirst({ where: { userId: user.id } });
+        if (driverRecord) {
+          const driverStats = await prisma.dispatch.findMany({
+            where: { 
+              driverId: driverRecord.id,
+              createdAt: { gte: today, lt: tomorrow }
+            }
+          });
+          
+          summary.driverStats = {
+            todayDeliveries: driverStats.filter(d => d.status === 'DELIVERED').length,
+            pendingDeliveries: driverStats.filter(d => d.status !== 'DELIVERED' && d.status !== 'CANCELLED').length
+          };
+        }
+      }
 
       res.json({ success: true, data: summary });
     } catch (error) {
@@ -209,7 +304,7 @@ export class DashboardController {
       const upcomingOrders = await prisma.deliveryOrder.findMany({
         where: { status: 'PENDING' },
         take: 5,
-        include: {
+        include: { 
           driver: true,
           vehicle: true
         },
@@ -285,29 +380,38 @@ export class DashboardController {
 
   static async getNotifications(req: Request, res: Response) {
     try {
-      // Get low stock items as notifications
-      const lowStockItems = await prisma.$queryRaw`
-        SELECT id, name, quantity, min_quantity as "minQuantity"
-        FROM inventory_items 
-        WHERE quantity < min_quantity 
-        LIMIT 5
-      `;
+      const userId = Number(req.user?.userId);
+      
+      // Ensure system notifications exist
+      await DashboardController.createSystemNotifications();
+      
+      // Get stored notifications for user (or global ones)
+      const notifications = await prisma.notification.findMany({
+        where: {
+          OR: [
+            { userId: userId },
+            { userId: null } // Global notifications
+          ]
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20
+      });
 
-      const formattedNotifications = Array.isArray(lowStockItems) 
-        ? lowStockItems.map((item: any) => ({
-            id: `low-stock-${item.id}`,
-            type: 'low_stock',
-            title: 'Low Stock Alert',
-            message: `${item.name} is running low (${item.quantity} remaining)`,
-            timestamp: new Date().toISOString(),
-            read: false
-          }))
-        : [];
+      const formattedNotifications = notifications.map(notification => ({
+        id: notification.id.toString(),
+        type: notification.type.toLowerCase(),
+        title: notification.title,
+        message: notification.message,
+        timestamp: notification.createdAt,
+        timeAgo: getTimeAgo(notification.createdAt),
+        severity: notification.severity.toLowerCase(),
+        read: notification.read
+      }));
 
       res.json({ success: true, data: formattedNotifications });
     } catch (error) {
       console.error('Notifications error:', error);
-      res.json({ success: true, data: [] }); // Return empty array on error
+      res.json({ success: true, data: [] });
     }
   }
 

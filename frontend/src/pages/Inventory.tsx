@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, AlertTriangle } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -7,6 +7,7 @@ import Modal from '../components/ui/Modal';
 import SearchFilter from '../components/ui/SearchFilter';
 import AddInventoryForm from '../components/forms/AddInventoryForm';
 import EditInventoryForm from '../components/forms/EditInventoryForm';
+import ViewInventoryModal from '../components/forms/ViewInventoryModal';
 import { formatDate, formatStockLevel } from '../utils/formatters';
 import { inventoryService } from '../services/inventoryService';
 import { useRealTimeData } from '../hooks/useRealTimeData';
@@ -16,6 +17,7 @@ import toast from 'react-hot-toast';
 
 export default function Inventory() {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [inventory, setInventory] = useState<any[]>([]);
@@ -101,6 +103,11 @@ export default function Inventory() {
     toast.success(`Inventory exported as ${format.toUpperCase()}`);
   };
 
+  const handleView = (item: any) => {
+    setSelectedItem(item);
+    setShowViewModal(true);
+  };
+
   const handleEdit = (item: any) => {
     setSelectedItem(item);
     setShowEditModal(true);
@@ -134,6 +141,7 @@ export default function Inventory() {
       cache.clearPattern('inventory');
       cache.clearPattern('/api/');
       
+      setShowViewModal(false);
       setShowEditModal(false);
       setShowAddModal(false);
       setSelectedItem(null);
@@ -281,6 +289,13 @@ export default function Inventory() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center gap-2">
                       <button 
+                        onClick={() => handleView(item)}
+                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        title="View item details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button 
                         onClick={() => handleEdit(item)}
                         className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
                         title="Edit item"
@@ -305,6 +320,10 @@ export default function Inventory() {
 
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Inventory Item">
         <AddInventoryForm onClose={() => setShowAddModal(false)} onSave={handleSaveItem} />
+      </Modal>
+
+      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Inventory Item Details" size="lg">
+        {selectedItem && <ViewInventoryModal item={selectedItem} />}
       </Modal>
 
       <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Inventory Item">

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check User Data</title>
+</head>
+<body>
+    <h1>User Data Check</h1>
+    <div id="result"></div>
+    
+    <script>
+        const userData = localStorage.getItem('user');
+        const token = localStorage.getItem('token');
+        
+        const resultDiv = document.getElementById('result');
+        
+        if (userData) {
+            const user = JSON.parse(userData);
+            resultDiv.innerHTML = `
+                <h3>Stored User Data:</h3>
+                <p><strong>ID:</strong> ${user.id}</p>
+                <p><strong>Name:</strong> ${user.name}</p>
+                <p><strong>Email:</strong> ${user.email}</p>
+                <p><strong>Role:</strong> ${user.role}</p>
+                <p><strong>Status:</strong> ${user.status}</p>
+                
+                <h3>Token Info:</h3>
+                <p><strong>Token exists:</strong> ${!!token}</p>
+                <p><strong>Token length:</strong> ${token ? token.length : 'N/A'}</p>
+                
+                <h3>Expected Dashboard:</h3>
+                <p><strong>Should route to:</strong> ${
+                    user.role === 'ADMIN' ? 'AdminDashboard' :
+                    user.role === 'WAREHOUSE_STAFF' ? 'WarehouseStaffDashboard' :
+                    user.role === 'DISPATCH_OFFICER' ? 'DispatchOfficerDashboard' :
+                    user.role === 'DRIVER' ? 'DriverDashboard' : 'Unknown'
+                }</p>
+            `;
+        } else {
+            resultDiv.innerHTML = '<p>No user data found in localStorage</p>';
+        }
+    </script>
+</body>
+</html>

@@ -34,6 +34,7 @@ model User {
   notificationPreferences NotificationPreferences?
   systemConfiguration SystemConfiguration?
   reportSettings ReportSettings?
+  notifications Notification[]
 
   @@map("users")
 }
@@ -283,6 +284,23 @@ model ReportSettings {
   @@map("report_settings")
 }
 
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  type      NotificationType
+  title     String
+  message   String
+  severity  NotificationSeverity @default(INFO)
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
 // Enums
 enum UserRole {
   ADMIN
@@ -335,4 +353,19 @@ enum DispatchStatus {
   IN_TRANSIT
   DELIVERED
   CANCELLED
+}
+
+enum NotificationType {
+  SYSTEM
+  LOW_STOCK
+  ORDER_UPDATE
+  DELIVERY_COMPLETE
+  WELCOME
+}
+
+enum NotificationSeverity {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
 }

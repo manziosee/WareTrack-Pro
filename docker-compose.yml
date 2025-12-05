@@ -10,12 +10,12 @@ services:
       POSTGRES_DB: waretrack
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password123
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - waretrack-network
     healthcheck:
@@ -23,13 +23,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
 
   # Redis Cache & Queue
   redis:
     image: redis:7-alpine
     container_name: waretrack-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass redis123
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass redis123
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
@@ -37,58 +45,70 @@ services:
     networks:
       - waretrack-network
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
 
   # Backend API
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-development}
     container_name: waretrack-backend
     restart: unless-stopped
     ports:
       - "5000:5000"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV:-development}
       - PORT=5000
       - DATABASE_URL=postgresql://postgres:password123@db:5432/waretrack
-      - JWT_SECRET=your-super-secret-jwt-key-for-development
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-for-development}
       - JWT_EXPIRE=7d
       - FRONTEND_URL=http://localhost:3001
       - REDIS_URL=redis://:redis123@redis:6379
-      - EMAILJS_SERVICE_ID=service_7hizj8v
-      - EMAILJS_TEMPLATE_ID=template_wh4q8sa
-      - EMAILJS_PUBLIC_KEY=zkK2mVNTo5OTMhvQv
-      - EMAILJS_PRIVATE_KEY=GXalvYErebOEaD_teqZb6
+      - EMAILJS_SERVICE_ID=${EMAILJS_SERVICE_ID:-service_7hizj8v}
+      - EMAILJS_TEMPLATE_ID=${EMAILJS_TEMPLATE_ID:-template_wh4q8sa}
+      - EMAILJS_PUBLIC_KEY=${EMAILJS_PUBLIC_KEY:-zkK2mVNTo5OTMhvQv}
+      - EMAILJS_PRIVATE_KEY=${EMAILJS_PRIVATE_KEY:-GXalvYErebOEaD_teqZb6}
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - waretrack-network
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - /app/dist
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
 
   # Frontend React App
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-development}
     container_name: waretrack-frontend
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "3001:3000"
     environment:
       - VITE_API_URL=http://localhost:5000/api
       - VITE_APP_NAME=WareTrack Pro
+      - VITE_APP_VERSION=2.0.0
     depends_on:
       - backend
     networks:
@@ -96,18 +116,33 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      - /app/dist
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   postgres_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
   redis_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
 
 networks:
   waretrack-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

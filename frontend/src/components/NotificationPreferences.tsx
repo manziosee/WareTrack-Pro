@@ -1,12 +1,75 @@
 import { useState, useEffect } from 'react';
 import { notificationService } from '../services/notificationService';
 import type { NotificationPreferences } from '../types';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const NotificationPreferencesComponent = () => {
+  const { user } = useAuth();
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Role-based notification options
+  const getNotificationOptionsForRole = (role: string) => {
+    const baseOptions = [
+      {
+        key: 'emailEnabled' as keyof NotificationPreferences,
+        title: 'Email Notifications',
+        description: 'Receive notifications via email'
+      },
+      {
+        key: 'smsEnabled' as keyof NotificationPreferences,
+        title: 'SMS Notifications', 
+        description: 'Receive notifications via SMS'
+      }
+    ];
+
+    const roleSpecificOptions = {
+      ADMIN: [
+        {
+          key: 'orderUpdates' as keyof NotificationPreferences,
+          title: 'Order Updates',
+          description: 'Get notified about order status changes'
+        },
+        {
+          key: 'lowStockAlerts' as keyof NotificationPreferences,
+          title: 'Low Stock Alerts',
+          description: 'Receive alerts when inventory is low'
+        }
+      ],
+      WAREHOUSE_STAFF: [
+        {
+          key: 'orderUpdates' as keyof NotificationPreferences,
+          title: 'Order Updates',
+          description: 'Get notified about new orders and updates'
+        },
+        {
+          key: 'lowStockAlerts' as keyof NotificationPreferences,
+          title: 'Low Stock Alerts',
+          description: 'Receive alerts when inventory is low'
+        }
+      ],
+      DISPATCH_OFFICER: [
+        {
+          key: 'orderUpdates' as keyof NotificationPreferences,
+          title: 'Order Updates',
+          description: 'Get notified about dispatch and delivery updates'
+        }
+      ],
+      DRIVER: [
+        {
+          key: 'orderUpdates' as keyof NotificationPreferences,
+          title: 'Delivery Updates',
+          description: 'Get notified about assigned deliveries'
+        }
+      ]
+    };
+
+    return [...baseOptions, ...(roleSpecificOptions[role as keyof typeof roleSpecificOptions] || [])];
+  };
+
+  const notificationOptions = getNotificationOptionsForRole(user?.role || 'WAREHOUSE_STAFF');
 
   useEffect(() => {
     loadPreferences();
@@ -72,65 +135,30 @@ const NotificationPreferencesComponent = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium">Email Notifications</p>
-          <p className="text-sm text-gray-600">Receive notifications via email</p>
+      {notificationOptions.map((option) => (
+        <div key={option.key} className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">{option.title}</p>
+            <p className="text-sm text-gray-600">{option.description}</p>
+          </div>
+          <input 
+            type="checkbox" 
+            checked={preferences[option.key] as boolean}
+            onChange={() => handleToggle(option.key)}
+            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" 
+          />
         </div>
-        <input 
-          type="checkbox" 
-          checked={preferences.emailEnabled}
-          onChange={() => handleToggle('emailEnabled')}
-          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" 
-        />
-      </div>
+      ))}
       
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium">SMS Notifications</p>
-          <p className="text-sm text-gray-600">Receive notifications via SMS</p>
-        </div>
-        <input 
-          type="checkbox" 
-          checked={preferences.smsEnabled}
-          onChange={() => handleToggle('smsEnabled')}
-          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" 
-        />
+      <div className="pt-4 border-t">
+        <button 
+          onClick={savePreferences}
+          disabled={saving}
+          className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50"
+        >
+          {saving ? 'Saving...' : 'Save Preferences'}
+        </button>
       </div>
-      
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium">Order Updates</p>
-          <p className="text-sm text-gray-600">Get notified about order status changes</p>
-        </div>
-        <input 
-          type="checkbox" 
-          checked={preferences.orderUpdates}
-          onChange={() => handleToggle('orderUpdates')}
-          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" 
-        />
-      </div>
-      
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium">Low Stock Alerts</p>
-          <p className="text-sm text-gray-600">Receive alerts when inventory is low</p>
-        </div>
-        <input 
-          type="checkbox" 
-          checked={preferences.lowStockAlerts}
-          onChange={() => handleToggle('lowStockAlerts')}
-          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" 
-        />
-      </div>
-      
-      <button 
-        onClick={savePreferences}
-        disabled={saving}
-        className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50"
-      >
-        {saving ? 'Saving...' : 'Save Preferences'}
-      </button>
     </div>
   );
 };

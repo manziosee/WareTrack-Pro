@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Search } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import AddUserForm from '../components/forms/AddUserForm';
 import EditUserForm from '../components/forms/EditUserForm';
+import ViewUserModal from '../components/forms/ViewUserModal';
 import { usersService } from '../services/usersService';
 import toast from 'react-hot-toast';
 import { formatDate } from '../utils/formatters';
@@ -13,6 +14,7 @@ import { formatDate } from '../utils/formatters';
 export default function Users() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -42,6 +44,11 @@ export default function Users() {
     return () => clearTimeout(timeoutId);
   }, [searchTerm]);
 
+  const handleView = (user: any) => {
+    setSelectedUser(user);
+    setShowViewModal(true);
+  };
+
   const handleEdit = (user: any) => {
     setSelectedUser(user);
     setShowEditModal(true);
@@ -50,12 +57,16 @@ export default function Users() {
   const handleDelete = async (userId: number) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
+        // Optimistic update - remove user from UI immediately
+        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+        
         await usersService.deleteUser(userId);
         toast.success('User deleted successfully');
-        fetchUsers();
       } catch (error) {
         console.error('Failed to delete user:', error);
         toast.error('Failed to delete user');
+        // Revert optimistic update on error
+        fetchUsers();
       }
     }
   };
@@ -63,19 +74,32 @@ export default function Users() {
   const handleSaveUser = async (userData: any) => {
     try {
       if (selectedUser) {
+        // Optimistic update for edit
+        const updatedUser = { ...selectedUser, ...userData };
+        setUsers(prevUsers => 
+          prevUsers.map(user => 
+            user.id === selectedUser.id ? updatedUser : user
+          )
+        );
+        
         await usersService.updateUser(selectedUser.id, userData);
         toast.success('User updated successfully');
       } else {
         await usersService.createUser(userData);
         toast.success('User created successfully');
+        fetchUsers(); // Refresh for new user
       }
+      setShowViewModal(false);
       setShowEditModal(false);
       setShowAddModal(false);
       setSelectedUser(null);
-      fetchUsers();
     } catch (error) {
       console.error('Failed to save user:', error);
       toast.error('Failed to save user');
+      // Revert optimistic update on error
+      if (selectedUser) {
+        fetchUsers();
+      }
     }
   };
 
@@ -94,10 +118,10 @@ export default function Users() {
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
-      case 'admin': return 'error';
-      case 'warehouse_staff': return 'primary';
-      case 'dispatch_officer': return 'warning';
-      case 'driver': return 'success';
+      case 'ADMIN': return 'error';
+      case 'WAREHOUSE_STAFF': return 'primary';
+      case 'DISPATCH_OFFICER': return 'warning';
+      case 'DRIVER': return 'success';
       default: return 'gray';
     }
   };
@@ -163,12 +187,12 @@ export default function Users() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Badge variant={getRoleBadgeVariant(user.role)}>
-                      {user.role.replace('_', ' ')}
+                      {user.role.replace(/_/g, ' ')}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.phone}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={user.status === 'active' ? 'success' : 'gray'}>
+                    <Badge variant={user.status === 'ACTIVE' ? 'success' : 'gray'}>
                       {user.status}
                     </Badge>
                   </td>
@@ -177,6 +201,13 @@ export default function Users() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => handleView(user)}
+                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        title="View user details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                       <button 
                         onClick={() => handleEdit(user)}
                         className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
@@ -202,6 +233,10 @@ export default function Users() {
 
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New User">
         <AddUserForm onClose={() => setShowAddModal(false)} onSave={handleSaveUser} />
+      </Modal>
+
+      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="User Details" size="lg">
+        {selectedUser && <ViewUserModal user={selectedUser} />}
       </Modal>
 
       <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit User">

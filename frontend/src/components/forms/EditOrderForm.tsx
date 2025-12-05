@@ -42,7 +42,9 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
       }
     };
     fetchInventory();
+  }, []);
 
+  useEffect(() => {
     if (order && inventory.length > 0) {
       const mappedItems = order.items?.map((item: any) => {
         const inventoryItem = inventory.find((inv: any) => 
@@ -63,7 +65,7 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
         customerName: order.customerName || '',
         contactNumber: order.contactNumber || '',
         deliveryAddress: order.deliveryAddress || '',
-        priority: order.priority || 'medium',
+        priority: order.priority?.toUpperCase() || 'MEDIUM',
         scheduledDate: order.scheduledDate ? new Date(order.scheduledDate).toISOString().split('T')[0] : '',
         deliveryInstructions: order.deliveryInstructions || '',
         orderType: order.orderType || 'delivery',
@@ -71,7 +73,7 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
         items: mappedItems
       });
     }
-  }, [order]);
+  }, [order, inventory]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,9 +181,9 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
               </select>
             </div>
             <div>
@@ -240,7 +242,7 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
                     required
                   >
                     <option value="">Select Item</option>
-                    {inventory.filter((inv: any) => inv.status === 'active').map((invItem: any) => (
+                    {inventory.filter((inv: any) => inv.status === 'ACTIVE').map((invItem: any) => (
                       <option key={invItem.id} value={invItem.id.toString()}>
                         {invItem.name} ({invItem.code})
                       </option>

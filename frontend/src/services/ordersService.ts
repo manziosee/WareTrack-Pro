@@ -14,13 +14,23 @@ export interface Order {
 
 export interface CreateOrder {
   customerName: string;
-  customerEmail: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  contactNumber?: string;
   deliveryAddress: string;
-  totalAmount: number;
+  priority?: string;
+  orderType?: string;
+  paymentMethod?: string;
+  scheduledDate?: string;
+  deliveryInstructions?: string;
+  notes?: string;
+  totalAmount?: number;
   items: Array<{
-    inventoryItemId: number;
+    inventoryId?: string;
+    itemId?: number;
     quantity: number;
-    unitPrice: number;
+    unitPrice?: number;
+    price?: number;
   }>;
 }
 
@@ -57,6 +67,11 @@ export const ordersService = {
 
   async getOrdersByCustomer(customerId: number) {
     const response = await api.get(`/orders/customer/${customerId}`);
+    return response.data;
+  },
+
+  async deleteOrder(id: number) {
+    const response = await api.delete(`/orders/${id}`);
     return response.data;
   }
 };
