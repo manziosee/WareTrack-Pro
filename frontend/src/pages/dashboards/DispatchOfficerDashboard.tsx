@@ -4,25 +4,31 @@ import Card from '@/components/ui/Card';
 import RefreshButton from '@/components/ui/RefreshButton';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Badge from '@/components/ui/Badge';
-import { dashboardService } from '@/services/dashboardService';
+import api from '@/services/api';
 
 export default function DispatchOfficerDashboard() {
-  const [stats, setStats] = useState<any>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [trends, setTrends] = useState<any[]>([]);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
     try {
-      const [dashboardStats, dashboardTrends, dashboardOrders] = await Promise.all([
-        dashboardService.getStats(),
-        dashboardService.getTrends(),
-        dashboardService.getRecentOrders(8)
+      const [summaryResponse, trendsResponse, ordersResponse] = await Promise.all([
+        api.get('/dashboard/summary'),
+        api.get('/dashboard/trends'),
+        api.get('/dashboard/recent-orders?limit=10')
       ]);
 
-      setStats(dashboardStats);
-      setTrends(dashboardTrends);
-      setRecentOrders(dashboardOrders || []);
+      if (summaryResponse.data.success) {
+        setDashboardData(summaryResponse.data.data);
+      }
+      if (trendsResponse.data.success) {
+        setTrends(trendsResponse.data.data);
+      }
+      if (ordersResponse.data.success) {
+        setRecentOrders(ordersResponse.data.data);
+      }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
@@ -42,34 +48,35 @@ export default function DispatchOfficerDashboard() {
     );
   }
 
+  const dispatchStats = dashboardData?.dispatchStats;
   const statCards = [
     { 
       label: 'Pending Dispatches', 
-      value: stats?.pendingDispatches?.value || 0, 
+      value: dispatchStats?.pendingDispatches?.value || 0, 
       icon: Clock, 
       color: 'bg-warning-500', 
-      change: `${stats?.pendingDispatches?.percentage || 0}%`
+      change: `${dispatchStats?.pendingDispatches?.percentage || 0}%`
     },
     { 
       label: 'In Transit', 
-      value: stats?.inTransit?.value || 0, 
+      value: dispatchStats?.inTransit?.value || 0, 
       icon: Truck, 
       color: 'bg-info-500', 
-      change: `${stats?.inTransit?.percentage || 0}%`
+      change: `${dispatchStats?.inTransit?.percentage || 0}%`
     },
     { 
       label: 'Completed Today', 
-      value: stats?.deliveriesToday?.value || 0, 
+      value: dispatchStats?.completedToday?.value || 0, 
       icon: CheckCircle, 
       color: 'bg-success-500', 
-      change: `${stats?.deliveriesToday?.percentage || 0}%`
+      change: `${dispatchStats?.completedToday?.percentage || 0}%`
     },
     { 
       label: 'Available Drivers', 
-      value: 8, 
+      value: dispatchStats?.availableDrivers?.value || 0, 
       icon: Users, 
       color: 'bg-primary-500', 
-      change: '+2%'
+      change: `${dispatchStats?.availableDrivers?.percentage || 0}%`
     }
   ];
 
@@ -134,21 +141,21 @@ export default function DispatchOfficerDashboard() {
                 <Truck className="w-5 h-5 text-green-600" />
                 <span className="font-medium text-green-800">Available Vehicles</span>
               </div>
-              <Badge variant="success">6</Badge>
+              <Badge variant="success">{dispatchStats?.fleetStatus?.availableVehicles || 0}</Badge>
             </div>
             <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
               <div className="flex items-center gap-3">
                 <MapPin className="w-5 h-5 text-blue-600" />
                 <span className="font-medium text-blue-800">On Route</span>
               </div>
-              <Badge variant="info">4</Badge>
+              <Badge variant="info">{dispatchStats?.fleetStatus?.onRouteVehicles || 0}</Badge>
             </div>
             <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
               <div className="flex items-center gap-3">
                 <Clock className="w-5 h-5 text-yellow-600" />
                 <span className="font-medium text-yellow-800">Maintenance</span>
               </div>
-              <Badge variant="warning">2</Badge>
+              <Badge variant="warning">{dispatchStats?.fleetStatus?.maintenanceVehicles || 0}</Badge>
             </div>
           </div>
         </Card>
@@ -227,15 +234,15 @@ export default function DispatchOfficerDashboard() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                <span className="text-sm text-gray-700">3 urgent deliveries</span>
+                <span className="text-sm text-gray-700">{dispatchStats?.todayPriority?.urgentDeliveries || 0} urgent deliveries</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                <span className="text-sm text-gray-700">5 scheduled pickups</span>
+                <span className="text-sm text-gray-700">{dispatchStats?.todayPriority?.scheduledPickups || 0} scheduled pickups</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-sm text-gray-700">2 route optimizations</span>
+                <span className="text-sm text-gray-700">{dispatchStats?.todayPriority?.routeOptimizations || 0} route optimizations</span>
               </div>
             </div>
           </div>

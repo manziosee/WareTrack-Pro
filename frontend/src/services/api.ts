@@ -3,6 +3,12 @@ import { cache } from '../utils/cache';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://waretrack-pro.onrender.com/api';
 
+console.log('🔧 API Configuration:', {
+  VITE_API_URL: import.meta.env.VITE_API_URL,
+  API_BASE_URL,
+  mode: import.meta.env.MODE
+});
+
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
