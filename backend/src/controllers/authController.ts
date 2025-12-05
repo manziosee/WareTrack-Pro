@@ -87,23 +87,45 @@ export class AuthController {
       } else if (role && ['WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'].includes(role)) {
         userRole = role;
       }
-      const userStatus = 'active';
 
       const hashedPassword = await bcrypt.hash(password, 12);
-      const user = await prisma.user.create({
-        data: {
-          firstName,
-          lastName,
-          name,
-          email,
-          password: hashedPassword,
-          phone: phone || '',
-          role: userRole as any,
-          status: 'ACTIVE'
+      
+      // Use transaction to create user and related records
+      const result = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            firstName,
+            lastName,
+            name,
+            email,
+            password: hashedPassword,
+            phone: phone || '',
+            role: userRole as any,
+            status: 'ACTIVE'
+          }
+        });
+
+        // Create driver record if role is DRIVER
+        if (userRole === 'DRIVER') {
+          await tx.driver.create({
+            data: {
+              userId: user.id,
+              name: user.name,
+              licenseNumber: `LIC-${user.id.toString().padStart(6, '0')}`, // Generate temp license
+              phone: user.phone || '',
+              status: 'AVAILABLE',
+              experience: 0,
+              rating: 0
+            }
+          });
         }
+
+        return user;
       });
 
-      const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+      const user = result;
+
+      const accessToken = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' });
       const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, process.env.JWT_SECRET!, { expiresIn: '30d' });
       
       try {
@@ -230,31 +252,15 @@ export class AuthController {
         });
       }
 
-      const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+      const accessToken = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' });
       const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, process.env.JWT_SECRET!, { expiresIn: '30d' });
       
       await cache.setSession(accessToken, user.id);
       
       const { password: _, ...userWithoutPassword } = user;
       
-      // Determine redirect URL based on role
-      let redirectUrl = '/dashboard';
-      switch (user.role) {
-        case 'ADMIN':
-          redirectUrl = '/dashboard';
-          break;
-        case 'WAREHOUSE_STAFF':
-          redirectUrl = '/inventory';
-          break;
-        case 'DISPATCH_OFFICER':
-          redirectUrl = '/dispatch';
-          break;
-        case 'DRIVER':
-          redirectUrl = '/tracking';
-          break;
-        default:
-          redirectUrl = '/dashboard';
-      }
+      // All users go to dashboard - role-specific routing handled in frontend
+      const redirectUrl = '/dashboard';
       
       res.json({ 
         success: true,
@@ -319,7 +325,7 @@ export class AuthController {
         });
       }
 
-      const newAccessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+      const newAccessToken = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' });
       const newRefreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, process.env.JWT_SECRET!, { expiresIn: '30d' });
       await cache.setSession(newAccessToken, user.id);
       

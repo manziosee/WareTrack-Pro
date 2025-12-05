@@ -33,12 +33,22 @@ export default function Login() {
     setLoading(true);
 
     try {
+      console.log('Attempting login with:', { email, apiUrl: import.meta.env.VITE_API_URL });
       await login(email, password);
       toast.success(`Welcome back!`);
       navigate('/dashboard');
     } catch (error: any) {
       console.error('Login failed:', error);
-      const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || 'Login failed';
+      let errorMessage = 'Login failed';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.data?.error?.message) {
+        errorMessage = error.response.data.error.message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
       toast.error(errorMessage);
     } finally {
       setLoading(false);

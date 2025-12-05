@@ -5,7 +5,7 @@ export type OrderStatus = 'pending' | 'dispatched' | 'in_transit' | 'delivered' 
 export type OrderPriority = 'high' | 'medium' | 'low';
 
 // User Roles
-export type UserRole = 'admin' | 'warehouse_staff' | 'dispatch_officer' | 'driver';
+export type UserRole = 'ADMIN' | 'WAREHOUSE_STAFF' | 'DISPATCH_OFFICER' | 'DRIVER';
 
 // Vehicle Status
 export type VehicleStatus = 'available' | 'in_use' | 'maintenance' | 'unavailable';

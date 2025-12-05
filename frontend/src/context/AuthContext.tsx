@@ -27,13 +27,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Check if user is already logged in
-    const initAuth = () => {
+    const initAuth = async () => {
       const token = authService.getToken();
       const storedUser = localStorage.getItem('user');
       
       if (token && storedUser) {
         try {
-          setUser(JSON.parse(storedUser));
+          const userData = JSON.parse(storedUser);
+          
+          // If user data doesn't have role, fetch fresh profile
+          if (!userData.role) {
+            try {
+              const profile = await authService.getProfile();
+              const updatedUser = { ...userData, role: profile.role };
+              localStorage.setItem('user', JSON.stringify(updatedUser));
+              setUser(updatedUser);
+            } catch (error) {
+              // If profile fetch fails, use stored data as is
+              setUser(userData);
+            }
+          } else {
+            setUser(userData);
+          }
         } catch (error) {
           authService.logout();
         }

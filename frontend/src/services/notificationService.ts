@@ -52,5 +52,13 @@ export const notificationService = {
   updateReportSettings: async (settings: Partial<ReportSettings>): Promise<ReportSettings> => {
     const response = await api.put('/notifications/report-settings', settings);
     return response.data.data;
+  },
+
+  markAsRead: async (notificationId: string): Promise<void> => {
+    await api.put(`/notifications/${notificationId}/read`);
+  },
+
+  deleteNotification: async (notificationId: string): Promise<void> => {
+    await api.delete(`/notifications/${notificationId}`);
   }
 };

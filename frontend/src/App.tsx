@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import MainLayout from './components/layout/MainLayout';
+import RoleGuard from './components/ui/RoleGuard';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -20,6 +21,7 @@ import EditInventory from './pages/EditInventory';
 import ViewOrder from './pages/ViewOrder';
 import EditOrder from './pages/EditOrder';
 import About from './pages/About';
+import Notifications from './pages/Notifications';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,18 +46,105 @@ function App() {
           
           {/* Protected Routes */}
           <Route path="/dashboard" element={<MainLayout><Dashboard /></MainLayout>} />
-          <Route path="/users" element={<MainLayout><Users /></MainLayout>} />
-          <Route path="/inventory" element={<MainLayout><Inventory /></MainLayout>} />
-          <Route path="/orders" element={<MainLayout><Orders /></MainLayout>} />
-          <Route path="/dispatch" element={<MainLayout><Dispatch /></MainLayout>} />
-          <Route path="/vehicles" element={<MainLayout><Vehicles /></MainLayout>} />
-          <Route path="/tracking" element={<MainLayout><Tracking /></MainLayout>} />
-          <Route path="/reports" element={<MainLayout><Reports /></MainLayout>} />
-          <Route path="/settings" element={<MainLayout><Settings /></MainLayout>} />
+          
+          {/* Admin Only */}
+          <Route path="/users" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN']}>
+                <Users />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          
+          {/* Warehouse Staff, Admin */}
+          <Route path="/inventory" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'WAREHOUSE_STAFF']}>
+                <Inventory />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          <Route path="/inventory/:id/edit" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'WAREHOUSE_STAFF']}>
+                <EditInventory />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          
+          {/* Orders - All except Driver */}
+          <Route path="/orders" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER']}>
+                <Orders />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          <Route path="/orders/:id" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER']}>
+                <ViewOrder />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          <Route path="/orders/:id/edit" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER']}>
+                <EditOrder />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          
+          {/* Dispatch - Admin, Dispatch Officer */}
+          <Route path="/dispatch" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER']}>
+                <Dispatch />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          
+          {/* Vehicles - Admin, Dispatch Officer */}
+          <Route path="/vehicles" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER']}>
+                <Vehicles />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          
+          {/* Tracking - All except Warehouse Staff */}
+          <Route path="/tracking" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER', 'DRIVER']}>
+                <Tracking />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          
+          {/* Reports - All except Driver */}
+          <Route path="/reports" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER']}>
+                <Reports />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          
+          {/* Settings - Admin, Dispatch Officer */}
+          <Route path="/settings" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER']}>
+                <Settings />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          
+          {/* Profile - All authenticated users */}
           <Route path="/profile" element={<MainLayout><Profile /></MainLayout>} />
-          <Route path="/inventory/:id/edit" element={<MainLayout><EditInventory /></MainLayout>} />
-          <Route path="/orders/:id" element={<MainLayout><ViewOrder /></MainLayout>} />
-          <Route path="/orders/:id/edit" element={<MainLayout><EditOrder /></MainLayout>} />
+          
+          {/* Notifications - All authenticated users */}
+          <Route path="/notifications" element={<MainLayout><Notifications /></MainLayout>} />
 
         </Routes>
         </BrowserRouter>

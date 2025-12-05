@@ -162,4 +162,39 @@ export class NotificationController {
       });
     }
   }
+
+  static async markNotificationAsRead(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      
+      const notification = await prisma.notification.update({
+        where: { id: Number(id) },
+        data: { read: true }
+      });
+
+      res.json({ success: true, data: notification });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
+
+  static async deleteNotification(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      
+      await prisma.notification.delete({
+        where: { id: Number(id) }
+      });
+
+      res.json({ success: true, message: 'Notification deleted' });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      });
+    }
+  }
 }

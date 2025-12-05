@@ -6,15 +6,11 @@ export class VehiclesController {
     try {
       const { page = 1, limit = 10, status, type, search } = req.query;
       const skip = (Number(page) - 1) * Number(limit);
-
-      // Get current user's managed vehicles
-      const managerId = (req as any).user?.id;
       
       const vehicles = await prisma.vehicle.findMany({
         skip,
         take: Number(limit),
         where: {
-          managerId, // Only show vehicles managed by current user
           ...(status && { status: status as any }),
           ...(type && { type: type as string }),
           ...(search && {
@@ -25,18 +21,53 @@ export class VehiclesController {
           })
         },
         include: {
-          manager: true,
-          currentDrivers: true
+          dispatches: {
+            where: {
+              status: {
+                in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT']
+              }
+            },
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 1
+          }
         }
       });
 
-      const total = await prisma.vehicle.count({
-        where: { managerId }
-      });
+      // Update vehicle status based on current dispatch
+      const updatedVehicles = await Promise.all(vehicles.map(async (vehicle) => {
+        const activeDispatch = vehicle.dispatches[0];
+        let correctStatus = 'AVAILABLE';
+        
+        if (activeDispatch) {
+          if (activeDispatch.status === 'PENDING' || activeDispatch.status === 'DISPATCHED' || activeDispatch.status === 'IN_TRANSIT') {
+            correctStatus = 'IN_USE';
+          }
+        }
+        
+        // Don't override maintenance status
+        if (vehicle.status === 'MAINTENANCE' || vehicle.status === 'UNAVAILABLE') {
+          correctStatus = vehicle.status;
+        }
+        
+        // Update vehicle status if it doesn't match
+        if (vehicle.status !== correctStatus) {
+          await prisma.vehicle.update({
+            where: { id: vehicle.id },
+            data: { status: correctStatus as any }
+          });
+          vehicle.status = correctStatus as any;
+        }
+        
+        return vehicle;
+      }));
+
+      const total = await prisma.vehicle.count();
 
       res.json({
         success: true,
-        data: vehicles,
+        data: updatedVehicles,
         pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
       });
     } catch (error) {

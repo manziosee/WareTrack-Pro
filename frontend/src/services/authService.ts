@@ -24,21 +24,69 @@ export interface User {
 
 export const authService = {
   async login(credentials: LoginCredentials) {
-    const response = await api.post('/auth/login', credentials);
-    
-    // Handle different response formats
-    const data = response.data.data || response.data;
-    const token = data.token || data.tokens?.access || data.accessToken;
-    const user = data.user;
-    
-    if (!token || !user) {
-      throw new Error('Invalid login response format');
+    try {
+      console.log('🔄 Starting login request to:', import.meta.env.VITE_API_URL);
+      console.log('📧 Login credentials:', { email: credentials.email, passwordLength: credentials.password.length });
+      
+      const response = await api.post('/auth/login', credentials);
+      
+      console.log('📥 Login response received:', {
+        status: response.status,
+        success: response.data?.success,
+        hasData: !!response.data?.data,
+        hasUser: !!response.data?.data?.user,
+        hasTokens: !!response.data?.data?.tokens
+      });
+      
+      // Check if response is successful
+      if (!response.data.success) {
+        console.error('❌ Login failed - API returned error:', response.data.error);
+        throw new Error(response.data.error?.message || 'Login failed');
+      }
+      
+      // Extract data from successful response
+      const data = response.data.data;
+      const token = data.tokens?.access;
+      const user = data.user;
+      
+      console.log('🔍 Extracted data:', {
+        hasToken: !!token,
+        hasUser: !!user,
+        userRole: user?.role,
+        tokenLength: token?.length
+      });
+      
+      if (!token || !user) {
+        console.error('❌ Invalid response format:', { token: !!token, user: !!user, data });
+        throw new Error('Invalid login response format');
+      }
+      
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      console.log('✅ Login successful, data stored in localStorage');
+      return { token, user };
+    } catch (error: any) {
+      console.error('🚨 Login error caught:', {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        responseData: error.response?.data
+      });
+      
+      // Handle network errors
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        throw new Error('Connection timeout. Please check your internet connection and try again.');
+      }
+      
+      // Handle API errors
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error.message);
+      }
+      
+      // Re-throw the error if it's already formatted
+      throw error;
     }
-    
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-    
-    return { token, user };
   },
 
   async register(data: RegisterData) {
