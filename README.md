@@ -383,24 +383,6 @@ Visit [waretrack-pro.onrender.com/api-docs](https://waretrack-pro.onrender.com/a
 - 🚨 **Error Handling** without information leakage
 
 ---
-
-## 📱 **Screenshots**
-
-<div align="center">
-
-### **Dashboard Overview**
-![Dashboard](https://via.placeholder.com/800x400/4F46E5/FFFFFF?text=Dashboard+Overview)
-
-### **Inventory Management**
-![Inventory](https://via.placeholder.com/800x400/10B981/FFFFFF?text=Inventory+Management)
-
-### **Order Tracking**
-![Orders](https://via.placeholder.com/800x400/F59E0B/FFFFFF?text=Order+Tracking)
-
-</div>
-
----
-
 ## 🤝 **Contributing**
 
 We welcome contributions! Here's how you can help:
