@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download } from 'lucide-react';
-import { notificationService } from '../services/notificationService';
-import type { ReportSettings } from '../services/notificationService';
+import { notificationService } from '@/services/notificationService';
+import type { ReportSettings } from '@/services/notificationService';
 import toast from 'react-hot-toast';
 
 interface ReportSettingsProps {

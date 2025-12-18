@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { notificationService } from '../services/notificationService';
-import type { NotificationPreferences } from '../types';
-import { useAuth } from '../context/AuthContext';
+import { notificationService } from '@/services/notificationService';
+import type { NotificationPreferences } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
 
 const NotificationPreferencesComponent = () => {

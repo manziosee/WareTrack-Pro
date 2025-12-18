@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Plus, Eye, Edit, Trash2 } from 'lucide-react';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import Badge from '../components/ui/Badge';
-import Modal from '../components/ui/Modal';
-import SearchFilter from '../components/ui/SearchFilter';
-import CreateOrderForm from '../components/forms/CreateOrderForm';
-import EditOrderForm from '../components/forms/EditOrderForm';
-import ViewOrderModal from '../components/forms/ViewOrderModal';
-import { formatOrderNumber, formatDate } from '../utils/formatters';
-import { ordersService } from '../services/ordersService';
-import { useRealTimeData } from '../hooks/useRealTimeData';
-import { exportToCSV, exportToPDF, exportToJSON } from '../utils/exportUtils';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
+import SearchFilter from '@/components/ui/SearchFilter';
+import CreateOrderForm from '@/components/forms/CreateOrderForm';
+import EditOrderForm from '@/components/forms/EditOrderForm';
+import ViewOrderModal from '@/components/forms/ViewOrderModal';
+import { formatOrderNumber, formatDate } from '@/utils/formatters';
+import { ordersService } from '@/services/ordersService';
+import { useRealTimeData } from '@/hooks/useRealTimeData';
+import { exportToCSV, exportToPDF, exportToJSON } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 
 export default function Orders() {

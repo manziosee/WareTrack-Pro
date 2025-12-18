@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { EmailService } from '../services/emailService';
+import { EmailService } from '@/services/emailService';
 
 const EmailTestPanel: React.FC = () => {
   const [loading, setLoading] = useState(false);

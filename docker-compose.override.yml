@@ -1,0 +1,29 @@
+version: '3.8'
+
+# Development overrides
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - /app/dist
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/dist
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+
+  db:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"

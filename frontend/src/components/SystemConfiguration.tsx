@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { notificationService } from '../services/notificationService';
-import type { SystemConfiguration } from '../services/notificationService';
+import { notificationService } from '@/services/notificationService';
+import type { SystemConfiguration } from '@/services/notificationService';
 import toast from 'react-hot-toast';
 
 const SystemConfigurationComponent = () => {

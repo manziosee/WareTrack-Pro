@@ -1,5 +1,5 @@
 import api from './api';
-import type { NotificationPreferences } from '../types';
+import type { NotificationPreferences } from '@/types';
 
 export interface SystemConfiguration {
   id: number;

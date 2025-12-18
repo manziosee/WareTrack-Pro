@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { cache } from '../utils/cache';
+import { cache } from '@/utils/cache';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://waretrack-pro.onrender.com/api';
 

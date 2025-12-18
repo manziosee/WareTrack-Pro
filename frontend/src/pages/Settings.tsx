@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { User, Bell, Shield, Database, Download, Calendar } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import Modal from '../components/ui/Modal';
-import ExportReportForm from '../components/forms/ExportReportForm';
-import UserProfile from '../components/profile/UserProfile';
-import NotificationPreferencesComponent from '../components/NotificationPreferences';
-import SecuritySettings from '../components/SecuritySettings';
-import SystemConfigurationComponent from '../components/SystemConfiguration';
-import ReportSettingsComponent from '../components/ReportSettings';
+import { useAuth } from '@/context/AuthContext';
+import Modal from '@/components/ui/Modal';
+import ExportReportForm from '@/components/forms/ExportReportForm';
+import UserProfile from '@/components/profile/UserProfile';
+import NotificationPreferencesComponent from '@/components/NotificationPreferences';
+import SecuritySettings from '@/components/SecuritySettings';
+import SystemConfigurationComponent from '@/components/SystemConfiguration';
+import ReportSettingsComponent from '@/components/ReportSettings';
 
 const Settings = () => {
   const { user } = useAuth();

@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Plus, Eye, Edit, Trash2, Search } from 'lucide-react';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import Badge from '../components/ui/Badge';
-import Modal from '../components/ui/Modal';
-import AddUserForm from '../components/forms/AddUserForm';
-import EditUserForm from '../components/forms/EditUserForm';
-import ViewUserModal from '../components/forms/ViewUserModal';
-import { usersService } from '../services/usersService';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
+import AddUserForm from '@/components/forms/AddUserForm';
+import EditUserForm from '@/components/forms/EditUserForm';
+import ViewUserModal from '@/components/forms/ViewUserModal';
+import { usersService } from '@/services/usersService';
 import toast from 'react-hot-toast';
-import { formatDate } from '../utils/formatters';
+import { formatDate } from '@/utils/formatters';
 
 export default function Users() {
   const [searchTerm, setSearchTerm] = useState('');

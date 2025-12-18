@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Bell, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
-import Card from '../components/ui/Card';
-import Badge from '../components/ui/Badge';
-import { dashboardService } from '../services/dashboardService';
-import { notificationService } from '../services/notificationService';
-import { formatDate } from '../utils/formatters';
+import Card from '@/components/ui/Card';
+import Badge from '@/components/ui/Badge';
+import { dashboardService } from '@/services/dashboardService';
+import { notificationService } from '@/services/notificationService';
+import { formatDate } from '@/utils/formatters';
 import toast from 'react-hot-toast';
 
 export default function Notifications() {

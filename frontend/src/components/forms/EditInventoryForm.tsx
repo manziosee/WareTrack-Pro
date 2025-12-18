@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
-import Button from '@/components/ui/Button';
-import { unitCategories } from '@/utils/units';
+import Button from '../ui/Button';
+import { unitCategories } from '../../utils/units';
 
 interface EditInventoryFormProps {
   item: any;

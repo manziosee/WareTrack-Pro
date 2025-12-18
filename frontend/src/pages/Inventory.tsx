@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Plus, Eye, Edit, Trash2, AlertTriangle } from 'lucide-react';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import Badge from '../components/ui/Badge';
-import Modal from '../components/ui/Modal';
-import SearchFilter from '../components/ui/SearchFilter';
-import AddInventoryForm from '../components/forms/AddInventoryForm';
-import EditInventoryForm from '../components/forms/EditInventoryForm';
-import ViewInventoryModal from '../components/forms/ViewInventoryModal';
-import { formatDate, formatStockLevel } from '../utils/formatters';
-import { inventoryService } from '../services/inventoryService';
-import { useRealTimeData } from '../hooks/useRealTimeData';
-import { exportToCSV, exportToPDF, exportToJSON } from '../utils/exportUtils';
-import { cache } from '../utils/cache';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
+import SearchFilter from '@/components/ui/SearchFilter';
+import AddInventoryForm from '@/components/forms/AddInventoryForm';
+import EditInventoryForm from '@/components/forms/EditInventoryForm';
+import ViewInventoryModal from '@/components/forms/ViewInventoryModal';
+import { formatDate, formatStockLevel } from '@/utils/formatters';
+import { inventoryService } from '@/services/inventoryService';
+import { useRealTimeData } from '@/hooks/useRealTimeData';
+import { exportToCSV, exportToPDF, exportToJSON } from '@/utils/exportUtils';
+import { cache } from '@/utils/cache';
 import toast from 'react-hot-toast';
 
 export default function Inventory() {

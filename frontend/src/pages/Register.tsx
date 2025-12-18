@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Package, Truck, Shield, Users } from 'lucide-react';
-import { authService } from '../services/authService';
+import { authService } from '@/services/authService';
 import toast from 'react-hot-toast';
 
 export default function Register() {
