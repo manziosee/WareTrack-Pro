@@ -7,10 +7,13 @@ import toast from 'react-hot-toast';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showOtpStep, setShowOtpStep] = useState(false);
+  const [otpEmail, setOtpEmail] = useState('');
   const navigate = useNavigate();
-  const { login, isAuthenticated, loading: authLoading } = useAuth();
+  const { login, verifyOTP, isAuthenticated, loading: authLoading } = useAuth();
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -34,9 +37,16 @@ export default function Login() {
 
     try {
       console.log('Attempting login with:', { email, apiUrl: import.meta.env.VITE_API_URL });
-      await login(email, password);
-      toast.success(`Welcome back!`);
-      navigate('/dashboard');
+      const result = await login(email, password);
+      
+      if (result.requiresOTP) {
+        setOtpEmail(result.email || email);
+        setShowOtpStep(true);
+        toast.success('OTP sent to your email. Please check your inbox.');
+      } else {
+        toast.success('Welcome back!');
+        navigate('/dashboard');
+      }
     } catch (error: any) {
       console.error('Login failed:', error);
       let errorMessage = 'Login failed';
@@ -53,6 +63,34 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      await verifyOTP(otpEmail, otp);
+      toast.success('Welcome back!');
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error('OTP verification failed:', error);
+      let errorMessage = 'OTP verification failed';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBackToLogin = () => {
+    setShowOtpStep(false);
+    setOtp('');
+    setOtpEmail('');
   };
 
   return (
@@ -111,69 +149,123 @@ export default function Login() {
 
           <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
-              <p className="text-gray-600">Sign in to your account to continue</p>
+              {showOtpStep ? (
+                <>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Verify Your Identity</h2>
+                  <p className="text-gray-600">Enter the 6-digit code sent to {otpEmail}</p>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
+                  <p className="text-gray-600">Sign in to your account to continue</p>
+                </>
+              )}
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                  placeholder="Enter your email"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                  Password
-                </label>
-                <div className="relative">
+            {showOtpStep ? (
+              <form onSubmit={handleOtpSubmit} className="space-y-6">
+                <div>
+                  <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-2">
+                    Verification Code
+                  </label>
                   <input
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
+                    id="otp"
+                    name="otp"
+                    type="text"
+                    maxLength={6}
                     required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="Enter your password"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors text-center text-2xl tracking-widest"
+                    placeholder="000000"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+                  <p className="text-sm text-gray-500 mt-2">Check your email for the 6-digit verification code</p>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign In'
-                )}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={loading || otp.length !== 6}
+                  className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify & Sign In'
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBackToLogin}
+                  className="w-full text-gray-600 hover:text-gray-800 font-medium py-2 transition-colors"
+                >
+                  ← Back to Login
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                    placeholder="Enter your email"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                      placeholder="Enter your password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Signing in...
+                    </>
+                  ) : (
+                    'Sign In'
+                  )}
+                </button>
+              </form>
+            )}
 
             <div className="mt-8 text-center">
               <p className="text-gray-600">
@@ -184,6 +276,16 @@ export default function Login() {
                   className="text-primary-600 hover:text-primary-700 font-semibold transition-colors"
                 >
                   Create one here
+                </button>
+              </p>
+              <p className="text-gray-600 mt-2">
+                Forgot your password?{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot-password')}
+                  className="text-primary-600 hover:text-primary-700 font-semibold transition-colors"
+                >
+                  Reset it here
                 </button>
               </p>
             </div>

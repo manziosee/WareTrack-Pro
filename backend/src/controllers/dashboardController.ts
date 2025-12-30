@@ -592,6 +592,26 @@ export class DashboardController {
     }
   }
 
+  // Manual inventory check endpoint
+  static async triggerInventoryCheck(req: Request, res: Response) {
+    try {
+      const { InventoryAlerts } = await import('../middleware/inventoryAlerts');
+      const result = await InventoryAlerts.triggerManualCheck();
+      
+      res.json({
+        success: true,
+        message: 'Inventory check completed successfully',
+        data: result
+      });
+    } catch (error) {
+      console.error('Manual inventory check error:', error);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to run inventory check' }
+      });
+    }
+  }
+
   static async getAlerts(req: Request, res: Response) {
     try {
       const lowStockItems = await prisma.$queryRaw`

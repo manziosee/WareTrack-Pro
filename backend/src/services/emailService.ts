@@ -88,4 +88,49 @@ export class EmailService {
       message: emailTemplates.delivery.getMessage(customerName, orderNumber, deliveryTime)
     });
   }
+
+  static async sendNotificationEmail(userEmail: string, notification: any): Promise<boolean> {
+    return this.sendEmail({
+      email: userEmail,
+      title: `WareTrack-Pro: ${notification.title}`,
+      name: 'System',
+      message: notification.message
+    });
+  }
+
+  static async sendSystemAlert(adminEmail: string, alertType: string, message: string): Promise<boolean> {
+    return this.sendEmail({
+      email: adminEmail,
+      title: `System Alert: ${alertType}`,
+      name: 'System Administrator',
+      message: `Alert Type: ${alertType}\n\nDetails: ${message}\n\nTime: ${new Date().toLocaleString()}`
+    });
+  }
+
+  static async sendPasswordResetOTP(userEmail: string, userName: string, otp: string): Promise<boolean> {
+    return this.sendEmail({
+      email: userEmail,
+      title: 'Password Reset - WareTrack-Pro',
+      name: userName,
+      message: `Your password reset OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request this, please ignore this email.`
+    });
+  }
+
+  static async sendPasswordResetConfirmation(userEmail: string, userName: string): Promise<boolean> {
+    return this.sendEmail({
+      email: userEmail,
+      title: 'Password Reset Successful - WareTrack-Pro',
+      name: userName,
+      message: `Your password has been successfully reset.\n\nIf you didn't make this change, please contact support immediately.`
+    });
+  }
+
+  static async sendLoginOTP(userEmail: string, userName: string, otp: string): Promise<boolean> {
+    return this.sendEmail({
+      email: userEmail,
+      title: 'Login Verification - WareTrack-Pro',
+      name: userName,
+      message: `Your login verification OTP is: ${otp}\n\nThis OTP will expire in 5 minutes.\n\nIf you didn't attempt to login, please secure your account immediately.`
+    });
+  }
 }

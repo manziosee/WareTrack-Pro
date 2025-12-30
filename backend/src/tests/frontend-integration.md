@@ -75,7 +75,7 @@
 
 ## ✅ CORS Configuration
 - [x] Frontend domain (ware-track-pro.vercel.app) allowed
-- [x] Production backend (waretrack-pro.onrender.com) configured
+- [x] Production backend (waretrack-pro-api.fly.dev) configured
 - [x] All HTTP methods enabled (GET, POST, PUT, DELETE, OPTIONS)
 - [x] Proper headers allowed (Authorization, Content-Type)
 
@@ -86,7 +86,7 @@
 - [x] Database connection error handling
 
 ## ✅ Swagger Documentation
-- [x] Production server URL added (waretrack-pro.onrender.com)
+- [x] Production server URL added (waretrack-pro-api.fly.dev)
 - [x] Development server URL working
 - [x] All endpoints documented
 - [x] Interactive testing available
@@ -138,7 +138,7 @@
 
 ## 🚀 Deployment Status
 
-### Backend (waretrack-pro.onrender.com)
+### Backend (waretrack-pro-api.fly.dev)
 - [x] All endpoints working
 - [x] Database connected (PostgreSQL)
 - [x] CORS configured for frontend

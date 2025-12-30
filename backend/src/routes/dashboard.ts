@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { DashboardController } from '../controllers/dashboardController';
 import { auth } from '../middleware/auth';
+import { adminAuth } from '../middleware/adminAuth';
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.get('/alerts', auth, DashboardController.getAlerts);
 router.get('/notifications', auth, DashboardController.getNotifications);
 router.get('/inventory-by-category', auth, DashboardController.getInventoryByCategory);
 router.get('/recent-orders', auth, DashboardController.getRecentOrders);
+router.post('/inventory-check', auth, adminAuth, DashboardController.triggerInventoryCheck);
 
 export default router;

@@ -7,6 +7,7 @@ import RoleGuard from './components/ui/RoleGuard';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Inventory from './pages/Inventory';
@@ -43,6 +44,7 @@ function App() {
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           
           {/* Protected Routes */}
           <Route path="/dashboard" element={<MainLayout><Dashboard /></MainLayout>} />

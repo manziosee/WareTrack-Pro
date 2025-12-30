@@ -287,7 +287,7 @@ const testEndpoints = {
 const corsConfig = {
   allowedOrigins: [
     'https://ware-track-pro.vercel.app',
-    'https://waretrack-pro.onrender.com',
+    'https://waretrack-pro-api.fly.dev',
     'http://localhost:3001',
     'http://localhost:3000'
   ],
