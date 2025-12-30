@@ -5,6 +5,27 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface OTPVerificationData {
+  email: string;
+  otp: string;
+}
+
+export interface LoginResponse {
+  success: boolean;
+  requiresOTP?: boolean;
+  message?: string;
+  data?: {
+    email?: string;
+    otpRequired?: boolean;
+    user?: User;
+    tokens?: {
+      access: string;
+      refresh: string;
+    };
+    redirectUrl?: string;
+  };
+}
+
 export interface RegisterData {
   name: string;
   email: string;
@@ -19,11 +40,12 @@ export interface User {
   email: string;
   role: string;
   status: string;
+  phone?: string;
   lastLogin?: string;
 }
 
 export const authService = {
-  async login(credentials: LoginCredentials) {
+  async login(credentials: LoginCredentials): Promise<LoginResponse> {
     try {
       console.log('🔄 Starting login request to:', import.meta.env.VITE_API_URL);
       console.log('📧 Login credentials:', { email: credentials.email, passwordLength: credentials.password.length });
@@ -33,9 +55,8 @@ export const authService = {
       console.log('📥 Login response received:', {
         status: response.status,
         success: response.data?.success,
-        hasData: !!response.data?.data,
-        hasUser: !!response.data?.data?.user,
-        hasTokens: !!response.data?.data?.tokens
+        requiresOTP: response.data?.requiresOTP,
+        hasData: !!response.data?.data
       });
       
       // Check if response is successful
@@ -44,28 +65,8 @@ export const authService = {
         throw new Error(response.data.error?.message || 'Login failed');
       }
       
-      // Extract data from successful response
-      const data = response.data.data;
-      const token = data.tokens?.access;
-      const user = data.user;
-      
-      console.log('🔍 Extracted data:', {
-        hasToken: !!token,
-        hasUser: !!user,
-        userRole: user?.role,
-        tokenLength: token?.length
-      });
-      
-      if (!token || !user) {
-        console.error('❌ Invalid response format:', { token: !!token, user: !!user, data });
-        throw new Error('Invalid login response format');
-      }
-      
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      
-      console.log('✅ Login successful, data stored in localStorage');
-      return { token, user };
+      // Return the response for 2FA handling
+      return response.data;
     } catch (error: any) {
       console.error('🚨 Login error caught:', {
         message: error.message,
@@ -85,6 +86,55 @@ export const authService = {
       }
       
       // Re-throw the error if it's already formatted
+      throw error;
+    }
+  },
+
+  async verifyOTP(otpData: OTPVerificationData) {
+    try {
+      console.log('🔐 Verifying OTP for:', otpData.email);
+      
+      const response = await api.post('/auth/verify-login-otp', otpData);
+      
+      console.log('📥 OTP verification response:', {
+        status: response.status,
+        success: response.data?.success,
+        hasUser: !!response.data?.data?.user,
+        hasTokens: !!response.data?.data?.tokens
+      });
+      
+      if (!response.data.success) {
+        console.error('❌ OTP verification failed:', response.data.error);
+        throw new Error(response.data.error?.message || 'OTP verification failed');
+      }
+      
+      const data = response.data.data;
+      const token = data.tokens?.access;
+      const user = data.user;
+      
+      if (!token || !user) {
+        console.error('❌ Invalid OTP response format:', { token: !!token, user: !!user, data });
+        throw new Error('Invalid OTP verification response format');
+      }
+      
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      console.log('✅ OTP verification successful, user logged in');
+      return { token, user, redirectUrl: data.redirectUrl };
+    } catch (error: any) {
+      console.error('🚨 OTP verification error:', {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        responseData: error.response?.data
+      });
+      
+      // Handle API errors
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error.message);
+      }
+      
       throw error;
     }
   },

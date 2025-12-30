@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 import { specs, swaggerUi } from './config/swagger';
 import authRoutes from './routes/auth';
@@ -18,6 +20,7 @@ import reportRoutes from './routes/reports';
 import testEmailRoutes from './routes/test-email';
 import settingsRoutes from './routes/settings';
 import notificationRoutes from './routes/notifications';
+import passwordResetRoutes from './routes/passwordReset';
 import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -74,7 +77,7 @@ app.use(cors({
     
     const allowedOrigins = [
       'https://ware-track-pro.vercel.app',
-      'https://waretrack-pro.onrender.com',
+      'https://waretrack-pro-api.fly.dev',
       'http://localhost:3001',
       'http://localhost:3000',
       'http://localhost:5000',
@@ -135,9 +138,14 @@ app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
-app.use('/api/test', testEmailRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/password-reset', passwordResetRoutes);
+
+// Test routes (development only)
+if (process.env.NODE_ENV === 'development') {
+  app.use('/api/test', testEmailRoutes);
+}
 
 // Health check
 app.get('/health', (req, res) => {
@@ -146,15 +154,7 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV,
-    version: process.env.npm_package_version || '1.0.0',
-    memory: {
-      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024 * 100) / 100,
-      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024 * 100) / 100,
-    },
-    services: {
-      database: 'connected',
-      redis: 'connected',
-    }
+    version: '2.0.0'
   };
   res.status(200).json(healthCheck);
 });
@@ -163,14 +163,44 @@ app.get('/health', (req, res) => {
 app.get('/api', (req, res) => {
   res.json({
     name: 'WareTrack-Pro API',
-    version: '1.0.0',
+    version: '2.0.0',
     description: 'Comprehensive Warehouse Delivery & Dispatch Tracking System',
-    documentation: '/api-docs',
-    health: '/health'
+    documentation: '/api-docs'
   });
 });
 
 // Error handling
 app.use(errorHandler);
 
-export { app };
+// Create HTTP server and Socket.IO
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: [
+      'https://ware-track-pro.vercel.app',
+      'http://localhost:3001',
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ],
+    credentials: true
+  }
+});
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  
+  socket.on('join-user', (userId) => {
+    socket.join(`user-${userId}`);
+    console.log(`User ${userId} joined their room`);
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+// Make io available globally for notifications
+(global as any).io = io;
+
+export { app, server };

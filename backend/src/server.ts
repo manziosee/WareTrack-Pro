@@ -1,8 +1,8 @@
-import { app } from './app';
+import { app, server } from './app';
 import { InventoryAlerts } from './middleware/inventoryAlerts';
 import { prisma } from './lib/prisma';
 
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 8080;
 
 console.log('📚 Swagger documentation available at /api-docs');
 
@@ -33,7 +33,7 @@ prisma.$connect().then(() => {
     console.log('🔄 Server will retry database connections on demand');
   }
   
-  const server = app.listen(PORT, () => {
+  const httpServer = server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
     console.log(`📊 Health check: http://localhost:${PORT}/health`);
@@ -44,7 +44,7 @@ prisma.$connect().then(() => {
   // Graceful shutdown
   process.on('SIGTERM', () => {
     console.log('SIGTERM received, closing server...');
-    server.close(() => {
+    httpServer.close(() => {
       console.log('Server closed');
       process.exit(0);
     });
@@ -53,7 +53,7 @@ prisma.$connect().then(() => {
   console.error('❌ Database connection failed:', error);
   console.warn('⚠️  Starting server anyway...');
   
-  const server = app.listen(PORT, () => {
+  const httpServer = server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
     console.log(`📊 Health check: http://localhost:${PORT}/health`);

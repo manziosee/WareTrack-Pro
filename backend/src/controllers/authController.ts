@@ -4,10 +4,18 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
 import { QueueService } from '../services/queueService';
+import { EmailService } from '../services/emailService';
 
 const cache = CacheService.getInstance();
 
+// In-memory OTP storage for login (in production, use Redis)
+const loginOtpStore = new Map<string, { otp: string; expires: Date; userId: number; email: string }>();
+
 export class AuthController {
+  // Generate 6-digit OTP for login
+  static generateLoginOTP(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
   static async register(req: Request, res: Response) {
     try {
       const { name, email, password, phone, role } = req.body;
@@ -232,6 +240,130 @@ export class AuthController {
         });
       }
 
+      // Generate and send OTP for login verification
+      const otp = AuthController.generateLoginOTP();
+      const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+      
+      // Store OTP
+      loginOtpStore.set(email.toLowerCase(), {
+        otp,
+        expires,
+        userId: user.id,
+        email: email.toLowerCase()
+      });
+
+      // Send OTP via email
+      const emailSent = await EmailService.sendLoginOTP(email, user.name, otp);
+      
+      if (!emailSent) {
+        return res.status(500).json({
+          success: false,
+          error: {
+            code: 'EMAIL_FAILED',
+            message: 'Failed to send login OTP'
+          }
+        });
+      }
+
+      res.json({ 
+        success: true,
+        requiresOTP: true,
+        message: 'Login OTP sent to your email',
+        data: {
+          email: email.toLowerCase(),
+          otpRequired: true
+        }
+      });
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      // Handle database connection errors
+      if (error.code === 'ENETUNREACH' || error.code === 'ECONNREFUSED') {
+        return res.status(503).json({ 
+          success: false,
+          error: {
+            code: 'DATABASE_UNAVAILABLE',
+            message: 'Database is temporarily unavailable. Please try again later.'
+          }
+        });
+      }
+      
+      res.status(500).json({ 
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Login failed. Please try again.'
+        }
+      });
+    }
+  }
+
+  // Verify OTP and complete login
+  static async verifyLoginOTP(req: Request, res: Response) {
+    try {
+      const { email, otp } = req.body;
+
+      if (!email || !otp) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'MISSING_FIELDS',
+            message: 'Email and OTP are required'
+          }
+        });
+      }
+
+      const storedData = loginOtpStore.get(email.toLowerCase());
+      
+      if (!storedData) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_OTP',
+            message: 'Invalid or expired OTP'
+          }
+        });
+      }
+
+      // Check if OTP is expired
+      if (new Date() > storedData.expires) {
+        loginOtpStore.delete(email.toLowerCase());
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'OTP_EXPIRED',
+            message: 'OTP has expired. Please login again'
+          }
+        });
+      }
+
+      // Verify OTP
+      if (storedData.otp !== otp) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_OTP',
+            message: 'Invalid OTP'
+          }
+        });
+      }
+
+      // Get user and complete login
+      const user = await prisma.user.findUnique({
+        where: { id: storedData.userId }
+      });
+
+      if (!user) {
+        loginOtpStore.delete(email.toLowerCase());
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'User not found'
+          }
+        });
+      }
+
       // Check if this is first login (lastLogin is null)
       const isFirstLogin = !user.lastLogin;
       
@@ -257,6 +389,9 @@ export class AuthController {
       
       await cache.setSession(accessToken, user.id);
       
+      // Remove OTP from store after successful login
+      loginOtpStore.delete(email.toLowerCase());
+      
       const { password: _, ...userWithoutPassword } = user;
       
       // All users go to dashboard - role-specific routing handled in frontend
@@ -274,24 +409,12 @@ export class AuthController {
         }
       });
     } catch (error: any) {
-      console.error('Login error:', error);
-      
-      // Handle database connection errors
-      if (error.code === 'ENETUNREACH' || error.code === 'ECONNREFUSED') {
-        return res.status(503).json({ 
-          success: false,
-          error: {
-            code: 'DATABASE_UNAVAILABLE',
-            message: 'Database is temporarily unavailable. Please try again later.'
-          }
-        });
-      }
-      
-      res.status(500).json({ 
+      console.error('OTP verification error:', error);
+      res.status(500).json({
         success: false,
         error: {
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Login failed. Please try again.'
+          message: 'OTP verification failed. Please try again.'
         }
       });
     }

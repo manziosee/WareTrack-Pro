@@ -15,7 +15,7 @@ const options = {
     },
     servers: [
       {
-        url: 'https://waretrack-pro.onrender.com',
+        url: 'https://waretrack-pro-api.fly.dev',
         description: 'Production server'
       },
       {

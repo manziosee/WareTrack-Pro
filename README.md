@@ -7,14 +7,15 @@
 **The Ultimate Warehouse Delivery & Dispatch Tracking System**
 
 [![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-4F46E5?style=for-the-badge)](https://ware-track-pro.vercel.app/)
-[![API Docs](https://img.shields.io/badge/📚_API_Docs-10B981?style=for-the-badge)](https://waretrack-pro.onrender.com/api-docs)
-[![Backend API](https://img.shields.io/badge/🔗_Backend_API-F59E0B?style=for-the-badge)](https://waretrack-pro.onrender.com/api)
+[![API Docs](https://img.shields.io/badge/📚_API_Docs-10B981?style=for-the-badge)](https://waretrack-pro-api.fly.dev/api-docs)
+[![Backend API](https://img.shields.io/badge/🔗_Backend_API-F59E0B?style=for-the-badge)](https://waretrack-pro-api.fly.dev/api)
+[![Postman Collection](https://img.shields.io/badge/📮_Postman-FF6C37?style=for-the-badge)](./WareTrack-Pro-API.postman_collection.json)
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB)
 ![Node.js](https://img.shields.io/badge/Node.js-43853D?style=flat-square&logo=node.js&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat-square&logo=postgresql&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?style=flat-square&logo=socket.io&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 
 </div>
@@ -27,16 +28,18 @@ WareTrack-Pro is a **production-ready**, **enterprise-grade** warehouse manageme
 
 ### 🎯 **Key Highlights**
 
-- 🔄 **Real-time Data Sync** - Live updates every 30 seconds with WebSocket support
+- 🔄 **Real-time Notifications** - Socket.IO powered live updates and database-driven alerts
 - 📊 **Advanced Analytics** - Role-based dashboards with comprehensive metrics
-- 🔐 **Enterprise Security** - JWT authentication with RBAC (4 user roles)
+- 🔐 **Enterprise Security** - 2FA authentication with JWT and RBAC (4 user roles)
 - 📱 **Mobile Responsive** - Progressive Web App (PWA) ready
-- 🚀 **Production Ready** - Deployed with 99.9% uptime
+- 🚀 **Production Ready** - Deployed with 99.9% uptime on Fly.io
 - 🐳 **Docker Support** - Multi-stage builds with security hardening
-- 📧 **Smart Notifications** - Database-driven notification system
+- 📧 **Smart Notifications** - EmailJS integration with user preferences
 - 📈 **Export Everything** - CSV, PDF, JSON export with filtering
 - 🔔 **Real-time Alerts** - Instant notifications for critical events
 - 🎯 **Role-Based UI** - Dynamic interface based on user permissions
+- 🔑 **Password Reset** - Secure OTP-based password recovery
+- 📮 **Complete API** - 70+ endpoints with Postman collection
 
 ---
 
@@ -195,9 +198,9 @@ docker-compose -f docker-compose.prod.yml up -d
 | **Service** | **URL** | **Status** |
 |-------------|---------|------------|
 | 🌐 **Frontend** | [ware-track-pro.vercel.app](https://ware-track-pro.vercel.app/) | ![Status](https://img.shields.io/badge/Status-Live-success) |
-| 🔗 **Backend API** | [waretrack-pro.onrender.com/api](https://waretrack-pro.onrender.com/api) | ![Status](https://img.shields.io/badge/Status-Live-success) |
-| 📚 **API Docs** | [waretrack-pro.onrender.com/api-docs](https://waretrack-pro.onrender.com/api-docs) | ![Status](https://img.shields.io/badge/Status-Live-success) |
-| 🏥 **Health Check** | [waretrack-pro.onrender.com/health](https://waretrack-pro.onrender.com/health) | ![Status](https://img.shields.io/badge/Status-Live-success) |
+| 🔗 **Backend API** | [waretrack-pro-api.fly.dev/api](https://waretrack-pro-api.fly.dev/api) | ![Status](https://img.shields.io/badge/Status-Live-success) |
+| 📚 **API Docs** | [waretrack-pro-api.fly.dev/api-docs](https://waretrack-pro-api.fly.dev/api-docs) | ![Status](https://img.shields.io/badge/Status-Live-success) |
+| 📮 **Postman** | [Collection Download](./WareTrack-Pro-API.postman_collection.json) | ![Status](https://img.shields.io/badge/Status-Ready-success) |
 
 </div>
 
@@ -205,7 +208,7 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ```bash
 # Test user registration
-curl -X POST https://waretrack-pro.onrender.com/api/auth/register \
+curl -X POST https://waretrack-pro-api.fly.dev/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Test User",
@@ -214,10 +217,13 @@ curl -X POST https://waretrack-pro.onrender.com/api/auth/register \
     "phone": "+1234567890"
   }'
 
-# Test email notifications
-curl -X POST https://waretrack-pro.onrender.com/api/test/email \
+# Test 2FA login (Step 1)
+curl -X POST https://waretrack-pro-api.fly.dev/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"type": "welcome"}'
+  -d '{
+    "email": "test@example.com",
+    "password": "password123"
+  }'
 ```
 
 ---
@@ -328,7 +334,7 @@ services:
 
 ## 📋 **API Documentation**
 
-### **60+ Endpoints Available**
+### **70+ Endpoints Available**
 
 | **Category** | **Endpoints** | **Features** |
 |--------------|---------------|--------------|
@@ -346,7 +352,7 @@ services:
 
 ### **Interactive API Explorer**
 
-Visit [waretrack-pro.onrender.com/api-docs](https://waretrack-pro.onrender.com/api-docs) for:
+Visit [waretrack-pro-api.fly.dev/api-docs](https://waretrack-pro-api.fly.dev/api-docs) for:
 - 🔍 **Interactive API Testing**
 - 📖 **Complete Documentation**
 - 🔐 **Authentication Testing**

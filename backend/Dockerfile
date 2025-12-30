@@ -2,7 +2,7 @@
 FROM node:18-alpine AS base
 
 # Install system dependencies
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl openssl
 
 # Set working directory
 WORKDIR /app
@@ -33,7 +33,7 @@ RUN npm run build
 FROM node:18-alpine AS production
 
 # Install system dependencies
-RUN apk add --no-cache curl dumb-init
+RUN apk add --no-cache curl dumb-init openssl
 
 # Create app directory
 WORKDIR /app
