@@ -344,6 +344,67 @@ async function main() {
     }
   }
 
+  // ─── Dispatch Records ─────────────────────────────────────
+  const orders = await prisma.deliveryOrder.findMany({ take: 3 })
+  const driver1 = await prisma.driver.findFirst({ where: { email: 'driver1@waretrack.com' } })
+  const driver2 = await prisma.driver.findFirst({ where: { email: 'driver2@waretrack.com' } })
+  const vehicle1 = await prisma.vehicle.findFirst({ where: { plateNumber: 'RAB 123A' } })
+  const vehicle2 = await prisma.vehicle.findFirst({ where: { plateNumber: 'RAC 456B' } })
+
+  if (orders.length > 0 && driver1 && driver2 && vehicle1 && vehicle2) {
+    const existingDispatch = await prisma.dispatch.count()
+    if (existingDispatch === 0) {
+      await prisma.dispatch.create({
+        data: {
+          order: { connect: { id: orders[0].id } },
+          driver: { connect: { id: driver1.id } },
+          vehicle: { connect: { id: vehicle1.id } },
+          createdByUser: { connect: { id: dispatchOfficer.id } },
+          status: 'IN_TRANSIT',
+          scheduledDate: new Date(),
+          dispatchedAt: new Date(),
+          estimatedDelivery: new Date(Date.now() + 4 * 60 * 60 * 1000),
+          notes: 'Priority delivery - handle with care'
+        }
+      })
+
+      await prisma.dispatch.create({
+        data: {
+          order: { connect: { id: orders[1].id } },
+          driver: { connect: { id: driver2.id } },
+          vehicle: { connect: { id: vehicle2.id } },
+          createdByUser: { connect: { id: dispatchOfficer.id } },
+          status: 'DISPATCHED',
+          scheduledDate: new Date(),
+          dispatchedAt: new Date(),
+          estimatedDelivery: new Date(Date.now() + 6 * 60 * 60 * 1000),
+          notes: 'Standard delivery'
+        }
+      })
+
+      await prisma.dispatch.create({
+        data: {
+          order: { connect: { id: orders[2].id } },
+          driver: { connect: { id: driver1.id } },
+          vehicle: { connect: { id: vehicle1.id } },
+          createdByUser: { connect: { id: dispatchOfficer.id } },
+          status: 'DELIVERED',
+          scheduledDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          dispatchedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          estimatedDelivery: new Date(Date.now() - 20 * 60 * 60 * 1000),
+          actualDelivery: new Date(Date.now() - 20 * 60 * 60 * 1000),
+          notes: 'Delivered successfully'
+        }
+      })
+
+      await prisma.deliveryOrder.update({ where: { id: orders[0].id }, data: { status: 'IN_TRANSIT' } })
+      await prisma.deliveryOrder.update({ where: { id: orders[1].id }, data: { status: 'DISPATCHED' } })
+      await prisma.deliveryOrder.update({ where: { id: orders[2].id }, data: { status: 'DELIVERED', deliveredAt: new Date(Date.now() - 20 * 60 * 60 * 1000) } })
+
+      console.log('✅ 3 dispatch records created')
+    }
+  }
+
   console.log('\n🎉 Database seeded successfully!')
   console.log('\n📋 Login Credentials:')
   console.log('  Admin:    admin@waretrack.com / admin123')

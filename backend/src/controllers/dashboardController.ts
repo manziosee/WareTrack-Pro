@@ -168,6 +168,11 @@ export class DashboardController {
       const lowStockCount = Array.isArray(lowStockItems) ? lowStockItems[0]?.count || 0 : 0;
       const prevLowStockCount = Array.isArray(prevLowStockItems) ? prevLowStockItems[0]?.count || 0 : 0;
 
+      // Count pending orders (for warehouse staff and others)
+      const pendingOrdersCount = await prisma.deliveryOrder.count({
+        where: { status: 'PENDING' }
+      });
+
       let summary: any = {
         totalInventory: {
           value: totalInventoryItems,
@@ -188,6 +193,14 @@ export class DashboardController {
         systemAlerts: {
           value: lowStockCount,
           percentage: calculatePercentage(lowStockCount, prevLowStockCount)
+        },
+        lowStockAlerts: {
+          value: lowStockCount,
+          percentage: calculatePercentage(lowStockCount, prevLowStockCount)
+        },
+        pendingDispatches: {
+          value: pendingOrdersCount,
+          percentage: 0
         },
         totalInventoryValue: inventoryValue,
         currency: 'RWF',
