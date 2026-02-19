@@ -6,6 +6,7 @@ import { adminAuth } from '../middleware/adminAuth';
 const router = Router();
 
 router.get('/stats', auth, DashboardController.getSummary);
+router.get('/summary', auth, DashboardController.getSummary);
 router.get('/trends', auth, DashboardController.getTrends);
 router.get('/activity', auth, DashboardController.getActivity);
 router.get('/upcoming', auth, DashboardController.getUpcoming);

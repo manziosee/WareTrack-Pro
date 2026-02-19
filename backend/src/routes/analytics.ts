@@ -6,20 +6,12 @@ const router = Router();
 
 router.use(authenticate);
 
-// Inventory Analytics
-router.get('/inventory/trends', AnalyticsController.getInventoryTrends);
-router.get('/inventory/categories', AnalyticsController.getCategoryDistribution);
-
-// Driver Analytics
-router.get('/drivers/:driverId/performance', AnalyticsController.getDriverPerformance);
-
-// Fleet Analytics
-router.get('/fleet/utilization', AnalyticsController.getFleetUtilization);
-
-// Dispatch Analytics
-router.get('/dispatch/efficiency', AnalyticsController.getDispatchEfficiency);
-
-// Order Analytics
-router.get('/orders/trends', AnalyticsController.getOrderTrends);
+router.get('/inventory-trends', AnalyticsController.getInventoryTrends);
+router.get('/category-distribution', AnalyticsController.getCategoryDistribution);
+router.get('/driver-performance', AnalyticsController.getAllDriverPerformance);
+router.get('/driver-performance/:driverId', AnalyticsController.getDriverPerformance);
+router.get('/fleet-utilization', AnalyticsController.getFleetUtilization);
+router.get('/dispatch-efficiency', AnalyticsController.getDispatchEfficiency);
+router.get('/order-trends', AnalyticsController.getOrderTrends);
 
 export default router;

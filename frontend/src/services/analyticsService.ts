@@ -16,6 +16,11 @@ export const analyticsService = {
     return response.data.data;
   },
 
+  getDriverPerformanceById: async (driverId: number, months: number = 6) => {
+    const response = await api.get(`/analytics/driver-performance/${driverId}?months=${months}`);
+    return response.data.data;
+  },
+
   getFleetUtilization: async () => {
     const response = await api.get('/analytics/fleet-utilization');
     return response.data.data;

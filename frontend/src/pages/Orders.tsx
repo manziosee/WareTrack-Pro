@@ -264,16 +264,16 @@ export default function Orders() {
                     <div className="text-sm text-gray-500">{order.contactNumber}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {order.items.length} item{order.items.length > 1 ? 's' : ''}
+                    {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={getPriorityBadgeVariant(order.priority)}>
-                      {order.priority.charAt(0).toUpperCase() + order.priority.slice(1).toLowerCase()}
+                    <Badge variant={getPriorityBadgeVariant(order.priority || 'low')}>
+                      {(order.priority || 'Low').charAt(0).toUpperCase() + (order.priority || 'low').slice(1).toLowerCase()}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={getStatusBadgeVariant(order.status)}>
-                      {order.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                    <Badge variant={getStatusBadgeVariant(order.status || 'pending')}>
+                      {(order.status || 'Pending').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

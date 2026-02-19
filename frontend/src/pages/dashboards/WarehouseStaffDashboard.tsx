@@ -11,16 +11,22 @@ export default function WarehouseStaffDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [inventoryByCategory, setInventoryByCategory] = useState<any[]>([]);
   const [inventoryTrends, setInventoryTrends] = useState<any[]>([]);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
     try {
-      const [dashboardStats] = await Promise.all([
-        dashboardService.getStats()
+      const [dashboardStats, activity, orders] = await Promise.all([
+        dashboardService.getStats(),
+        dashboardService.getActivity(),
+        dashboardService.getRecentOrders(5)
       ]);
 
       setStats(dashboardStats);
-      
+      setRecentActivity(activity || []);
+      setPendingOrders((orders || []).filter((o: any) => o.status === 'PENDING'));
+
       // Try to fetch analytics data, fallback to empty if not available
       try {
         const [categoryData, trends] = await Promise.all([
@@ -230,36 +236,54 @@ export default function WarehouseStaffDashboard() {
         <Card>
           <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-              <span className="text-sm text-gray-600">Stock updated</span>
-              <span className="text-xs text-gray-500">2 min ago</span>
-            </div>
-            <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-              <span className="text-sm text-gray-600">New item added</span>
-              <span className="text-xs text-gray-500">15 min ago</span>
-            </div>
-            <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-              <span className="text-sm text-gray-600">Order fulfilled</span>
-              <span className="text-xs text-gray-500">1 hour ago</span>
-            </div>
+            {recentActivity.length > 0 ? recentActivity.slice(0, 5).map((activity: any) => {
+              const getTimeAgo = (date: string) => {
+                const diffMs = Date.now() - new Date(date).getTime();
+                const mins = Math.floor(diffMs / 60000);
+                if (mins < 1) return 'Just now';
+                if (mins < 60) return `${mins} min ago`;
+                const hours = Math.floor(mins / 60);
+                if (hours < 24) return `${hours}h ago`;
+                return `${Math.floor(hours / 24)}d ago`;
+              };
+              return (
+                <div key={activity.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-gray-700 truncate block">{activity.message}</span>
+                    <span className="text-xs text-gray-400">{activity.user}</span>
+                  </div>
+                  <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{getTimeAgo(activity.timestamp)}</span>
+                </div>
+              );
+            }) : (
+              <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>
+            )}
           </div>
         </Card>
 
         <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Today's Tasks</h3>
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Orders to Fulfill</h3>
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <input type="checkbox" className="rounded" />
-              <span className="text-sm text-gray-700">Check low stock items</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <input type="checkbox" className="rounded" />
-              <span className="text-sm text-gray-700">Update inventory counts</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <input type="checkbox" className="rounded" />
-              <span className="text-sm text-gray-700">Prepare orders for dispatch</span>
-            </div>
+            {pendingOrders.length > 0 ? pendingOrders.slice(0, 5).map((order: any) => (
+              <div key={order.id} className="flex items-center justify-between p-2 bg-yellow-50 rounded">
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-gray-900 block">{order.orderNumber}</span>
+                  <span className="text-xs text-gray-500">{order.customerName} - {order.totalAmount}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => window.location.href = `/orders`}
+                  className="text-xs bg-primary-600 text-white px-2 py-1 rounded hover:bg-primary-700 transition-colors"
+                >
+                  View
+                </button>
+              </div>
+            )) : (
+              <div className="text-center py-4">
+                <Package className="w-8 h-8 mx-auto mb-2 text-green-400" />
+                <p className="text-sm text-green-600 font-medium">All orders fulfilled!</p>
+              </div>
+            )}
           </div>
         </Card>
       </div>

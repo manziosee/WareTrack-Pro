@@ -40,7 +40,7 @@ const Settings = () => {
         ];
       case 'DRIVER':
         return [
-          { id: 'profile', label: 'Profile', icon: User },
+          ...baseTabs,
         ];
       default:
         return baseTabs;
