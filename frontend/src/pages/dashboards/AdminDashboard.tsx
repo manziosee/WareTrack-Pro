@@ -1,31 +1,51 @@
-import { Package, Truck, CheckCircle, AlertTriangle, Users, Settings } from 'lucide-react';
+import { Package, Truck, CheckCircle, AlertTriangle, Users, Settings, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import RefreshButton from '@/components/ui/RefreshButton';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import Badge from '@/components/ui/Badge';
 import { dashboardService } from '@/services/dashboardService';
+import { analyticsService } from '@/services/analyticsService';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [trends, setTrends] = useState<any[]>([]);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [inventoryByCategory, setInventoryByCategory] = useState<any[]>([]);
+  const [orderTrends, setOrderTrends] = useState<any[]>([]);
+  const [fleetData, setFleetData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
   const fetchDashboardData = async () => {
     try {
-      const [dashboardStats, dashboardTrends, dashboardOrders, categoryData] = await Promise.all([
+      const [dashboardStats, dashboardTrends, dashboardOrders] = await Promise.all([
         dashboardService.getStats(),
         dashboardService.getTrends(),
-        dashboardService.getRecentOrders(5),
-        dashboardService.getInventoryByCategory()
+        dashboardService.getRecentOrders(5)
       ]);
 
       setStats(dashboardStats);
       setTrends(dashboardTrends);
       setRecentOrders(dashboardOrders || []);
-      setInventoryByCategory(categoryData || []);
+      
+      // Try to fetch analytics data, fallback to empty if not available
+      try {
+        const [categoryData, orders, fleet] = await Promise.all([
+          analyticsService.getCategoryDistribution(),
+          analyticsService.getOrderTrends(6),
+          analyticsService.getFleetUtilization()
+        ]);
+        setInventoryByCategory(categoryData || []);
+        setOrderTrends(orders || []);
+        setFleetData(fleet || []);
+      } catch (analyticsError) {
+        console.log('Analytics endpoints not available yet');
+        setInventoryByCategory([]);
+        setOrderTrends([]);
+        setFleetData([]);
+      }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
@@ -119,6 +139,43 @@ export default function AdminDashboard() {
       {/* Admin Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary-600" />
+            Revenue & Orders Trend
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={orderTrends}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Legend />
+              <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.6} name="Revenue (RWF)" />
+              <Area yAxisId="right" type="monotone" dataKey="orderCount" stroke="#10B981" fill="#10B981" fillOpacity={0.4} name="Orders" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card>
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <PieChartIcon className="w-5 h-5 text-primary-600" />
+            Inventory by Category
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie data={inventoryByCategory} dataKey="count" nameKey="category" cx="50%" cy="50%" outerRadius={100} label>
+                {inventoryByCategory.map((_entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card>
           <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">System Performance</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={trends}>
@@ -135,14 +192,14 @@ export default function AdminDashboard() {
         </Card>
 
         <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Inventory Distribution</h3>
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Fleet Utilization</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={inventoryByCategory}>
+            <BarChart data={fleetData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="category" tick={{ fontSize: 12 }} />
+              <XAxis dataKey="status" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
-              <Bar dataKey="count" fill="#4682B4" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="count" fill="#4F46E5" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>

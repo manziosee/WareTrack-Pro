@@ -1,19 +1,33 @@
-import { MapPin, Clock, CheckCircle, Navigation, Phone, Package } from 'lucide-react';
+import { MapPin, Clock, CheckCircle, Navigation, Phone, Package, TrendingUp, Award } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import RefreshButton from '@/components/ui/RefreshButton';
 import Badge from '@/components/ui/Badge';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '@/services/api';
+import { analyticsService } from '@/services/analyticsService';
 
 export default function DriverDashboard() {
   const [dashboardData, setDashboardData] = useState<any>(null);
+  const [performanceData, setPerformanceData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDriverData = async () => {
     try {
-      const response = await api.get('/dashboard/summary');
+      const [response] = await Promise.all([
+        api.get('/dashboard/summary')
+      ]);
       if (response.data.success) {
         setDashboardData(response.data.data);
+      }
+      
+      // Try to fetch analytics data, fallback to empty if not available
+      try {
+        const performance = await analyticsService.getDriverPerformance(6);
+        setPerformanceData(performance || []);
+      } catch (analyticsError) {
+        console.log('Analytics endpoints not available yet');
+        setPerformanceData([]);
       }
     } catch (error) {
       console.error('Failed to fetch driver data:', error);
@@ -176,6 +190,46 @@ export default function DriverDashboard() {
       {/* Driver Actions and Info */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary-600" />
+            My Performance (6 Months)
+          </h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={performanceData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="deliveries" stroke="#4F46E5" strokeWidth={2} name="Deliveries" />
+              <Line type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={2} name="Revenue (RWF)" />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="p-3 bg-primary-50 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <Award className="w-4 h-4 text-primary-600" />
+                <span className="text-xs text-primary-600 font-medium">Success Rate</span>
+              </div>
+              <p className="text-2xl font-bold text-primary-700">
+                {performanceData.length > 0 
+                  ? Math.round(performanceData[performanceData.length - 1]?.successRate || 0)
+                  : 0}%
+              </p>
+            </div>
+            <div className="p-3 bg-success-50 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="w-4 h-4 text-success-600" />
+                <span className="text-xs text-success-600 font-medium">Total Revenue</span>
+              </div>
+              <p className="text-2xl font-bold text-success-700">
+                RWF {performanceData.reduce((sum, d) => sum + (d.revenue || 0), 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
           <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Today's Schedule</h3>
           <div className="space-y-3">
             {driverStats?.todaySchedule?.map((delivery: any, index: number) => {
@@ -234,7 +288,10 @@ export default function DriverDashboard() {
             )}
           </div>
         </Card>
+      </div>
 
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="space-y-3">

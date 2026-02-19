@@ -76,10 +76,10 @@ export default function ViewOrder() {
         </div>
         <div className="flex items-center gap-3">
           <Badge variant={getStatusBadgeVariant(order.status)} size="lg">
-            {order.status.replace('_', ' ')}
+            {order.status ? order.status.replace('_', ' ').toUpperCase() : 'PENDING'}
           </Badge>
           <Badge variant={getPriorityBadgeVariant(order.priority)}>
-            {order.priority} priority
+            {order.priority ? `${order.priority.toUpperCase()} priority` : 'MEDIUM priority'}
           </Badge>
         </div>
       </div>

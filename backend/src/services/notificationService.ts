@@ -95,6 +95,23 @@ export class NotificationService {
       where: { role: 'ADMIN', status: 'ACTIVE' }
     });
 
+    // Check if unread low stock alert already exists for this item
+    const existingAlert = await prisma.notification.findFirst({
+      where: {
+        type: 'LOW_STOCK',
+        message: {
+          contains: itemName
+        },
+        read: false
+      }
+    });
+
+    // If unread alert exists, don't create new one or send email
+    if (existingAlert) {
+      console.log(`Skipping duplicate low stock alert for ${itemName} - unread alert exists`);
+      return [];
+    }
+
     const notifications = await Promise.all(
       admins.map(admin => 
         this.createNotification({
@@ -160,6 +177,21 @@ export class NotificationService {
     const admins = await prisma.user.findMany({
       where: { role: 'ADMIN', status: 'ACTIVE' }
     });
+
+    // Check if unread system alert with same title already exists
+    const existingAlert = await prisma.notification.findFirst({
+      where: {
+        type: 'SYSTEM',
+        title,
+        read: false
+      }
+    });
+
+    // If unread alert exists, don't create new one or send email
+    if (existingAlert) {
+      console.log(`Skipping duplicate system alert: ${title} - unread alert exists`);
+      return [];
+    }
 
     const notifications = await Promise.all(
       admins.map(admin => 

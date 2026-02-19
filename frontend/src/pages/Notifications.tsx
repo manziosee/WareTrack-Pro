@@ -1,43 +1,46 @@
-import { useState, useEffect } from 'react';
-import { Bell, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Bell, AlertTriangle, CheckCircle, Info, CheckCheck, Trash2 } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
-import { dashboardService } from '@/services/dashboardService';
 import { notificationService } from '@/services/notificationService';
+import type { Notification } from '@/services/notificationService';
 import { formatDate } from '@/utils/formatters';
 import toast from 'react-hot-toast';
 
 export default function Notifications() {
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await dashboardService.getNotifications();
-      
-      const allNotifications = (data || []).map((notification: any) => ({
-        ...notification,
-        timeAgo: getTimeAgo(new Date(notification.timestamp))
-      }));
+      const [notifData, statsData] = await Promise.all([
+        notificationService.getNotifications({ page, limit: 20, unreadOnly: filter === 'unread' }),
+        notificationService.getStats()
+      ]);
 
-      setNotifications(allNotifications);
+      setNotifications(notifData.data || []);
+      setTotalPages(notifData.pagination?.totalPages || 1);
+      setUnreadCount(statsData.unread || 0);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
       toast.error('Failed to load notifications');
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, filter]);
 
-  const getTimeAgo = (date: Date): string => {
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  const getTimeAgo = (date: string): string => {
     const now = new Date();
-    const diffInMs = now.getTime() - date.getTime();
+    const diffInMs = now.getTime() - new Date(date).getTime();
     const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
     const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
     const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
@@ -48,13 +51,15 @@ export default function Notifications() {
     return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
   };
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'low_stock':
+  const getNotificationIcon = (type: string, severity: string) => {
+    const sev = severity?.toLowerCase() || type?.toLowerCase();
+    switch (sev) {
       case 'warning':
         return <AlertTriangle className="w-5 h-5 text-warning-500" />;
       case 'success':
         return <CheckCircle className="w-5 h-5 text-success-500" />;
+      case 'error':
+        return <AlertTriangle className="w-5 h-5 text-error-500" />;
       case 'info':
         return <Info className="w-5 h-5 text-primary-500" />;
       default:
@@ -62,43 +67,38 @@ export default function Notifications() {
     }
   };
 
-  const getNotificationBadgeVariant = (type: string) => {
-    switch (type) {
-      case 'low_stock':
-      case 'warning':
-        return 'warning';
-      case 'success':
-        return 'success';
-      case 'info':
-        return 'primary';
-      default:
-        return 'gray';
+  const getNotificationBadgeVariant = (severity: string): 'warning' | 'success' | 'primary' | 'error' | 'gray' => {
+    switch (severity?.toLowerCase()) {
+      case 'warning': return 'warning';
+      case 'success': return 'success';
+      case 'error': return 'error';
+      case 'info': return 'primary';
+      default: return 'gray';
     }
   };
 
-  const markAsRead = async (notificationId: string) => {
+  const markAsRead = async (notificationId: number) => {
     try {
       await notificationService.markAsRead(notificationId);
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.id === notificationId 
-            ? { ...notification, read: true }
-            : notification
-        )
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
-      toast.success('Notification marked as read');
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      toast.success('Marked as read');
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
       toast.error('Failed to mark as read');
     }
   };
 
-  const deleteNotification = async (notificationId: string) => {
+  const deleteNotification = async (notificationId: number) => {
     try {
       await notificationService.deleteNotification(notificationId);
-      setNotifications(prev => 
-        prev.filter(notification => notification.id !== notificationId)
-      );
+      const wasUnread = notifications.find(n => n.id === notificationId && !n.read);
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      if (wasUnread) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
       toast.success('Notification deleted');
     } catch (error) {
       console.error('Failed to delete notification:', error);
@@ -106,20 +106,23 @@ export default function Notifications() {
     }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-    toast.success('All notifications marked as read');
+  const markAllAsRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+      toast.success('All notifications marked as read');
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
+      toast.error('Failed to mark all as read');
+    }
   };
 
-  const filteredNotifications = notifications.filter(notification => {
-    if (filter === 'unread') return !notification.read;
-    if (filter === 'read') return notification.read;
-    return true;
-  });
-
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const filteredNotifications = filter === 'read'
+    ? notifications.filter(n => n.read)
+    : filter === 'unread'
+    ? notifications.filter(n => !n.read)
+    : notifications;
 
   if (loading) {
     return (
@@ -143,9 +146,10 @@ export default function Notifications() {
           {unreadCount > 0 && (
             <button
               onClick={markAllAsRead}
-              className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >
-              Mark All as Read
+              <CheckCheck className="w-4 h-4" />
+              Mark All as Read ({unreadCount})
             </button>
           )}
         </div>
@@ -163,7 +167,7 @@ export default function Notifications() {
         </Card>
         <Card>
           <p className="text-sm text-gray-600">Read</p>
-          <p className="text-2xl font-bold text-success-600 mt-1">{notifications.length - unreadCount}</p>
+          <p className="text-2xl font-bold text-success-600 mt-1">{notifications.length - notifications.filter(n => !n.read).length}</p>
         </Card>
       </div>
 
@@ -171,12 +175,12 @@ export default function Notifications() {
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
         {[
           { key: 'all', label: 'All' },
-          { key: 'unread', label: 'Unread' },
+          { key: 'unread', label: `Unread${unreadCount > 0 ? ` (${unreadCount})` : ''}` },
           { key: 'read', label: 'Read' }
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setFilter(tab.key)}
+            onClick={() => { setFilter(tab.key); setPage(1); }}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               filter === tab.key
                 ? 'bg-white text-primary-600 shadow-sm'
@@ -196,31 +200,31 @@ export default function Notifications() {
               <div
                 key={notification.id}
                 className={`p-6 hover:bg-gray-50 transition-colors ${
-                  !notification.read ? 'bg-blue-50' : ''
+                  !notification.read ? 'bg-blue-50/60' : ''
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4 flex-1">
                     <div className="flex-shrink-0 mt-1">
-                      {getNotificationIcon(notification.type)}
+                      {getNotificationIcon(notification.type, notification.severity)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-sm font-semibold text-gray-900">
+                        <h3 className={`text-sm font-semibold ${!notification.read ? 'text-gray-900' : 'text-gray-700'}`}>
                           {notification.title}
                         </h3>
                         {!notification.read && (
                           <div className="w-2 h-2 bg-primary-500 rounded-full"></div>
                         )}
-                        <Badge variant={getNotificationBadgeVariant(notification.type)} size="sm">
-                          {notification.type.replace('_', ' ')}
+                        <Badge variant={getNotificationBadgeVariant(notification.severity)} size="sm">
+                          {(notification.type || '').replace('_', ' ')}
                         </Badge>
                       </div>
                       <p className="text-sm text-gray-600 mb-2">
                         {notification.message}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {notification.timeAgo} • {formatDate(notification.timestamp)}
+                        {getTimeAgo(notification.createdAt)} {notification.createdAt && `\u2022 ${formatDate(notification.createdAt)}`}
                       </p>
                     </div>
                   </div>
@@ -228,7 +232,7 @@ export default function Notifications() {
                     {!notification.read && (
                       <button
                         onClick={() => markAsRead(notification.id)}
-                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        className="p-1.5 text-primary-600 hover:bg-primary-50 rounded transition-colors"
                         title="Mark as read"
                       >
                         <CheckCircle className="w-4 h-4" />
@@ -236,10 +240,10 @@ export default function Notifications() {
                     )}
                     <button
                       onClick={() => deleteNotification(notification.id)}
-                      className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-error-600 hover:bg-error-50 rounded transition-colors"
                       title="Delete notification"
                     >
-                      <X className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -251,7 +255,7 @@ export default function Notifications() {
             <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications</h3>
             <p className="text-gray-500">
-              {filter === 'unread' 
+              {filter === 'unread'
                 ? "You're all caught up! No unread notifications."
                 : filter === 'read'
                 ? "No read notifications to show."
@@ -261,6 +265,27 @@ export default function Notifications() {
           </div>
         )}
       </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-600">Page {page} of {totalPages}</span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

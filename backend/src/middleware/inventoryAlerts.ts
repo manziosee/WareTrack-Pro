@@ -16,7 +16,7 @@ export class InventoryAlerts {
       if (lowStockItems.length > 0) {
         console.log(`Found ${lowStockItems.length} low stock items`);
         
-        // Create notifications for each low stock item
+        // Create notifications for each low stock item (only if no unread alert exists)
         for (const item of lowStockItems) {
           await NotificationService.createLowStockAlert(
             item.name,
@@ -25,7 +25,7 @@ export class InventoryAlerts {
           );
         }
 
-        // Create system alert for multiple low stock items
+        // Create system alert for multiple low stock items (only if no unread alert exists)
         if (lowStockItems.length > 1) {
           const itemsList = lowStockItems.map(item => 
             `${item.name} (${item.code}): ${item.quantity}/${item.minQuantity}`
@@ -41,7 +41,7 @@ export class InventoryAlerts {
     } catch (error) {
       console.error('Error checking low stock:', error);
       
-      // Create error notification for admins
+      // Create error notification for admins (only if no unread alert exists)
       await NotificationService.createSystemAlert(
         'Inventory Check Failed',
         `Failed to check inventory levels: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -110,12 +110,12 @@ export class InventoryAlerts {
     // Run immediately on startup
     this.runInventoryChecks();
     
-    // Then run every hour
+    // Then run every 6 hours to reduce duplicate alerts
     setInterval(() => {
       this.runInventoryChecks();
-    }, 60 * 60 * 1000); // 1 hour
+    }, 6 * 60 * 60 * 1000); // 6 hours
     
-    console.log('📅 Inventory alerts scheduler started (runs every hour)');
+    console.log('📅 Inventory alerts scheduler started (runs every 6 hours)');
   }
 
   // Manual trigger for testing

@@ -35,6 +35,10 @@ model User {
   systemConfiguration SystemConfiguration?
   reportSettings ReportSettings?
   notifications Notification[]
+  sentMessages ChatMessage[] @relation("SentMessages")
+  receivedMessages ChatMessage[] @relation("ReceivedMessages")
+  preferences UserPreferences?
+  barcodeGenerations BarcodeLog[]
 
   @@map("users")
 }
@@ -61,6 +65,8 @@ model InventoryItem {
   // Relations
   orderItems       OrderItem[]
   inventoryHistory InventoryHistory[]
+  forecasts        InventoryForecast[]
+  barcodeLogs      BarcodeLog[]
 
   @@map("inventory_items")
 }
@@ -85,6 +91,7 @@ model Vehicle {
   dispatches          Dispatch[]
   currentDrivers      Driver[]
   maintenanceRecords  MaintenanceRecord[]
+  healthRecords       VehicleHealth[]
 
   @@map("vehicles")
 }
@@ -116,6 +123,9 @@ model Driver {
   currentVehicle Vehicle? @relation(fields: [currentVehicleId], references: [id])
   orders         DeliveryOrder[]
   dispatches     Dispatch[]
+  achievements   DriverAchievement[]
+  leaderboard    DriverLeaderboard[]
+  ratings        CustomerRating[]
 
   @@map("drivers")
 }
@@ -147,6 +157,8 @@ model DeliveryOrder {
   createdByUser User @relation("CreatedBy", fields: [createdBy], references: [id])
   items        OrderItem[]
   dispatches   Dispatch[]
+  proofs       DeliveryProof[]
+  ratings      CustomerRating[]
 
   @@map("delivery_orders")
 }
@@ -191,6 +203,7 @@ model Dispatch {
   driver        Driver @relation(fields: [driverId], references: [id])
   vehicle       Vehicle @relation(fields: [vehicleId], references: [id])
   createdByUser User @relation("CreatedBy", fields: [createdBy], references: [id])
+  proof         DeliveryProof?
 
   @@map("dispatches")
 }
@@ -368,4 +381,185 @@ enum NotificationSeverity {
   SUCCESS
   WARNING
   ERROR
+}
+
+model DeliveryProof {
+  id               Int      @id @default(autoincrement())
+  dispatchId       Int      @unique @map("dispatch_id")
+  orderId          Int      @map("order_id")
+  photoUrl         String?  @map("photo_url")
+  signatureData    String?  @map("signature_data")
+  confirmationCode String   @unique @map("confirmation_code")
+  recipientName    String?  @map("recipient_name")
+  notes            String?
+  latitude         Decimal? @db.Decimal(10, 8)
+  longitude        Decimal? @db.Decimal(11, 8)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  dispatch Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  order    DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("delivery_proofs")
+}
+
+model ChatMessage {
+  id          Int      @id @default(autoincrement())
+  senderId    Int      @map("sender_id")
+  receiverId  Int?     @map("receiver_id")
+  roomId      String?  @map("room_id")
+  message     String
+  messageType String   @default("text") @map("message_type")
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  sender   User  @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User? @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([senderId])
+  @@map("chat_messages")
+}
+
+model DriverAchievement {
+  id              Int      @id @default(autoincrement())
+  driverId        Int      @map("driver_id")
+  achievementType String   @map("achievement_type")
+  title           String
+  description     String?
+  points          Int      @default(0)
+  earnedAt        DateTime @default(now()) @map("earned_at")
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId])
+  @@map("driver_achievements")
+}
+
+model DriverLeaderboard {
+  id              Int      @id @default(autoincrement())
+  driverId        Int      @map("driver_id")
+  month           String
+  totalDeliveries Int      @default(0) @map("total_deliveries")
+  totalRevenue    Decimal  @default(0) @map("total_revenue") @db.Decimal(12, 2)
+  successRate     Decimal  @default(0) @map("success_rate") @db.Decimal(5, 2)
+  points          Int      @default(0)
+  rank            Int?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, month])
+  @@map("driver_leaderboard")
+}
+
+model InventoryForecast {
+  id              Int      @id @default(autoincrement())
+  itemId          Int      @map("item_id")
+  forecastDate    DateTime @map("forecast_date") @db.Date
+  predictedDemand Int      @map("predicted_demand")
+  confidenceLevel Decimal? @map("confidence_level") @db.Decimal(5, 2)
+  seasonalFactor  Decimal? @map("seasonal_factor") @db.Decimal(5, 2)
+  trendFactor     Decimal? @map("trend_factor") @db.Decimal(5, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, forecastDate])
+  @@map("inventory_forecasts")
+}
+
+model SmartAlert {
+  id          Int       @id @default(autoincrement())
+  alertType   String    @map("alert_type")
+  entityType  String?   @map("entity_type")
+  entityId    Int?      @map("entity_id")
+  title       String
+  message     String
+  severity    String    @default("INFO")
+  triggerDate DateTime  @map("trigger_date")
+  resolved    Boolean   @default(false)
+  resolvedAt  DateTime? @map("resolved_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([triggerDate, resolved])
+  @@map("smart_alerts")
+}
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?
+  address   String?
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  ratings CustomerRating[]
+
+  @@map("customers")
+}
+
+model CustomerRating {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @map("customer_id")
+  orderId    Int      @map("order_id")
+  driverId   Int      @map("driver_id")
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order    DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driver   Driver        @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, orderId])
+  @@map("customer_ratings")
+}
+
+model VehicleHealth {
+  id                        Int       @id @default(autoincrement())
+  vehicleId                 Int       @map("vehicle_id")
+  odometerReading           Int       @map("odometer_reading")
+  fuelEfficiency            Decimal?  @map("fuel_efficiency") @db.Decimal(5, 2)
+  engineHours               Int?      @map("engine_hours")
+  healthScore               Int?      @map("health_score")
+  predictedMaintenanceDate  DateTime? @map("predicted_maintenance_date") @db.Date
+  maintenanceCostEstimate   Decimal?  @map("maintenance_cost_estimate") @db.Decimal(10, 2)
+  recordedAt                DateTime  @default(now()) @map("recorded_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_health")
+}
+
+model UserPreferences {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @unique @map("user_id")
+  theme      String   @default("light")
+  autoTheme  Boolean  @default(false) @map("auto_theme")
+  language   String   @default("en")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model BarcodeLog {
+  id          Int      @id @default(autoincrement())
+  itemId      Int      @map("item_id")
+  barcode     String
+  format      String   @default("CODE128")
+  generatedBy Int?     @map("generated_by")
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  generator User?         @relation(fields: [generatedBy], references: [id])
+
+  @@index([itemId])
+  @@map("barcode_logs")
 }

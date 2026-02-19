@@ -22,6 +22,23 @@
 
 ---
 
+## 🎉 **Latest Updates (v2.1.0)**
+
+### ✅ Recently Added Features
+- **🔔 Enhanced Notification System**: Real-time updates with auto-refresh, unread badge count, mark-all-as-read
+- **📦 Comprehensive Seed Data**: 22 inventory items, 8 vehicles, 3 drivers ready to use
+- **🚚 Improved Tracking Page**: Auto-refresh, driver/vehicle names, summary stats, better timeline
+- **🎯 Role-Based Navigation**: Dynamic sidebar with proper access control for all roles
+- **⚡ Performance Optimizations**: 30-second auto-refresh, optimistic UI updates
+- **📚 Complete Documentation**: API reference, quick start guide, improvements summary
+
+**📖 New Documentation Files:**
+- `QUICK_START.md` - Get started in 5 minutes
+- `API_REFERENCE.md` - Complete API endpoints guide
+- `IMPROVEMENTS_SUMMARY.md` - Detailed changelog
+
+---
+
 ## ✨ **What Makes WareTrack-Pro Special?**
 
 WareTrack-Pro is a **production-ready**, **enterprise-grade** warehouse management system that transforms how businesses handle inventory, orders, and deliveries. Built with modern technologies and best practices, it's designed to scale from small warehouses to large distribution centers.

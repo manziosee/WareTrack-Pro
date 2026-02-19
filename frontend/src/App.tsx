@@ -115,6 +115,15 @@ function App() {
             </MainLayout>
           } />
           
+          {/* Drivers - Admin, Dispatch Officer (same as vehicles page) */}
+          <Route path="/drivers" element={
+            <MainLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER']}>
+                <Vehicles />
+              </RoleGuard>
+            </MainLayout>
+          } />
+          
           {/* Tracking - All except Warehouse Staff */}
           <Route path="/tracking" element={
             <MainLayout>
@@ -133,14 +142,8 @@ function App() {
             </MainLayout>
           } />
           
-          {/* Settings - Admin, Dispatch Officer */}
-          <Route path="/settings" element={
-            <MainLayout>
-              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER']}>
-                <Settings />
-              </RoleGuard>
-            </MainLayout>
-          } />
+          {/* Settings - All authenticated users */}
+          <Route path="/settings" element={<MainLayout><Settings /></MainLayout>} />
           
           {/* Profile - All authenticated users */}
           <Route path="/profile" element={<MainLayout><Profile /></MainLayout>} />
