@@ -1,33 +1,45 @@
-import { Truck, Clock, MapPin, CheckCircle, Plus, Users } from 'lucide-react';
+import { Truck, Clock, MapPin, CheckCircle, Plus, Users, TrendingUp, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import RefreshButton from '@/components/ui/RefreshButton';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import Badge from '@/components/ui/Badge';
 import api from '@/services/api';
+import { analyticsService } from '@/services/analyticsService';
 
 export default function DispatchOfficerDashboard() {
   const [dashboardData, setDashboardData] = useState<any>(null);
-  const [trends, setTrends] = useState<any[]>([]);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [dispatchEfficiency, setDispatchEfficiency] = useState<any[]>([]);
+  const [driverPerformance, setDriverPerformance] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
     try {
-      const [summaryResponse, trendsResponse, ordersResponse] = await Promise.all([
+      const [summaryResponse, ordersResponse] = await Promise.all([
         api.get('/dashboard/summary'),
-        api.get('/dashboard/trends'),
         api.get('/dashboard/recent-orders?limit=10')
       ]);
 
       if (summaryResponse.data.success) {
         setDashboardData(summaryResponse.data.data);
       }
-      if (trendsResponse.data.success) {
-        setTrends(trendsResponse.data.data);
-      }
       if (ordersResponse.data.success) {
         setRecentOrders(ordersResponse.data.data);
+      }
+      
+      // Try to fetch analytics data, fallback to empty if not available
+      try {
+        const [efficiency, performance] = await Promise.all([
+          analyticsService.getDispatchEfficiency(30),
+          analyticsService.getDriverPerformance(6)
+        ]);
+        setDispatchEfficiency(efficiency || []);
+        setDriverPerformance(performance || []);
+      } catch (analyticsError) {
+        console.log('Analytics endpoints not available yet');
+        setDispatchEfficiency([]);
+        setDriverPerformance([]);
       }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
@@ -120,46 +132,67 @@ export default function DispatchOfficerDashboard() {
       {/* Dispatch Content */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Delivery Performance</h3>
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary-600" />
+            Dispatch Efficiency (30 Days)
+          </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={trends}>
+            <LineChart data={dispatchEfficiency}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis dataKey="date" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
-              <Line type="monotone" dataKey="completed" stroke="#10B981" strokeWidth={2} name="Completed" />
-              <Line type="monotone" dataKey="pending" stroke="#F59E0B" strokeWidth={2} name="Pending" />
+              <Legend />
+              <Line type="monotone" dataKey="dispatched" stroke="#4F46E5" strokeWidth={2} name="Dispatched" />
+              <Line type="monotone" dataKey="delivered" stroke="#10B981" strokeWidth={2} name="Delivered" />
             </LineChart>
           </ResponsiveContainer>
         </Card>
 
         <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Fleet Status</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Truck className="w-5 h-5 text-green-600" />
-                <span className="font-medium text-green-800">Available Vehicles</span>
-              </div>
-              <Badge variant="success">{dispatchStats?.fleetStatus?.availableVehicles || 0}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-blue-600" />
-                <span className="font-medium text-blue-800">On Route</span>
-              </div>
-              <Badge variant="info">{dispatchStats?.fleetStatus?.onRouteVehicles || 0}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-yellow-600" />
-                <span className="font-medium text-yellow-800">Maintenance</span>
-              </div>
-              <Badge variant="warning">{dispatchStats?.fleetStatus?.maintenanceVehicles || 0}</Badge>
-            </div>
-          </div>
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-primary-600" />
+            Driver Performance
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={driverPerformance}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="driverName" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Bar dataKey="deliveries" fill="#4F46E5" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </Card>
       </div>
+
+      {/* Fleet Status */}
+      <Card>
+        <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Fleet Status</h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+            <div className="flex items-center gap-3">
+              <Truck className="w-5 h-5 text-green-600" />
+              <span className="font-medium text-green-800">Available Vehicles</span>
+            </div>
+            <Badge variant="success">{dispatchStats?.fleetStatus?.availableVehicles || 0}</Badge>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+            <div className="flex items-center gap-3">
+              <MapPin className="w-5 h-5 text-blue-600" />
+              <span className="font-medium text-blue-800">On Route</span>
+            </div>
+            <Badge variant="info">{dispatchStats?.fleetStatus?.onRouteVehicles || 0}</Badge>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+            <div className="flex items-center gap-3">
+              <Clock className="w-5 h-5 text-yellow-600" />
+              <span className="font-medium text-yellow-800">Maintenance</span>
+            </div>
+            <Badge variant="warning">{dispatchStats?.fleetStatus?.maintenanceVehicles || 0}</Badge>
+          </div>
+        </div>
+      </Card>
 
       {/* Orders and Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -374,4 +374,5 @@ const options = {
 };
 
 export const specs = swaggerJSDoc(options);
+export const swaggerSpec = specs;
 export { swaggerUi };

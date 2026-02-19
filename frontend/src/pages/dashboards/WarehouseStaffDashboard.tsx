@@ -1,25 +1,39 @@
-import { Package, AlertTriangle, TrendingUp, Clock, Plus } from 'lucide-react';
+import { Package, AlertTriangle, TrendingUp, Clock, Plus, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import RefreshButton from '@/components/ui/RefreshButton';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 import { dashboardService } from '@/services/dashboardService';
+import { analyticsService } from '@/services/analyticsService';
 
 export default function WarehouseStaffDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [inventoryByCategory, setInventoryByCategory] = useState<any[]>([]);
+  const [inventoryTrends, setInventoryTrends] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
     try {
-      const [dashboardStats, categoryData] = await Promise.all([
-        dashboardService.getStats(),
-        dashboardService.getInventoryByCategory()
+      const [dashboardStats] = await Promise.all([
+        dashboardService.getStats()
       ]);
 
       setStats(dashboardStats);
-      setInventoryByCategory(categoryData || []);
+      
+      // Try to fetch analytics data, fallback to empty if not available
+      try {
+        const [categoryData, trends] = await Promise.all([
+          analyticsService.getCategoryDistribution(),
+          analyticsService.getInventoryTrends(30)
+        ]);
+        setInventoryByCategory(categoryData || []);
+        setInventoryTrends(trends || []);
+      } catch (analyticsError) {
+        console.log('Analytics endpoints not available yet');
+        setInventoryByCategory([]);
+        setInventoryTrends([]);
+      }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
@@ -110,51 +124,73 @@ export default function WarehouseStaffDashboard() {
       {/* Warehouse Content */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Inventory by Category</h3>
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-primary-600" />
+            Inventory by Category
+          </h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={inventoryByCategory}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis dataKey="category" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
-              <Bar dataKey="count" fill="#4682B4" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="count" fill="#4F46E5" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
         <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Stock Alerts</h3>
-          <div className="space-y-4">
-            {stats?.lowStockAlerts?.value > 0 ? (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-6 h-6 text-red-600" />
-                  <div>
-                    <p className="font-medium text-red-800">{stats.lowStockAlerts.value} items need restocking</p>
-                    <p className="text-sm text-red-600">Check inventory for items below minimum stock</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => window.location.href = '/inventory?filter=low-stock'}
-                  className="mt-3 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  View Low Stock Items
-                </button>
-              </div>
-            ) : (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Package className="w-6 h-6 text-green-600" />
-                  <div>
-                    <p className="font-medium text-green-800">All items are well stocked</p>
-                    <p className="text-sm text-green-600">No low stock alerts at this time</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary-600" />
+            Stock Movement (30 Days)
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={inventoryTrends}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="stockIn" stroke="#10B981" strokeWidth={2} name="Stock In" />
+              <Line type="monotone" dataKey="stockOut" stroke="#EF4444" strokeWidth={2} name="Stock Out" />
+            </LineChart>
+          </ResponsiveContainer>
         </Card>
       </div>
+
+      {/* Stock Alerts */}
+      <Card>
+        <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Stock Alerts</h3>
+        <div className="space-y-4">
+          {stats?.lowStockAlerts?.value > 0 ? (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+                <div>
+                  <p className="font-medium text-red-800">{stats.lowStockAlerts.value} items need restocking</p>
+                  <p className="text-sm text-red-600">Check inventory for items below minimum stock</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => window.location.href = '/inventory?filter=low-stock'}
+                className="mt-3 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                View Low Stock Items
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Package className="w-6 h-6 text-green-600" />
+                <div>
+                  <p className="font-medium text-green-800">All items are well stocked</p>
+                  <p className="text-sm text-green-600">No low stock alerts at this time</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -30,6 +30,9 @@ export const auth = (req: Request, res: Response, next: NextFunction) => {
   });
 };
 
+export const authenticate = auth;
+export const authenticateToken = auth;
+
 export const authorizeRoles = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
