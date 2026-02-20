@@ -34,7 +34,8 @@ const AddInventoryForm = ({ onClose, onSave }: AddInventoryFormProps) => {
       ...formData,
       quantity: parseInt(formData.quantity),
       minQuantity: parseInt(formData.minQuantity),
-      unitPrice: formData.unitPrice
+      unitPrice: formData.unitPrice,
+      status: formData.status.toUpperCase() // Convert to uppercase for backend
     };
     
     if (onSave) {

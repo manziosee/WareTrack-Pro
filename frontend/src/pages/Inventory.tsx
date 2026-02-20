@@ -42,12 +42,31 @@ export default function Inventory() {
 
   useEffect(() => {
     fetchStats();
+    
+    // Check for lowStock query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const lowStockParam = urlParams.get('lowStock');
+    if (lowStockParam === 'true') {
+      // Filter to show only low stock items
+      const lowStockItems = inventory.filter(item => item.quantity < item.minQuantity);
+      setFilteredInventory(lowStockItems);
+    }
   }, []);
 
   useEffect(() => {
     if (realtimeInventory) {
       setInventory(realtimeInventory.data || []);
-      setFilteredInventory(realtimeInventory.data || []);
+      
+      // Check for lowStock query parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      const lowStockParam = urlParams.get('lowStock');
+      if (lowStockParam === 'true') {
+        // Filter to show only low stock items
+        const lowStockItems = (realtimeInventory.data || []).filter((item: any) => item.quantity < item.minQuantity);
+        setFilteredInventory(lowStockItems);
+      } else {
+        setFilteredInventory(realtimeInventory.data || []);
+      }
     }
   }, [realtimeInventory]);
 

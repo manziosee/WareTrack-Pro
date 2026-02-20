@@ -178,7 +178,7 @@ export default function WarehouseStaffDashboard() {
                 </div>
               </div>
               <button 
-                onClick={() => window.location.href = '/inventory?filter=low-stock'}
+                onClick={() => window.location.href = '/inventory?lowStock=true'}
                 className="mt-3 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
               >
                 View Low Stock Items

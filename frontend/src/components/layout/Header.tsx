@@ -202,18 +202,18 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
-      <div className="flex items-center justify-between">
+    <header className="bg-white border-b border-gray-200 px-3 sm:px-4 md:px-6 py-3 md:py-4">
+      <div className="flex items-center justify-between gap-2 md:gap-4">
         {/* Search */}
-        <div className="flex-1 max-w-lg" ref={searchRef}>
+        <div className="flex-1 max-w-xs sm:max-w-md lg:max-w-lg" ref={searchRef}>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search orders, inventory, drivers..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Search..."
+              className="w-full pl-8 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             {showSearchResults && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-y-auto">
@@ -247,7 +247,7 @@ export default function Header() {
                             {result.type === 'driver' && result.licenseNumber}
                           </p>
                         </div>
-                        <span className="text-xs text-gray-400 capitalize">{result.type}</span>
+                        <span className="text-xs text-gray-400 capitalize hidden sm:inline">{result.type}</span>
                       </button>
                     ))}
                   </div>
@@ -263,26 +263,26 @@ export default function Header() {
         </div>
 
         {/* Right Section */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
           {/* Notifications */}
           <div className="relative" ref={notificationRef}>
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="relative p-1.5 sm:p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <Bell className="w-5 h-5" />
+              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-error-500 text-white text-xs rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-error-500 text-white text-[10px] sm:text-xs rounded-full flex items-center justify-center">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">Notifications</h3>
                     {unreadCount > 0 && (
                       <p className="text-xs text-gray-500">{unreadCount} unread</p>
                     )}
@@ -293,7 +293,7 @@ export default function Header() {
                       className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium"
                     >
                       <CheckCheck className="w-3.5 h-3.5" />
-                      Mark all read
+                      <span className="hidden sm:inline">Mark all read</span>
                     </button>
                   )}
                 </div>
@@ -308,7 +308,7 @@ export default function Header() {
                       <div
                         key={notification.id}
                         onClick={() => handleNotificationClick(notification)}
-                        className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-all duration-300 cursor-pointer ${
+                        className={`p-3 sm:p-4 border-b border-gray-100 hover:bg-gray-50 transition-all duration-300 cursor-pointer ${
                           !notification.read ? 'bg-blue-50/50' : ''
                         } ${
                           expandedNotification === notification.id 
@@ -320,7 +320,7 @@ export default function Header() {
                           transition: 'all 0.3s ease-out'
                         }}
                       >
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-2 sm:gap-3">
                           <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 transition-all ${
                             !notification.read
                               ? getNotificationTypeColor(notification.severity)
@@ -337,7 +337,7 @@ export default function Header() {
                                 <div className="w-1.5 h-1.5 bg-primary-500 rounded-full flex-shrink-0 animate-pulse"></div>
                               )}
                             </div>
-                            <p className={`text-sm text-gray-500 mt-0.5 transition-all ${
+                            <p className={`text-xs sm:text-sm text-gray-500 mt-0.5 transition-all ${
                               expandedNotification === notification.id ? 'line-clamp-none' : 'line-clamp-2'
                             }`}>{notification.message}</p>
                             <p className="text-xs text-gray-400 mt-1">{getTimeAgo(notification.createdAt)}</p>
@@ -371,28 +371,28 @@ export default function Header() {
           <div className="relative" ref={userDropdownRef}>
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
-              className="flex items-center gap-3 pl-4 border-l border-gray-200 hover:bg-gray-50 rounded-lg p-2 transition-colors"
+              className="flex items-center gap-2 sm:gap-3 sm:pl-3 md:pl-4 sm:border-l border-gray-200 hover:bg-gray-50 rounded-lg p-1 sm:p-2 transition-colors"
             >
-              <div className="text-right">
+              <div className="text-right hidden md:block">
                 <p className="text-sm font-medium text-gray-900">{user?.name || 'Guest'}</p>
                 <p className="text-xs text-gray-500 capitalize">{user?.role?.replace('_', ' ') || 'User'}</p>
               </div>
-              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-medium">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
                 {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
               </div>
-              <ChevronDown className="w-4 h-4 text-gray-500" />
+              <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 hidden sm:block" />
             </button>
 
             {showUserDropdown && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                <div className="p-4 border-b border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-medium">
+              <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <div className="p-3 sm:p-4 border-b border-gray-200">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-medium">
                       {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{user?.name || 'Guest'}</p>
-                      <p className="text-sm text-gray-500">{user?.email || 'guest@example.com'}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{user?.name || 'Guest'}</p>
+                      <p className="text-xs sm:text-sm text-gray-500 truncate">{user?.email || 'guest@example.com'}</p>
                       <p className="text-xs text-gray-500 capitalize">{user?.role?.replace('_', ' ') || 'User'}</p>
                     </div>
                   </div>
@@ -403,7 +403,7 @@ export default function Header() {
                       navigate('/profile');
                       setShowUserDropdown(false);
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     <User className="w-4 h-4" />
                     My Profile
@@ -413,7 +413,7 @@ export default function Header() {
                       navigate('/settings');
                       setShowUserDropdown(false);
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     <Settings className="w-4 h-4" />
                     Settings
@@ -422,7 +422,7 @@ export default function Header() {
                 <div className="border-t border-gray-200 py-2">
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                   >
                     <LogOut className="w-4 h-4" />
                     Sign Out

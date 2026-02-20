@@ -66,7 +66,7 @@ export default function Sidebar() {
         );
       case 'DRIVER':
         return navigation.filter(item =>
-          ['Dashboard', 'Tracking', 'Notifications'].includes(item.name)
+          ['Dashboard', 'Drivers', 'Vehicles', 'Tracking', 'Notifications'].includes(item.name)
         );
       default:
         return navigation.filter(item =>

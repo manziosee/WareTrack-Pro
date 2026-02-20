@@ -38,11 +38,11 @@ export default function ViewOrderModal({ order }: ViewOrderModalProps) {
           <p className="text-sm text-gray-600">Created {formatDate(order.createdAt)}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={getStatusBadgeVariant(order.status)}>
-            {order.status.replace('_', ' ')}
+          <Badge variant={getStatusBadgeVariant(order.status?.toLowerCase() || 'pending')}>
+            {(order.status || 'PENDING').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
           </Badge>
-          <Badge variant={getPriorityBadgeVariant(order.priority)} size="sm">
-            {order.priority}
+          <Badge variant={getPriorityBadgeVariant(order.priority?.toLowerCase() || 'medium')} size="sm">
+            {(order.priority || 'MEDIUM').toUpperCase()}
           </Badge>
         </div>
       </div>
@@ -76,18 +76,22 @@ export default function ViewOrderModal({ order }: ViewOrderModalProps) {
           <h4 className="font-medium text-gray-900">Order Items</h4>
         </div>
         <div className="space-y-2">
-          {order.items.map((item: any, index: number) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-              <div>
-                <p className="font-medium text-gray-900">{item.name}</p>
-                <p className="text-sm text-gray-600">Code: {item.code}</p>
+          {order.items && order.items.length > 0 ? (
+            order.items.map((item: any, index: number) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                <div>
+                  <p className="font-medium text-gray-900">{item.itemName || item.name || 'Item'}</p>
+                  <p className="text-sm text-gray-600">Qty: {item.quantity} {item.unit || 'pcs'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">RWF {Number(item.unitPrice || item.price || 0).toLocaleString()}</p>
+                  <p className="text-sm text-gray-600">Total: RWF {Number(item.totalPrice || (item.unitPrice * item.quantity) || 0).toLocaleString()}</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-medium">{item.quantity} {item.unit}</p>
-                {item.price && <p className="text-sm text-gray-600">RWF {item.price.toLocaleString()}</p>}
-              </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="text-sm text-gray-500 p-3 bg-gray-50 rounded">No items in this order</p>
+          )}
         </div>
       </div>
 

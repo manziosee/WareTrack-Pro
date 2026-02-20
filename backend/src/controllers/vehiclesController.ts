@@ -185,18 +185,38 @@ export class VehiclesController {
   static async scheduleMaintenance(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { type, scheduledDate, notes, description, cost, performedBy } = req.body;
+      const { type, scheduledDate, notes, description, cost, performedBy, priority, serviceProvider } = req.body;
+
+      // Validate required fields
+      if (!type || !scheduledDate) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Maintenance type and scheduled date are required' }
+        });
+      }
+
+      // Check if vehicle exists
+      const vehicle = await prisma.vehicle.findUnique({
+        where: { id: Number(id) }
+      });
+
+      if (!vehicle) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'VEHICLE_NOT_FOUND', message: 'Vehicle not found' }
+        });
+      }
 
       // Create maintenance record
       const maintenance = await prisma.maintenanceRecord.create({
         data: {
           vehicleId: Number(id),
           type,
-          description: description || type,
+          description: description || notes || type,
           cost: cost ? Number(cost) : 0,
-          notes,
+          notes: notes || `${type} scheduled for ${new Date(scheduledDate).toLocaleDateString()}`,
           scheduledDate: new Date(scheduledDate),
-          performedBy: performedBy || 'System'
+          performedBy: performedBy || serviceProvider || 'Scheduled'
         }
       });
 
@@ -214,10 +234,11 @@ export class VehiclesController {
         message: 'Maintenance scheduled successfully',
         data: maintenance
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Schedule maintenance error:', error);
       res.status(500).json({ 
         success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+        error: { code: 'INTERNAL_SERVER_ERROR', message: error.message || 'Server error' }
       });
     }
   }

@@ -393,10 +393,74 @@ export class UsersController {
   static async deleteUser(req: Request, res: Response) {
     try {
       const { id } = req.params;
+      const userId = Number(id);
       
-      await prisma.user.delete({
-        where: { id: Number(id) }
+      // Check if user exists
+      const user = await prisma.user.findUnique({
+        where: { id: userId }
       });
+
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+        });
+      }
+
+      // Use transaction to ensure all operations succeed or fail together
+      await prisma.$transaction(async (tx) => {
+        // 1. Delete driver profile if exists (cascades to related records)
+        const driverProfile = await tx.driver.findFirst({
+          where: { userId }
+        });
+        
+        if (driverProfile) {
+          await tx.driver.delete({
+            where: { id: driverProfile.id }
+          });
+        }
+
+        // 2. Update orders to remove user reference
+        await tx.deliveryOrder.updateMany({
+          where: { createdBy: userId },
+          data: { createdBy: 1 }
+        });
+
+        // 3. Update dispatches to remove user reference
+        await tx.dispatch.updateMany({
+          where: { createdBy: userId },
+          data: { createdBy: 1 }
+        });
+
+        // 4. Delete inventory history
+        await tx.inventoryHistory.deleteMany({
+          where: { performedBy: userId }
+        });
+
+        // 5. Delete notifications
+        await tx.notification.deleteMany({
+          where: { userId }
+        });
+
+        // 6. Delete user preferences
+        await tx.notificationPreferences.deleteMany({
+          where: { userId }
+        });
+
+        await tx.systemConfiguration.deleteMany({
+          where: { userId }
+        });
+
+        await tx.reportSettings.deleteMany({
+          where: { userId }
+        });
+
+        // 7. Finally delete the user
+        await tx.user.delete({
+          where: { id: userId }
+        });
+      });
+      
       await cache.invalidateUserCache();
       
       res.json({ 
@@ -404,15 +468,22 @@ export class UsersController {
         message: 'User deleted successfully'
       });
     } catch (error: any) {
+      console.error('Delete user error:', error);
       if (error.code === 'P2025') {
         return res.status(404).json({ 
           success: false,
           error: { code: 'USER_NOT_FOUND', message: 'User not found' }
         });
       }
+      if (error.code === 'P2003') {
+        return res.status(400).json({ 
+          success: false,
+          error: { code: 'FOREIGN_KEY_CONSTRAINT', message: 'Cannot delete user with existing references' }
+        });
+      }
       res.status(500).json({ 
         success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+        error: { code: 'INTERNAL_SERVER_ERROR', message: error.message || 'Server error' }
       });
     }
   }

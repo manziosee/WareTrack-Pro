@@ -10,6 +10,7 @@ import { analyticsService } from '@/services/analyticsService';
 export default function DriverDashboard() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [performanceData, setPerformanceData] = useState<any[]>([]);
+  const [performancePeriod, setPerformancePeriod] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [loading, setLoading] = useState(true);
 
   const fetchDriverData = async () => {
@@ -21,13 +22,47 @@ export default function DriverDashboard() {
         setDashboardData(response.data.data);
       }
       
-      // Try to fetch analytics data, fallback to empty if not available
+      // Fetch performance data with selected period
       try {
-        const performance = await analyticsService.getDriverPerformance(6);
-        setPerformanceData(performance || []);
-      } catch (analyticsError) {
-        console.log('Analytics endpoints not available yet');
-        setPerformanceData([]);
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const driverId = user.driverId || user.id;
+        if (driverId) {
+          const performance = await analyticsService.getDriverPerformanceById(driverId, performancePeriod);
+          setPerformanceData(performance?.performanceData || []);
+        }
+      } catch (analyticsError: any) {
+        console.log('Analytics not available, using fallback data');
+        // Fallback: Generate sample data for visualization
+        const periods = performancePeriod === 'daily' ? 7 : performancePeriod === 'weekly' ? 8 : 6;
+        const fallbackData = Array.from({ length: periods }, (_, i) => {
+          const date = new Date();
+          if (performancePeriod === 'daily') {
+            date.setDate(date.getDate() - (periods - 1 - i));
+            return {
+              period: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              deliveries: 0,
+              revenue: 0,
+              successRate: 0
+            };
+          } else if (performancePeriod === 'weekly') {
+            date.setDate(date.getDate() - ((periods - 1 - i) * 7));
+            return {
+              period: `Week ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+              deliveries: 0,
+              revenue: 0,
+              successRate: 0
+            };
+          } else {
+            date.setMonth(date.getMonth() - (periods - 1 - i));
+            return {
+              period: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+              deliveries: 0,
+              revenue: 0,
+              successRate: 0
+            };
+          }
+        });
+        setPerformanceData(fallbackData);
       }
     } catch (error) {
       console.error('Failed to fetch driver data:', error);
@@ -38,7 +73,7 @@ export default function DriverDashboard() {
 
   useEffect(() => {
     fetchDriverData();
-  }, []);
+  }, [performancePeriod]);
 
   if (loading) {
     return (
@@ -190,14 +225,25 @@ export default function DriverDashboard() {
       {/* Driver Actions and Info */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary-600" />
-            My Performance (6 Months)
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary-600" />
+              My Performance
+            </div>
+            <select
+              value={performancePeriod}
+              onChange={(e) => setPerformancePeriod(e.target.value as 'daily' | 'weekly' | 'monthly')}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="daily">Last 7 Days</option>
+              <option value="weekly">Last 8 Weeks</option>
+              <option value="monthly">Last 6 Months</option>
+            </select>
           </h3>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={performanceData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+              <XAxis dataKey="period" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
               <Legend />
@@ -232,55 +278,56 @@ export default function DriverDashboard() {
         <Card>
           <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Today's Schedule</h3>
           <div className="space-y-3">
-            {driverStats?.todaySchedule?.map((delivery: any, index: number) => {
-              const getStatusColor = (status: string) => {
-                switch (status) {
-                  case 'DELIVERED': return 'bg-green-50 text-green-800';
-                  case 'IN_TRANSIT': return 'bg-blue-50 text-blue-800';
-                  case 'DISPATCHED': return 'bg-yellow-50 text-yellow-800';
-                  case 'PENDING': return 'bg-gray-50 text-gray-800';
-                  default: return 'bg-gray-50 text-gray-800';
-                }
-              };
+            {driverStats?.todaySchedule && driverStats.todaySchedule.length > 0 ? (
+              driverStats.todaySchedule.map((delivery: any, index: number) => {
+                const getStatusColor = (status: string) => {
+                  switch (status) {
+                    case 'DELIVERED': return 'bg-green-50 text-green-800';
+                    case 'IN_TRANSIT': return 'bg-blue-50 text-blue-800';
+                    case 'DISPATCHED': return 'bg-yellow-50 text-yellow-800';
+                    case 'PENDING': return 'bg-gray-50 text-gray-800';
+                    default: return 'bg-gray-50 text-gray-800';
+                  }
+                };
 
-              const getStatusIcon = (status: string) => {
-                switch (status) {
-                  case 'DELIVERED': return <CheckCircle className="w-5 h-5 text-green-600" />;
-                  case 'IN_TRANSIT': return <Clock className="w-5 h-5 text-blue-600" />;
-                  case 'DISPATCHED': return <Clock className="w-5 h-5 text-yellow-600" />;
-                  case 'PENDING': return <Clock className="w-5 h-5 text-gray-600" />;
-                  default: return <Clock className="w-5 h-5 text-gray-600" />;
-                }
-              };
+                const getStatusIcon = (status: string) => {
+                  switch (status) {
+                    case 'DELIVERED': return <CheckCircle className="w-5 h-5 text-green-600" />;
+                    case 'IN_TRANSIT': return <Clock className="w-5 h-5 text-blue-600" />;
+                    case 'DISPATCHED': return <Clock className="w-5 h-5 text-yellow-600" />;
+                    case 'PENDING': return <Clock className="w-5 h-5 text-gray-600" />;
+                    default: return <Clock className="w-5 h-5 text-gray-600" />;
+                  }
+                };
 
-              const formatTime = (time: string) => {
-                return new Date(time).toLocaleTimeString('en-US', { 
-                  hour: 'numeric', 
-                  minute: '2-digit', 
-                  hour12: true 
-                });
-              };
+                const formatTime = (time: string) => {
+                  return new Date(time).toLocaleTimeString('en-US', { 
+                    hour: 'numeric', 
+                    minute: '2-digit', 
+                    hour12: true 
+                  });
+                };
 
-              const getStatusText = (status: string, time: string) => {
-                switch (status) {
-                  case 'DELIVERED': return `Delivered - ${formatTime(time)}`;
-                  case 'IN_TRANSIT': return `In Transit - ETA ${formatTime(time)}`;
-                  case 'DISPATCHED': return `Dispatched - ETA ${formatTime(time)}`;
-                  case 'PENDING': return `Pending - ${formatTime(time)}`;
-                  default: return `${status} - ${formatTime(time)}`;
-                }
-              };
-
-              return (
-                <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${getStatusColor(delivery.status)}`}>
-                  <div>
-                    <p className="font-medium">{delivery.orderNumber}</p>
-                    <p className="text-sm">{getStatusText(delivery.status, delivery.time)}</p>
+                return (
+                  <div key={index} className={`flex items-start justify-between p-3 rounded-lg ${getStatusColor(delivery.status)}`}>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-medium">{delivery.orderNumber}</p>
+                        {getStatusIcon(delivery.status)}
+                      </div>
+                      <p className="text-sm mb-1">{delivery.customerName}</p>
+                      <p className="text-xs text-gray-600">{delivery.deliveryAddress}</p>
+                      <p className="text-xs mt-1">
+                        {delivery.status === 'DELIVERED' 
+                          ? `Delivered at ${formatTime(delivery.deliveredAt || delivery.time)}`
+                          : `Scheduled: ${formatTime(delivery.scheduledDate || delivery.time)}`
+                        }
+                      </p>
+                    </div>
                   </div>
-                  {getStatusIcon(delivery.status)}
-                </div>
-              );
-            }) || (
+                );
+              })
+            ) : (
               <div className="text-center py-8 text-gray-500">
                 <Clock className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                 <p>No deliveries scheduled for today</p>
