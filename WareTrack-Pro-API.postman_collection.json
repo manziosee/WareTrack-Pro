@@ -2,7 +2,7 @@
   "info": {
     "name": "WareTrack-Pro API",
     "description": "Complete API collection for WareTrack-Pro Warehouse Management System",
-    "version": "2.0.0",
+    "version": "2.1.1",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -740,6 +740,30 @@
       "name": "Reports",
       "item": [
         {
+          "name": "Get Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/analytics",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "analytics"]
+            }
+          }
+        },
+        {
+          "name": "Get Sales Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/sales",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "sales"]
+            }
+          }
+        },
+        {
           "name": "Get Inventory Report",
           "request": {
             "method": "GET",
@@ -752,24 +776,47 @@
           }
         },
         {
-          "name": "Get Orders Report",
+          "name": "Get Vehicles Report",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/reports/orders?startDate=2024-01-01&endDate=2024-01-31",
+              "raw": "{{base_url}}/reports/vehicles",
               "host": ["{{base_url}}"],
-              "path": ["reports", "orders"],
-              "query": [
-                {
-                  "key": "startDate",
-                  "value": "2024-01-01"
-                },
-                {
-                  "key": "endDate",
-                  "value": "2024-01-31"
-                }
-              ]
+              "path": ["reports", "vehicles"]
+            }
+          }
+        },
+        {
+          "name": "Get Drivers Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/drivers",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "drivers"]
+            }
+          }
+        },
+        {
+          "name": "Export Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"sales\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/reports/export",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "export"]
             }
           }
         }

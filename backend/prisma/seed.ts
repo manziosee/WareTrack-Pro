@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import * as bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
@@ -12,53 +12,6 @@ async function main() {
   const dispatchPassword = await bcrypt.hash('dispatch123', 12)
 
   // ─── Users ────────────────────────────────────────────────
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@waretrack.com' },
-    update: {},
-    create: {
-      firstName: 'System',
-      lastName: 'Administrator',
-      name: 'System Administrator',
-      email: 'admin@waretrack.com',
-      password: hashedPassword,
-      phone: '+250786416374',
-      role: 'ADMIN',
-      status: 'ACTIVE'
-    }
-  })
-  console.log('✅ Admin user created:', admin.email)
-
-  const warehouseStaff = await prisma.user.upsert({
-    where: { email: 'warehouse@waretrack.com' },
-    update: {},
-    create: {
-      firstName: 'Alice',
-      lastName: 'Mukamana',
-      name: 'Alice Mukamana',
-      email: 'warehouse@waretrack.com',
-      password: staffPassword,
-      phone: '+250788123456',
-      role: 'WAREHOUSE_STAFF',
-      status: 'ACTIVE'
-    }
-  })
-  console.log('✅ Warehouse staff created:', warehouseStaff.email)
-
-  const dispatchOfficer = await prisma.user.upsert({
-    where: { email: 'dispatch@waretrack.com' },
-    update: {},
-    create: {
-      firstName: 'Jean',
-      lastName: 'Habimana',
-      name: 'Jean Habimana',
-      email: 'dispatch@waretrack.com',
-      password: dispatchPassword,
-      phone: '+250789654321',
-      role: 'DISPATCH_OFFICER',
-      status: 'ACTIVE'
-    }
-  })
-  console.log('✅ Dispatch officer created:', dispatchOfficer.email)
 
   const driverUser1 = await prisma.user.upsert({
     where: { email: 'driver1@waretrack.com' },
@@ -91,20 +44,73 @@ async function main() {
   })
 
   const driverUser3 = await prisma.user.upsert({
-    where: { email: 'driver3@waretrack.com' },
+  where: { email: 'ornellasimbibeza@gmail.com' }, // ✅ MUST match
+  update: {},
+  create: {
+    firstName: 'Ornella',
+    lastName: 'Simbibeza',
+    name: 'Ornella Simbibeza',
+    email: 'ornellasimbibeza@gmail.com', // ✅ same email
+    password: driverPassword,
+    phone: '+250788000444',
+    role: 'DRIVER',
+    status: 'ACTIVE'
+  }
+})
+
+  console.log('✅ Driver users created')
+
+  // ─── Admin and Staff Users ────────────────────────────────────
+  const adminUser = await prisma.user.upsert({
+    where: { email: 'admin@waretrack.com' },
     update: {},
     create: {
-      firstName: 'Claude',
-      lastName: 'Ndayisaba',
-      name: 'Claude Ndayisaba',
-      email: 'driver3@waretrack.com',
-      password: driverPassword,
-      phone: '+250788555666',
-      role: 'DRIVER',
+      firstName: 'Admin',
+      lastName: 'User',
+      name: 'Admin User',
+      email: 'admin@waretrack.com',
+      password: hashedPassword,
+      phone: '+250788999000',
+      role: 'ADMIN',
       status: 'ACTIVE'
     }
   })
-  console.log('✅ Driver users created')
+
+  const warehouseStaffUser = await prisma.user.upsert({
+    where: { email: 'warehouse@waretrack.com' },
+    update: {},
+    create: {
+      firstName: 'Warehouse',
+      lastName: 'Staff',
+      name: 'Warehouse Staff',
+      email: 'warehouse@waretrack.com',
+      password: staffPassword,
+      phone: '+250788888000',
+      role: 'WAREHOUSE_STAFF',
+      status: 'ACTIVE'
+    }
+  })
+
+  const dispatchOfficerUser = await prisma.user.upsert({
+    where: { email: 'dispatch@waretrack.com' },
+    update: {},
+    create: {
+      firstName: 'Dispatch',
+      lastName: 'Officer',
+      name: 'Dispatch Officer',
+      email: 'dispatch@waretrack.com',
+      password: dispatchPassword,
+      phone: '+250788777000',
+      role: 'DISPATCH_OFFICER',
+      status: 'ACTIVE'
+    }
+  })
+
+  const admin = adminUser
+  const warehouseStaff = warehouseStaffUser
+  const dispatchOfficer = dispatchOfficerUser
+
+  console.log('✅ Admin and staff users created')
 
   // ─── Inventory Items ──────────────────────────────────────
   const inventoryItems = [
@@ -217,10 +223,11 @@ async function main() {
   ]
 
   for (const driver of driversData) {
-    const existing = await prisma.driver.findUnique({ where: { userId: driver.userId } })
-    if (!existing) {
-      await prisma.driver.create({ data: driver })
-    }
+    await prisma.driver.upsert({
+      where: { licenseNumber: driver.licenseNumber },
+      update: {},
+      create: driver
+    })
   }
   console.log(`✅ ${driversData.length} drivers created`)
 

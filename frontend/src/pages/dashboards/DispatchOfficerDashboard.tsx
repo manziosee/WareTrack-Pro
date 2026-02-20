@@ -12,6 +12,8 @@ export default function DispatchOfficerDashboard() {
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [dispatchEfficiency, setDispatchEfficiency] = useState<any[]>([]);
   const [driverPerformance, setDriverPerformance] = useState<any[]>([]);
+  const [efficiencyPeriod, setEfficiencyPeriod] = useState<'week' | 'month' | '6months' | 'year'>('month');
+  const [performancePeriod, setPerformancePeriod] = useState<'week' | 'month' | '6months' | 'year'>('6months');
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
@@ -28,16 +30,34 @@ export default function DispatchOfficerDashboard() {
         setRecentOrders(ordersResponse.data.data);
       }
       
-      // Try to fetch analytics data, fallback to empty if not available
+      // Fetch analytics data with selected periods
       try {
+        const efficiencyDays = efficiencyPeriod === 'week' ? 7 : efficiencyPeriod === 'month' ? 30 : efficiencyPeriod === '6months' ? 180 : 365;
+        const performanceMonths = performancePeriod === 'week' ? 1 : performancePeriod === 'month' ? 1 : performancePeriod === '6months' ? 6 : 12;
+        
         const [efficiency, performance] = await Promise.all([
-          analyticsService.getDispatchEfficiency(30),
-          analyticsService.getDriverPerformance(6)
+          analyticsService.getDispatchEfficiency(efficiencyDays),
+          analyticsService.getDriverPerformance(performanceMonths)
         ]);
-        setDispatchEfficiency(efficiency || []);
-        setDriverPerformance(performance || []);
-      } catch (analyticsError) {
-        console.log('Analytics endpoints not available yet');
+        
+        // Handle response data structure
+        if (Array.isArray(efficiency)) {
+          setDispatchEfficiency(efficiency);
+        } else if (efficiency?.data) {
+          setDispatchEfficiency(efficiency.data);
+        } else {
+          setDispatchEfficiency([]);
+        }
+        
+        if (Array.isArray(performance)) {
+          setDriverPerformance(performance);
+        } else if (performance?.driverSummaries) {
+          setDriverPerformance(performance.driverSummaries);
+        } else {
+          setDriverPerformance([]);
+        }
+      } catch (analyticsError: any) {
+        console.log('Analytics not available:', analyticsError.message);
         setDispatchEfficiency([]);
         setDriverPerformance([]);
       }
@@ -50,7 +70,7 @@ export default function DispatchOfficerDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [efficiencyPeriod, performancePeriod]);
 
   if (loading) {
     return (
@@ -132,9 +152,21 @@ export default function DispatchOfficerDashboard() {
       {/* Dispatch Content */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary-600" />
-            Dispatch Efficiency (30 Days)
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary-600" />
+              Dispatch Efficiency
+            </div>
+            <select
+              value={efficiencyPeriod}
+              onChange={(e) => setEfficiencyPeriod(e.target.value as 'week' | 'month' | '6months' | 'year')}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="week">Last Week</option>
+              <option value="month">Last Month</option>
+              <option value="6months">Last 6 Months</option>
+              <option value="year">Last Year</option>
+            </select>
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={dispatchEfficiency}>
@@ -150,9 +182,21 @@ export default function DispatchOfficerDashboard() {
         </Card>
 
         <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-primary-600" />
-            Driver Performance
+          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-primary-600" />
+              Driver Performance
+            </div>
+            <select
+              value={performancePeriod}
+              onChange={(e) => setPerformancePeriod(e.target.value as 'week' | 'month' | '6months' | 'year')}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="week">Last Week</option>
+              <option value="month">Last Month</option>
+              <option value="6months">Last 6 Months</option>
+              <option value="year">Last Year</option>
+            </select>
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={driverPerformance}>

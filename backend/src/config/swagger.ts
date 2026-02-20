@@ -6,8 +6,8 @@ const options = {
     openapi: '3.0.0',
     info: {
       title: 'WareTrack-Pro API',
-      version: '1.0.0',
-      description: 'Comprehensive Warehouse Delivery & Dispatch Tracking System API',
+      version: '2.1.0',
+      description: 'Comprehensive Warehouse Delivery & Dispatch Tracking System API with Real-time Notifications, Advanced Analytics, and Role-Based Access Control',
       contact: {
         name: 'WareTrack-Pro Support',
         email: 'support@waretrackpro.com'

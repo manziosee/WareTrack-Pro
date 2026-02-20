@@ -27,6 +27,11 @@ export const dispatchService = {
     return response.data;
   },
 
+  async getDispatchById(id: number) {
+    const response = await api.get(`/dispatch/${id}`);
+    return response.data;
+  },
+
   async createDispatch(data: CreateDispatch) {
     const response = await api.post('/dispatch', data);
     return response.data;

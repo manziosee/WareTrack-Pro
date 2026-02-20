@@ -12,6 +12,7 @@ router.get('/orders', auth, DispatchController.getAvailableOrders);
 router.get('/drivers', auth, DispatchController.getAvailableDrivers);
 router.get('/vehicles', auth, DispatchController.getAvailableVehicles);
 router.get('/driver/:id', auth, DispatchController.getDriverDispatch);
+router.get('/:id', auth, DispatchController.getDispatchById);
 router.post('/', auth, DispatchController.createDispatch);
 router.post('/:id/status', auth, DispatchController.updateDispatchStatus);
 router.put('/:id', auth, DispatchController.updateDispatch);

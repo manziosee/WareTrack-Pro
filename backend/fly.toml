@@ -2,13 +2,15 @@ app = "waretrack-pro-api"
 primary_region = "iad"
 
 [build]
+  [build.args]
+    NODE_ENV = "production"
 
 [env]
   NODE_ENV = "production"
-  PORT = "8080"
+  PORT = "5000"
 
 [http_service]
-  internal_port = 8080
+  internal_port = 5000
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true

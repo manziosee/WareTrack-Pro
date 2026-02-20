@@ -18,8 +18,12 @@ const AddUserForm = ({ onClose, onSave }: AddUserFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const userData = {
+      ...formData,
+      status: 'ACTIVE' // Backend expects uppercase
+    };
     if (onSave) {
-      onSave(formData);
+      onSave(userData);
     } else {
       alert('User added successfully!');
       onClose();

@@ -13,6 +13,7 @@ import Users from './pages/Users';
 import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
 import Vehicles from './pages/Vehicles';
+import Drivers from './pages/Drivers';
 import Tracking from './pages/Tracking';
 import Reports from './pages/Reports';
 import Dispatch from './pages/Dispatch';
@@ -106,20 +107,20 @@ function App() {
             </MainLayout>
           } />
           
-          {/* Vehicles - Admin, Dispatch Officer */}
+          {/* Vehicles - Admin, Dispatch Officer, Driver (read-only) */}
           <Route path="/vehicles" element={
             <MainLayout>
-              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER']}>
+              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER', 'DRIVER']}>
                 <Vehicles />
               </RoleGuard>
             </MainLayout>
           } />
           
-          {/* Drivers - Admin, Dispatch Officer (same as vehicles page) */}
+          {/* Drivers - Admin, Dispatch Officer, Driver (read-only) */}
           <Route path="/drivers" element={
             <MainLayout>
-              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER']}>
-                <Vehicles />
+              <RoleGuard allowedRoles={['ADMIN', 'DISPATCH_OFFICER', 'DRIVER']}>
+                <Drivers />
               </RoleGuard>
             </MainLayout>
           } />

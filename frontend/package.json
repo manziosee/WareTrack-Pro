@@ -1,7 +1,7 @@
 {
   "name": "waretrack-pro-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.1.1",
   "description": "Frontend for WareTrack-Pro Warehouse Delivery & Dispatch Tracking System",
   "type": "module",
   "scripts": {
