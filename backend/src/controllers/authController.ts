@@ -9,7 +9,8 @@ import { EmailService } from '../services/emailService';
 const cache = CacheService.getInstance();
 
 // In-memory OTP storage for login (in production, use Redis)
-const loginOtpStore = new Map<string, { otp: string; expires: Date; userId: number; email: string }>();
+const loginOtpStore = new Map<string, { otp: string; expires: Date; userId: number; email: string; attempts: number }>();
+const MAX_LOGIN_OTP_ATTEMPTS = 5;
 
 export class AuthController {
   // Generate 6-digit OTP for login
@@ -249,7 +250,8 @@ export class AuthController {
         otp,
         expires,
         userId: user.id,
-        email: email.toLowerCase()
+        email: email.toLowerCase(),
+        attempts: 0
       });
 
       // Send OTP via email
@@ -339,6 +341,10 @@ export class AuthController {
 
       // Verify OTP
       if (storedData.otp !== otp) {
+        storedData.attempts += 1;
+        if (storedData.attempts >= MAX_LOGIN_OTP_ATTEMPTS) {
+          loginOtpStore.delete(email.toLowerCase());
+        }
         return res.status(400).json({
           success: false,
           error: {

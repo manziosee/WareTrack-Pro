@@ -21,6 +21,9 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 
 const app = express();
+
+// Fly.io terminates TLS at its proxy; trust it so rate limiting sees real client IPs
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 app.use(helmet());
@@ -44,7 +47,9 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/password-reset', passwordResetRoutes);
-app.use('/api/test-email', testEmailRoutes);
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/test-email', testEmailRoutes);
+}
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/features', featuresRoutes);
 

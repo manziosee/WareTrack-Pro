@@ -22,9 +22,18 @@
 
 ---
 
-## 🎉 **Latest Updates (v2.1.1)**
+## 🎉 **Latest Updates (v2.1.2)**
 
-### ✅ Recently Added Features
+### 🔒 Security Hardening
+- **🚦 Login Rate Limiting**: `/api/auth/login` is limited to 5 attempts per 15 minutes per IP, and `/api/auth/verify-login-otp` to 10 attempts per 5 minutes
+- **🔢 OTP Attempt Cap**: A login OTP is invalidated after 5 wrong guesses, so the user must log in again
+- **🌐 Proxy-Aware Limits**: Express trusts the Fly.io proxy so rate limits apply per real client IP
+- **🧪 Test Email Route Disabled in Production**: `/api/test-email` is only mounted outside production
+- **🔑 No Default Credentials in Production**: Seeded demo accounts have been deactivated on the live deployment, and the Postman collection now uses variables instead of hard-coded credentials
+
+> ⚠️ The seed script (`npx prisma db seed`) creates demo accounts with well-known passwords. Use it for **local development only** and never run it against a production database.
+
+### ✅ v2.1.1 Features
 - **🔧 Build System Fixes**: Resolved TypeScript compilation errors in backend and frontend
 - **📊 Reports Controller**: Added comprehensive reporting endpoints for analytics, sales, inventory, vehicles, and drivers
 - **📚 Enhanced API Documentation**: Updated Swagger documentation with reports endpoints
@@ -90,7 +99,7 @@ cp .env.example .env
 # Configure your .env file with PostgreSQL connection
 npx prisma generate
 npx prisma migrate dev
-npx prisma db seed
+npx prisma db seed   # local development only, creates demo accounts
 npm run dev
 
 # Frontend setup (new terminal)
