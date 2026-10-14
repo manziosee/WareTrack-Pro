@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Truck, Eye, Trash2 } from 'lucide-react';
+import { Plus, Edit, Truck, Eye, Trash2, Package, MapPin, User, Clock, CalendarClock, StickyNote } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import { DetailHero, DetailSection, DetailField, DetailGrid, DetailStat } from '@/components/ui/Detail';
 import Modal from '@/components/ui/Modal';
 import SearchFilter from '@/components/ui/SearchFilter';
 import DispatchForm from '@/components/forms/DispatchForm';
@@ -279,21 +280,21 @@ function DispatchContent() {
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={() => handleView(dispatch)}
-                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        className="action-btn action-btn-view"
                         title="View dispatch details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleEdit(dispatch)}
-                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        className="action-btn action-btn-edit"
                         title="Edit dispatch"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDelete(dispatch)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        className="action-btn action-btn-delete"
                         title="Delete dispatch"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -321,72 +322,82 @@ function DispatchContent() {
         )}
       </Modal>
 
-      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Dispatch Details" size="lg">
+      <Modal
+        isOpen={showViewModal}
+        onClose={() => setShowViewModal(false)}
+        title="Dispatch Details"
+        subtitle="Assignment and delivery schedule"
+        icon={<Truck className="w-5 h-5" />}
+        size="lg"
+      >
         {selectedDispatch && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Information</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Order Number</label>
-                    <p className="text-lg font-semibold">{selectedDispatch.order?.orderNumber || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Customer</label>
-                    <p className="text-lg">{selectedDispatch.order?.customerName || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Delivery Address</label>
-                    <p className="text-lg">{selectedDispatch.order?.deliveryAddress || 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Assignment Details</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Driver</label>
-                    <p className="text-lg font-semibold">{selectedDispatch.driver?.name || 'N/A'}</p>
-                    <p className="text-sm text-gray-500">{selectedDispatch.driver?.phone || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Vehicle</label>
-                    <p className="text-lg font-semibold">{selectedDispatch.vehicle?.plateNumber || 'N/A'}</p>
-                    <p className="text-sm text-gray-500">{selectedDispatch.vehicle?.type} - {selectedDispatch.vehicle?.capacity}kg</p>
-                    {selectedDispatch.vehicle?.status && (
-                      <Badge variant={getStatusBadgeVariant(selectedDispatch.vehicle.status)} className="mt-1">
+          <div className="space-y-5">
+            <DetailHero
+              avatar={<Package className="w-6 h-6" />}
+              title={selectedDispatch.order?.orderNumber || 'Dispatch'}
+              subtitle={selectedDispatch.order?.customerName}
+              badges={
+                <Badge variant={getStatusBadgeVariant(selectedDispatch.status)}>
+                  {selectedDispatch.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                </Badge>
+              }
+            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <DetailStat
+                label="Scheduled"
+                value={<span className="text-lg">{formatDate(selectedDispatch.scheduledDate)}</span>}
+                icon={<CalendarClock className="w-4 h-4" />}
+              />
+              <DetailStat
+                label="Estimated Delivery"
+                value={<span className="text-lg">{formatDate(selectedDispatch.estimatedDelivery) || 'N/A'}</span>}
+                icon={<Clock className="w-4 h-4" />}
+                tone="accent"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <DetailSection title="Order" icon={<Package className="w-4 h-4" />}>
+                <DetailGrid>
+                  <DetailField label="Order Number">{selectedDispatch.order?.orderNumber || 'N/A'}</DetailField>
+                  <DetailField label="Customer">{selectedDispatch.order?.customerName || 'N/A'}</DetailField>
+                  <DetailField label="Delivery Address" className="sm:col-span-2">
+                    <span className="inline-flex items-start gap-1.5">
+                      <MapPin className="mt-0.5 w-3.5 h-3.5 shrink-0 text-accent-500" />
+                      {selectedDispatch.order?.deliveryAddress || 'N/A'}
+                    </span>
+                  </DetailField>
+                </DetailGrid>
+              </DetailSection>
+              <DetailSection title="Assignment" icon={<User className="w-4 h-4" />}>
+                <DetailGrid>
+                  <DetailField label="Driver">
+                    {selectedDispatch.driver?.name || 'N/A'}
+                    {selectedDispatch.driver?.phone && (
+                      <span className="block text-xs font-normal text-gray-500">{selectedDispatch.driver.phone}</span>
+                    )}
+                  </DetailField>
+                  <DetailField label="Vehicle">
+                    {selectedDispatch.vehicle?.plateNumber || 'N/A'}
+                    {selectedDispatch.vehicle && (
+                      <span className="block text-xs font-normal text-gray-500">
+                        {selectedDispatch.vehicle.type} · {selectedDispatch.vehicle.capacity}kg
+                      </span>
+                    )}
+                  </DetailField>
+                  {selectedDispatch.vehicle?.status && (
+                    <DetailField label="Vehicle Status">
+                      <Badge variant={getStatusBadgeVariant(selectedDispatch.vehicle.status)} size="sm">
                         {selectedDispatch.vehicle.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
                       </Badge>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Status</label>
-                    <Badge variant={getStatusBadgeVariant(selectedDispatch.status)}>
-                      {selectedDispatch.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Scheduled Date</label>
-                  <p className="text-lg">{formatDate(selectedDispatch.scheduledDate)}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Estimated Delivery</label>
-                  <p className="text-lg">{formatDate(selectedDispatch.estimatedDelivery) || 'N/A'}</p>
-                </div>
-              </div>
+                    </DetailField>
+                  )}
+                </DetailGrid>
+              </DetailSection>
             </div>
             {selectedDispatch.notes && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedDispatch.notes}</p>
-              </div>
+              <DetailSection title="Notes" icon={<StickyNote className="w-4 h-4" />}>
+                <p className="rounded-xl border-l-4 border-accent-500 bg-white p-4 text-sm text-gray-700">{selectedDispatch.notes}</p>
+              </DetailSection>
             )}
           </div>
         )}

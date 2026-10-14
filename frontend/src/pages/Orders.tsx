@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye, Edit, Trash2 } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Receipt } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -286,21 +286,21 @@ export default function Orders() {
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={() => handleView(order)}
-                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        className="action-btn action-btn-view"
                         title="View order details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleEdit(order)}
-                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        className="action-btn action-btn-edit"
                         title="Edit order"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDelete(order.id)}
-                        className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors"
+                        className="action-btn action-btn-delete"
                         title="Delete order"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -318,7 +318,7 @@ export default function Orders() {
         <CreateOrderForm onClose={() => setShowCreateModal(false)} onSave={handleSaveOrder} />
       </Modal>
 
-      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Order Details" size="lg">
+      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Order Details" subtitle="Order information and progress" icon={<Receipt className="w-5 h-5" />} size="lg">
         {selectedOrder && <ViewOrderModal order={selectedOrder} />}
       </Modal>
 

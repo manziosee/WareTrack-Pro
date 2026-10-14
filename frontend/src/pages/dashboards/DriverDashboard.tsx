@@ -3,13 +3,16 @@ import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import RefreshButton from '@/components/ui/RefreshButton';
 import Badge from '@/components/ui/Badge';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { SERIES, chartMargin, gridProps, xAxisProps, yAxisProps, lineProps, tooltipCursor } from '@/components/charts/chartConfig';
+import { AreaGradient, ChartTooltip } from '@/components/charts/chartTheme';
 import api from '@/services/api';
 import { analyticsService } from '@/services/analyticsService';
 
 export default function DriverDashboard() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [performanceData, setPerformanceData] = useState<any[]>([]);
+  const [perfMetric, setPerfMetric] = useState<'deliveries' | 'revenue'>('deliveries');
   const [performancePeriod, setPerformancePeriod] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [loading, setLoading] = useState(true);
 
@@ -240,16 +243,43 @@ export default function DriverDashboard() {
               <option value="monthly">Last 6 Months</option>
             </select>
           </h3>
+          <div className="mb-3 flex w-fit rounded-xl bg-gray-100 p-1 text-xs font-medium">
+            {([['deliveries', 'Deliveries'], ['revenue', 'Revenue']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setPerfMetric(key)}
+                className={`rounded-lg px-3 py-1.5 transition-all ${
+                  perfMetric === key ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={performanceData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="period" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="deliveries" stroke="#4F46E5" strokeWidth={2} name="Deliveries" />
-              <Line type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={2} name="Revenue (RWF)" />
-            </LineChart>
+            <AreaChart data={performanceData} margin={chartMargin}>
+              <defs>
+                <AreaGradient id="driverPerfFill" color={perfMetric === 'deliveries' ? SERIES[0] : SERIES[2]} />
+              </defs>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="period" {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip
+                content={
+                  <ChartTooltip
+                    valueFormatter={(v) => perfMetric === 'revenue' ? `RWF ${Number(v).toLocaleString()}` : Number(v).toLocaleString()}
+                  />
+                }
+                cursor={tooltipCursor}
+              />
+              <Area
+                {...lineProps}
+                dataKey={perfMetric}
+                stroke={perfMetric === 'deliveries' ? SERIES[0] : SERIES[2]}
+                fill="url(#driverPerfFill)"
+                name={perfMetric === 'deliveries' ? 'Deliveries' : 'Revenue'}
+              />
+            </AreaChart>
           </ResponsiveContainer>
           <div className="mt-4 grid grid-cols-2 gap-4">
             <div className="p-3 bg-primary-50 rounded-lg">

@@ -1,137 +1,156 @@
 import { useState } from 'react';
+import { FileText, FileSpreadsheet, FileJson, TrendingUp, PieChart, Boxes, Gauge } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import { exportToCSV, exportToPDF, exportToJSON } from '@/utils/exportUtils';
+import toast from 'react-hot-toast';
 
 interface ExportReportFormProps {
   onClose: () => void;
+  analytics?: any;
+  dateRange?: { startDate: string; endDate: string };
 }
 
-const ExportReportForm = ({ onClose }: ExportReportFormProps) => {
-  const [formData, setFormData] = useState({
-    reportType: 'delivery',
-    startDate: '',
-    endDate: '',
-    format: 'pdf',
-    includeCharts: true,
-    includeDetails: true,
-    filterBy: 'all'
-  });
+type ReportType = 'delivery' | 'status' | 'inventory' | 'kpi';
+type ExportFormat = 'pdf' | 'csv' | 'json';
+
+const REPORT_TYPES: { value: ReportType; label: string; hint: string; icon: typeof TrendingUp }[] = [
+  { value: 'delivery', label: 'Delivery Trends', hint: 'Daily orders by stage', icon: TrendingUp },
+  { value: 'status', label: 'Status Breakdown', hint: 'Orders per status', icon: PieChart },
+  { value: 'inventory', label: 'Inventory by Category', hint: 'Items and units held', icon: Boxes },
+  { value: 'kpi', label: 'KPI Summary', hint: 'Headline performance numbers', icon: Gauge },
+];
+
+const FORMATS: { value: ExportFormat; label: string; icon: typeof FileText }[] = [
+  { value: 'pdf', label: 'PDF', icon: FileText },
+  { value: 'csv', label: 'CSV', icon: FileSpreadsheet },
+  { value: 'json', label: 'JSON', icon: FileJson },
+];
+
+function buildRows(type: ReportType, analytics: any): any[] {
+  switch (type) {
+    case 'delivery':
+      return (analytics?.trends || []).map((row: any) => ({
+        Date: row.date,
+        'Total Orders': row.orders ?? 0,
+        Delivered: row.delivered ?? 0,
+        'In Transit': row.inTransit ?? 0,
+        Pending: row.pending ?? 0,
+      }));
+    case 'status':
+      return (analytics?.statusDistribution || []).map((row: any) => ({
+        Status: row.status,
+        Orders: row.count ?? 0,
+      }));
+    case 'inventory':
+      return (analytics?.inventoryByCategory || []).map((row: any) => ({
+        Category: row.category,
+        Items: row.count ?? 0,
+        'Total Units': row.totalQuantity ?? 0,
+      }));
+    case 'kpi': {
+      const s = analytics?.summary || {};
+      const k = analytics?.kpis || {};
+      return [
+        { Metric: 'Total Orders', Value: s.totalOrders ?? 0 },
+        { Metric: 'Delivery Rate (%)', Value: s.deliveryRate ?? 0 },
+        { Metric: 'Avg. Delivery Time (days)', Value: s.avgDeliveryTime ?? 0 },
+        { Metric: 'Active Drivers', Value: s.activeDrivers ?? 0 },
+        { Metric: 'On-Time Delivery Rate (%)', Value: k.onTimeDeliveryRate ?? 0 },
+        { Metric: 'Customer Satisfaction (/5)', Value: k.customerSatisfaction ?? 0 },
+        { Metric: 'Fleet Utilization (%)', Value: k.fleetUtilization ?? 0 },
+      ];
+    }
+  }
+}
+
+const ExportReportForm = ({ onClose, analytics, dateRange }: ExportReportFormProps) => {
+  const [reportType, setReportType] = useState<ReportType>('delivery');
+  const [format, setFormat] = useState<ExportFormat>('pdf');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Exporting ${formData.reportType} report from ${formData.startDate} to ${formData.endDate} as ${formData.format.toUpperCase()}`);
+    const rows = buildRows(reportType, analytics);
+    if (rows.length === 0) {
+      toast.error('There is no data for this report in the selected period');
+      return;
+    }
+
+    const label = REPORT_TYPES.find((r) => r.value === reportType)!.label;
+    const period = dateRange ? ` (${dateRange.startDate} to ${dateRange.endDate})` : '';
+    const filename = `${reportType}-report${dateRange ? `-${dateRange.startDate}_${dateRange.endDate}` : ''}`;
+
+    if (format === 'pdf') exportToPDF(rows, filename, `${label}${period}`);
+    if (format === 'csv') exportToCSV(rows, filename);
+    if (format === 'json') exportToJSON(rows, filename);
+
+    toast.success(`${label} exported as ${format.toUpperCase()}`);
     onClose();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
-          <select
-            value={formData.reportType}
-            onChange={(e) => setFormData({ ...formData, reportType: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="delivery">Delivery Report</option>
-            <option value="inventory">Inventory Report</option>
-            <option value="performance">Performance Report</option>
-            <option value="financial">Financial Report</option>
-            <option value="driver">Driver Report</option>
-            <option value="vehicle">Vehicle Report</option>
-          </select>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {dateRange && (
+        <div className="flex items-center justify-between rounded-xl bg-primary-50 px-4 py-3 text-sm">
+          <span className="text-primary-700">Reporting period</span>
+          <span className="font-semibold text-primary-800">{dateRange.startDate} → {dateRange.endDate}</span>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Filter By</label>
-          <select
-            value={formData.filterBy}
-            onChange={(e) => setFormData({ ...formData, filterBy: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="all">All Records</option>
-            <option value="priority">High Priority Only</option>
-            <option value="status">By Status</option>
-            <option value="driver">By Driver</option>
-          </select>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-          <input
-            type="date"
-            required
-            value={formData.startDate}
-            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-          <input
-            type="date"
-            required
-            value={formData.endDate}
-            onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-      </div>
-      
+      )}
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Export Format</label>
-        <select
-          value={formData.format}
-          onChange={(e) => setFormData({ ...formData, format: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-        >
-          <option value="pdf">PDF Document</option>
-          <option value="excel">Excel Spreadsheet</option>
-          <option value="csv">CSV File</option>
-          <option value="json">JSON Data</option>
-        </select>
-      </div>
-      
-      <div className="space-y-3">
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="includeCharts"
-            checked={formData.includeCharts}
-            onChange={(e) => setFormData({ ...formData, includeCharts: e.target.checked })}
-            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-          />
-          <label htmlFor="includeCharts" className="ml-2 text-sm text-gray-700">
-            Include charts and graphs
-          </label>
-        </div>
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="includeDetails"
-            checked={formData.includeDetails}
-            onChange={(e) => setFormData({ ...formData, includeDetails: e.target.checked })}
-            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-          />
-          <label htmlFor="includeDetails" className="ml-2 text-sm text-gray-700">
-            Include detailed records
-          </label>
+        <p className="mb-3 text-sm font-medium text-gray-700">Report</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {REPORT_TYPES.map(({ value, label, hint, icon: Icon }) => {
+            const selected = reportType === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setReportType(value)}
+                className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all ${
+                  selected
+                    ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-100'
+                    : 'border-gray-200 hover:border-primary-300 hover:bg-gray-50'
+                }`}
+              >
+                <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${selected ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                  <Icon className="w-4 h-4" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-gray-900">{label}</span>
+                  <span className="block text-xs text-gray-500">{hint}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
-      
-      <div className="flex gap-3 pt-4">
-        <button
-          type="submit"
-          className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium"
-        >
-          Export Report
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors font-medium"
-        >
+
+      <div>
+        <p className="mb-3 text-sm font-medium text-gray-700">Format</p>
+        <div className="flex gap-2 rounded-xl bg-gray-100 p-1">
+          {FORMATS.map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setFormat(value)}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-all ${
+                format === value ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-3 pt-2">
+        <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
           Cancel
-        </button>
+        </Button>
+        <Button type="submit" variant="primary" className="flex-1">
+          Export {format.toUpperCase()}
+        </Button>
       </div>
     </form>
   );

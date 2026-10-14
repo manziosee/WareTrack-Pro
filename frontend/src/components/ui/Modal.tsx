@@ -1,15 +1,32 @@
-import { type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  subtitle?: string;
+  icon?: ReactNode;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalProps) => {
+const Modal = ({ isOpen, onClose, title, subtitle, icon, children, size = 'md' }: ModalProps) => {
+  // Close on Escape and lock background scroll while open
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -20,18 +37,43 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalProps) =>
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className={`bg-white rounded-lg shadow-xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary-900/50 backdrop-blur-sm animate-fade-in"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={`relative w-full ${sizeClasses[size]} max-h-[90vh] flex flex-col overflow-hidden rounded-2xl bg-white shadow-lift ring-1 ring-black/5 animate-pop-in`}
+      >
+        {/* Brand accent strip */}
+        <div className="h-1.5 w-full shrink-0 bg-gradient-to-r from-primary-500 via-primary-400 to-accent-500" />
+
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-gray-100 bg-gradient-to-b from-primary-50/60 to-white shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            {icon && (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-500 text-white shadow-glow">
+                {icon}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-semibold text-gray-900">{title}</h2>
+              {subtitle && <p className="truncate text-sm text-gray-500">{subtitle}</p>}
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Close"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 transition-all hover:rotate-90 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6">
+
+        <div className="overflow-y-auto p-6">
           {children}
         </div>
       </div>

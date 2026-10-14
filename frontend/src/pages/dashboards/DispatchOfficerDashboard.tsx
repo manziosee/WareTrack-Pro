@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import RefreshButton from '@/components/ui/RefreshButton';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { SERIES, STATUS, chartMargin, gridProps, xAxisProps, yAxisProps, lineProps, barProps, tooltipCursor, barCursor, legendProps } from '@/components/charts/chartConfig';
+import { ChartTooltip } from '@/components/charts/chartTheme';
 import Badge from '@/components/ui/Badge';
 import api from '@/services/api';
 import { analyticsService } from '@/services/analyticsService';
@@ -169,14 +171,14 @@ export default function DispatchOfficerDashboard() {
             </select>
           </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={dispatchEfficiency}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="dispatched" stroke="#4F46E5" strokeWidth={2} name="Dispatched" />
-              <Line type="monotone" dataKey="delivered" stroke="#10B981" strokeWidth={2} name="Delivered" />
+            <LineChart data={dispatchEfficiency} margin={chartMargin}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip content={<ChartTooltip />} cursor={tooltipCursor} />
+              <Legend {...legendProps} />
+              <Line {...lineProps} dataKey="dispatched" stroke={SERIES[0]} name="Dispatched" />
+              <Line {...lineProps} dataKey="delivered" stroke={STATUS.good} name="Delivered" />
             </LineChart>
           </ResponsiveContainer>
         </Card>
@@ -199,12 +201,12 @@ export default function DispatchOfficerDashboard() {
             </select>
           </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={driverPerformance}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="driverName" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="deliveries" fill="#4F46E5" radius={[8, 8, 0, 0]} />
+            <BarChart data={driverPerformance} margin={chartMargin}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="driverName" {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip content={<ChartTooltip />} cursor={barCursor} />
+              <Bar {...barProps} dataKey="deliveries" fill={SERIES[0]} name="Deliveries" />
             </BarChart>
           </ResponsiveContainer>
         </Card>

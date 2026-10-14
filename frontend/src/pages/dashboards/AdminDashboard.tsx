@@ -1,8 +1,10 @@
-import { Package, Truck, CheckCircle, AlertTriangle, Users, Settings, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
+import { Package, Truck, CheckCircle, AlertTriangle, Users, Settings, TrendingUp, PieChart as PieChartIcon, Activity, Gauge } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import RefreshButton from '@/components/ui/RefreshButton';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { SERIES, STATUS, chartMargin, gridProps, xAxisProps, yAxisProps, lineProps, barProps, tooltipCursor, barCursor, legendProps, compactNumber } from '@/components/charts/chartConfig';
+import { AreaGradient, ChartTooltip, ChartCard, ChartEmpty, DonutCenter, DonutLegend } from '@/components/charts/chartTheme';
 import Badge from '@/components/ui/Badge';
 import { dashboardService } from '@/services/dashboardService';
 import { analyticsService } from '@/services/analyticsService';
@@ -16,7 +18,7 @@ export default function AdminDashboard() {
   const [fleetData, setFleetData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+  const [trendMetric, setTrendMetric] = useState<'revenue' | 'orderCount'>('revenue');
 
   const fetchDashboardData = async () => {
     try {
@@ -138,71 +140,139 @@ export default function AdminDashboard() {
 
       {/* Admin Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary-600" />
-            Revenue & Orders Trend
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={orderTrends}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Legend />
-              <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.6} name="Revenue (RWF)" />
-              <Area yAxisId="right" type="monotone" dataKey="orderCount" stroke="#10B981" fill="#10B981" fillOpacity={0.4} name="Orders" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Card>
+        <ChartCard
+          title={trendMetric === 'revenue' ? 'Revenue Trend' : 'Orders Trend'}
+          subtitle={trendMetric === 'revenue' ? 'Monthly revenue in RWF' : 'Orders placed per month'}
+          icon={<TrendingUp className="w-5 h-5" />}
+          action={
+            <div className="flex rounded-xl bg-gray-100 p-1 text-xs font-medium">
+              {([['revenue', 'Revenue'], ['orderCount', 'Orders']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setTrendMetric(key)}
+                  className={`rounded-lg px-3 py-1.5 transition-all ${
+                    trendMetric === key ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          {orderTrends.length === 0 ? <ChartEmpty /> : (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={orderTrends} margin={chartMargin}>
+                <defs>
+                  <AreaGradient id="adminTrendFill" color={trendMetric === 'revenue' ? SERIES[0] : SERIES[1]} />
+                </defs>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="month" {...xAxisProps} />
+                <YAxis {...yAxisProps} />
+                <Tooltip
+                  content={
+                    <ChartTooltip
+                      valueFormatter={(v) => trendMetric === 'revenue' ? `RWF ${compactNumber(Number(v))}` : Number(v).toLocaleString()}
+                    />
+                  }
+                  cursor={tooltipCursor}
+                />
+                <Area
+                  {...lineProps}
+                  dataKey={trendMetric}
+                  stroke={trendMetric === 'revenue' ? SERIES[0] : SERIES[1]}
+                  fill="url(#adminTrendFill)"
+                  name={trendMetric === 'revenue' ? 'Revenue' : 'Orders'}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
 
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <PieChartIcon className="w-5 h-5 text-primary-600" />
-            Inventory by Category
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie data={inventoryByCategory} dataKey="count" nameKey="category" cx="50%" cy="50%" outerRadius={100} label>
-                {inventoryByCategory.map((_entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
+        <ChartCard
+          title="Inventory by Category"
+          subtitle="Number of items in each category"
+          icon={<PieChartIcon className="w-5 h-5" />}
+        >
+          {inventoryByCategory.length === 0 ? <ChartEmpty /> : (() => {
+            // Keep at most 5 named slices; fold the rest into "Other" so colours never repeat
+            const sorted = [...inventoryByCategory].sort((a, b) => (b.count || 0) - (a.count || 0));
+            const top = sorted.slice(0, 5);
+            const rest = sorted.slice(5).reduce((sum, c) => sum + (c.count || 0), 0);
+            const slices = [
+              ...top.map((c, i) => ({ name: c.category, value: c.count || 0, color: SERIES[i] })),
+              ...(rest > 0 ? [{ name: 'Other', value: rest, color: STATUS.neutral }] : []),
+            ];
+            const total = slices.reduce((sum, c) => sum + c.value, 0);
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-6">
+                <div className="relative h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={slices}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius="62%"
+                        outerRadius="92%"
+                        paddingAngle={2}
+                        cornerRadius={6}
+                        stroke="#fff"
+                        strokeWidth={2}
+                      >
+                        {slices.map((slice) => (
+                          <Cell key={slice.name} fill={slice.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <DonutCenter total={total.toLocaleString()} label="Items" />
+                </div>
+                <DonutLegend items={slices} />
+              </div>
+            );
+          })()}
+        </ChartCard>
 
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">System Performance</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={trends}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="completed" stroke="#10B981" strokeWidth={2} name="Completed" />
-              <Line type="monotone" dataKey="cancelled" stroke="#EF4444" strokeWidth={2} name="Cancelled" />
-              <Line type="monotone" dataKey="pending" stroke="#F59E0B" strokeWidth={2} name="Pending" />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
+        <ChartCard
+          title="System Performance"
+          subtitle="Completed, pending and cancelled orders"
+          icon={<Activity className="w-5 h-5" />}
+        >
+          {trends.length === 0 ? <ChartEmpty /> : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={trends} margin={chartMargin}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="date" {...xAxisProps} />
+                <YAxis {...yAxisProps} />
+                <Tooltip content={<ChartTooltip />} cursor={tooltipCursor} />
+                <Legend {...legendProps} />
+                <Line {...lineProps} dataKey="completed" stroke={STATUS.good} name="Completed" />
+                <Line {...lineProps} dataKey="pending" stroke={STATUS.warning} name="Pending" strokeDasharray="5 4" />
+                <Line {...lineProps} dataKey="cancelled" stroke={STATUS.critical} name="Cancelled" />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
 
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Fleet Utilization</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={fleetData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="status" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#4F46E5" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
+        <ChartCard
+          title="Fleet Utilization"
+          subtitle="Vehicles by current status"
+          icon={<Gauge className="w-5 h-5" />}
+        >
+          {fleetData.length === 0 ? <ChartEmpty /> : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={fleetData} margin={chartMargin}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="status" {...xAxisProps} />
+                <YAxis {...yAxisProps} />
+                <Tooltip content={<ChartTooltip />} cursor={barCursor} />
+                <Bar {...barProps} dataKey="count" fill={SERIES[0]} name="Vehicles" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
       </div>
 
       {/* Admin Management Panels */}

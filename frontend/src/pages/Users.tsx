@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye, Edit, Trash2, Search } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Search, UserRound } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -203,21 +203,21 @@ export default function Users() {
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={() => handleView(user)}
-                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        className="action-btn action-btn-view"
                         title="View user details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleEdit(user)}
-                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        className="action-btn action-btn-edit"
                         title="Edit user"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDelete(user.id)}
-                        className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors"
+                        className="action-btn action-btn-delete"
                         title="Delete user"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -235,7 +235,7 @@ export default function Users() {
         <AddUserForm onClose={() => setShowAddModal(false)} onSave={handleSaveUser} />
       </Modal>
 
-      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="User Details" size="lg">
+      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="User Details" subtitle="Account profile and permissions" icon={<UserRound className="w-5 h-5" />} size="lg">
         {selectedUser && <ViewUserModal user={selectedUser} />}
       </Modal>
 

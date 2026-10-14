@@ -9,6 +9,8 @@ import CreateOrderForm from '../../components/forms/CreateOrderForm';
 import { inventoryService } from '../../services/inventoryService';
 import { ordersService } from '../../services/ordersService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { SERIES, chartMargin, gridProps, xAxisProps, yAxisProps, barProps, barCursor } from '@/components/charts/chartConfig';
+import { ChartTooltip } from '@/components/charts/chartTheme';
 import { formatDate } from '../../utils/formatters';
 
 export default function WarehouseDashboard() {
@@ -126,12 +128,12 @@ export default function WarehouseDashboard() {
         <Card>
           <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Stock by Category</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={categoryData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="category" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="stock" fill="#4682B4" radius={[8, 8, 0, 0]} />
+            <BarChart data={categoryData} margin={chartMargin}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="category" {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip content={<ChartTooltip />} cursor={barCursor} />
+              <Bar {...barProps} dataKey="stock" fill={SERIES[0]} name="Units in stock" />
             </BarChart>
           </ResponsiveContainer>
         </Card>

@@ -3,6 +3,7 @@ import { Plus, Edit, Eye, Trash2, User, Phone, Award, TrendingUp } from 'lucide-
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import { DetailHero, DetailSection, DetailField, DetailGrid, DetailStat } from '@/components/ui/Detail';
 import Modal from '@/components/ui/Modal';
 import SearchFilter from '@/components/ui/SearchFilter';
 import AddDriverForm from '@/components/forms/AddDriverForm';
@@ -10,6 +11,7 @@ import EditDriverForm from '@/components/forms/EditDriverForm';
 import { driversService } from '@/services/driversService';
 import { vehiclesService } from '@/services/vehiclesService';
 import { exportToCSV, exportToPDF, exportToJSON } from '@/utils/exportUtils';
+import { initials } from '@/utils/formatters';
 import toast from 'react-hot-toast';
 
 export default function Drivers() {
@@ -287,39 +289,53 @@ export default function Drivers() {
             <EditDriverForm driver={selectedDriver} onClose={() => { setShowEditModal(false); setSelectedDriver(null); }} onSave={handleSave} />
           </Modal>
 
-          <Modal isOpen={showViewModal} onClose={() => { setShowViewModal(false); setSelectedDriver(null); }} title="Driver Details">
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 pb-4 border-b">
-                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-                  {selectedDriver.name.split(' ').map((n: string) => n[0]).join('')}
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">{selectedDriver.name}</h3>
+          <Modal
+            isOpen={showViewModal}
+            onClose={() => { setShowViewModal(false); setSelectedDriver(null); }}
+            title="Driver Details"
+            subtitle="Driver profile"
+            icon={<User className="w-5 h-5" />}
+          >
+            <div className="space-y-5">
+              <DetailHero
+                avatar={initials(selectedDriver.name)}
+                title={selectedDriver.name}
+                subtitle={selectedDriver.phone}
+                badges={
                   <Badge variant={getStatusBadge(selectedDriver.status)}>
-                    {selectedDriver.status.replace('_', ' ')}
+                    {selectedDriver.status.replace(/_/g, ' ')}
                   </Badge>
-                </div>
+                }
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <DetailStat
+                  label="License"
+                  value={<span className="font-mono text-lg">{selectedDriver.licenseNumber}</span>}
+                  icon={<Award className="w-4 h-4" />}
+                />
+                <DetailStat
+                  label="Current Vehicle"
+                  value={
+                    <span className="text-lg">
+                      {selectedDriver.currentVehicleId
+                        ? vehicles.find((v: any) => v.id === selectedDriver.currentVehicleId)?.plateNumber || 'Unknown Vehicle'
+                        : 'None assigned'}
+                    </span>
+                  }
+                  icon={<TrendingUp className="w-4 h-4" />}
+                  tone="accent"
+                />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <label className="block text-sm font-medium text-blue-700 mb-1">License Number</label>
-                  <p className="text-lg font-mono font-semibold text-blue-900">{selectedDriver.licenseNumber}</p>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <label className="block text-sm font-medium text-blue-700 mb-1">Phone</label>
-                  <p className="text-lg font-semibold text-blue-900">{selectedDriver.phone}</p>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-lg col-span-2">
-                  <label className="block text-sm font-medium text-blue-700 mb-1">Current Vehicle</label>
-                  <p className="text-lg font-semibold text-blue-900">
-                    {selectedDriver.currentVehicleId 
-                      ? vehicles.find((v: any) => v.id === selectedDriver.currentVehicleId)?.plateNumber || 'Unknown Vehicle'
-                      : 'No vehicle assigned'
-                    }
-                  </p>
-                </div>
-              </div>
+              <DetailSection title="Contact" icon={<Phone className="w-4 h-4" />}>
+                <DetailGrid>
+                  <DetailField label="Phone">
+                    {selectedDriver.phone ? (
+                      <a href={`tel:${selectedDriver.phone}`} className="text-primary-600 hover:underline">{selectedDriver.phone}</a>
+                    ) : 'Not provided'}
+                  </DetailField>
+                  <DetailField label="Email">{selectedDriver.email || 'Not provided'}</DetailField>
+                </DetailGrid>
+              </DetailSection>
             </div>
           </Modal>
         </>

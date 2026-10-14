@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import RefreshButton from '@/components/ui/RefreshButton';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { SERIES, STATUS, chartMargin, gridProps, xAxisProps, yAxisProps, lineProps, barProps, tooltipCursor, barCursor, legendProps } from '@/components/charts/chartConfig';
+import { ChartTooltip } from '@/components/charts/chartTheme';
 
 import { dashboardService } from '@/services/dashboardService';
 import { analyticsService } from '@/services/analyticsService';
@@ -135,12 +137,12 @@ export default function WarehouseStaffDashboard() {
             Inventory by Category
           </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={inventoryByCategory}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="category" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#4F46E5" radius={[8, 8, 0, 0]} />
+            <BarChart data={inventoryByCategory} margin={chartMargin}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="category" {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip content={<ChartTooltip />} cursor={barCursor} />
+              <Bar {...barProps} dataKey="count" fill={SERIES[0]} name="Items" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -151,14 +153,14 @@ export default function WarehouseStaffDashboard() {
             Stock Movement (30 Days)
           </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={inventoryTrends}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="stockIn" stroke="#10B981" strokeWidth={2} name="Stock In" />
-              <Line type="monotone" dataKey="stockOut" stroke="#EF4444" strokeWidth={2} name="Stock Out" />
+            <LineChart data={inventoryTrends} margin={chartMargin}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip content={<ChartTooltip />} cursor={tooltipCursor} />
+              <Legend {...legendProps} />
+              <Line {...lineProps} dataKey="stockIn" stroke={STATUS.good} name="Stock In" />
+              <Line {...lineProps} dataKey="stockOut" stroke={STATUS.critical} name="Stock Out" />
             </LineChart>
           </ResponsiveContainer>
         </Card>

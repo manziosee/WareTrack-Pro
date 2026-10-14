@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Download, Calendar } from 'lucide-react';
+import { Download, Calendar, TrendingUp, PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import ExportReportForm from '@/components/forms/ExportReportForm';
 import { reportsService } from '@/services/reportsService';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { SERIES, STATUS, chartMargin, gridProps, xAxisProps, yAxisProps, lineProps, barProps, tooltipCursor, barCursor, legendProps } from '@/components/charts/chartConfig';
+import { ChartTooltip, ChartCard, ChartEmpty, DonutCenter, DonutLegend } from '@/components/charts/chartTheme';
 
 export default function Reports() {
   const [showExportModal, setShowExportModal] = useState(false);
@@ -58,11 +60,13 @@ export default function Reports() {
   const deliveryStatusData = analytics.statusDistribution?.map((item: any) => ({
     name: item.status.replace('_', ' '),
     value: item.count,
-    color: item.status === 'DELIVERED' ? '#10B981' : 
-           item.status === 'IN_TRANSIT' ? '#FF8C42' :
-           item.status === 'DISPATCHED' ? '#F59E0B' : '#6B7280'
+    color: item.status === 'DELIVERED' ? STATUS.good :
+           item.status === 'IN_TRANSIT' ? STATUS.info :
+           item.status === 'DISPATCHED' ? STATUS.warning :
+           item.status === 'CANCELLED' ? STATUS.critical : STATUS.neutral
   })) || [];
 
+  const totalDeliveries = deliveryStatusData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0);
   const inventoryByCategory = analytics.inventoryByCategory || [];
   const deliveryTrends = analytics.trends || [];
 
@@ -124,65 +128,85 @@ export default function Reports() {
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Delivery Trends */}
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Delivery Trends (Last 7 Days)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={deliveryTrends}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="delivered" stroke="#10B981" strokeWidth={2} name="Delivered" />
-              <Line type="monotone" dataKey="inTransit" stroke="#FF8C42" strokeWidth={2} name="In Transit" />
-              <Line type="monotone" dataKey="pending" stroke="#F59E0B" strokeWidth={2} name="Pending" />
-              <Line type="monotone" dataKey="orders" stroke="#6366F1" strokeWidth={2} name="Total Orders" />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
+        <ChartCard
+          title="Delivery Trends"
+          subtitle="Orders by delivery stage over the selected period"
+          icon={<TrendingUp className="w-5 h-5" />}
+        >
+          {deliveryTrends.length === 0 ? <ChartEmpty /> : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={deliveryTrends} margin={chartMargin}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="date" {...xAxisProps} />
+                <YAxis {...yAxisProps} />
+                <Tooltip content={<ChartTooltip />} cursor={tooltipCursor} />
+                <Legend {...legendProps} />
+                <Line {...lineProps} dataKey="orders" stroke={SERIES[0]} name="Total Orders" />
+                <Line {...lineProps} dataKey="delivered" stroke={STATUS.good} name="Delivered" />
+                <Line {...lineProps} dataKey="inTransit" stroke={SERIES[1]} name="In Transit" />
+                <Line {...lineProps} dataKey="pending" stroke={STATUS.warning} name="Pending" strokeDasharray="5 4" />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
 
-        {/* Delivery Status Distribution */}
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Delivery Status Distribution</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={deliveryStatusData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {deliveryStatusData.map((entry: any, index: number) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
+        <ChartCard
+          title="Delivery Status Distribution"
+          subtitle="Share of orders in each status"
+          icon={<PieChartIcon className="w-5 h-5" />}
+        >
+          {totalDeliveries === 0 ? <ChartEmpty /> : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-6">
+              <div className="relative h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={deliveryStatusData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius="62%"
+                      outerRadius="92%"
+                      paddingAngle={2}
+                      cornerRadius={6}
+                      stroke="#fff"
+                      strokeWidth={2}
+                    >
+                      {deliveryStatusData.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<ChartTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <DonutCenter total={totalDeliveries.toLocaleString()} label="Orders" />
+              </div>
+              <DonutLegend items={deliveryStatusData} />
+            </div>
+          )}
+        </ChartCard>
       </div>
 
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Inventory by Category */}
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Inventory by Category</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={inventoryByCategory}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="category" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#4682B4" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="totalQuantity" fill="#10B981" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
+        <ChartCard
+          title="Inventory by Category"
+          subtitle="Number of items and units held per category"
+          icon={<BarChart3 className="w-5 h-5" />}
+        >
+          {inventoryByCategory.length === 0 ? <ChartEmpty /> : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={inventoryByCategory} margin={chartMargin} barGap={2}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="category" {...xAxisProps} />
+                <YAxis {...yAxisProps} />
+                <Tooltip content={<ChartTooltip />} cursor={barCursor} />
+                <Legend {...legendProps} />
+                <Bar {...barProps} dataKey="count" fill={SERIES[0]} name="Items" />
+                <Bar {...barProps} dataKey="totalQuantity" fill={SERIES[1]} name="Total Units" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
 
         {/* Performance Metrics */}
         <Card>
@@ -246,8 +270,14 @@ export default function Reports() {
         </Card>
       </div>
 
-      <Modal isOpen={showExportModal} onClose={() => setShowExportModal(false)} title="Export Report">
-        <ExportReportForm onClose={() => setShowExportModal(false)} />
+      <Modal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Report"
+        subtitle="Download the current analytics"
+        icon={<Download className="w-5 h-5" />}
+      >
+        <ExportReportForm onClose={() => setShowExportModal(false)} analytics={analytics} dateRange={dateRange} />
       </Modal>
 
       <Modal isOpen={showDateRangeModal} onClose={() => setShowDateRangeModal(false)} title="Select Date Range">

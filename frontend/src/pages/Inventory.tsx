@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye, Edit, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, AlertTriangle, Package } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -315,21 +315,21 @@ export default function Inventory() {
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={() => handleView(item)}
-                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        className="action-btn action-btn-view"
                         title="View item details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleEdit(item)}
-                        className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                        className="action-btn action-btn-edit"
                         title="Edit item"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDelete(item.id)}
-                        className="p-1 text-error-600 hover:bg-error-50 rounded transition-colors"
+                        className="action-btn action-btn-delete"
                         title="Delete item"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -347,7 +347,7 @@ export default function Inventory() {
         <AddInventoryForm onClose={() => setShowAddModal(false)} onSave={handleSaveItem} />
       </Modal>
 
-      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Inventory Item Details" size="lg">
+      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Inventory Item Details" subtitle="Stock levels and item information" icon={<Package className="w-5 h-5" />} size="lg">
         {selectedItem && <ViewInventoryModal item={selectedItem} />}
       </Modal>
 

@@ -3,6 +3,7 @@ import { Plus, Edit, Wrench, Eye, Trash2, Truck, Package, AlertTriangle } from '
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import { DetailHero, DetailSection, DetailField, DetailGrid, DetailStat } from '@/components/ui/Detail';
 import Modal from '@/components/ui/Modal';
 import SearchFilter from '@/components/ui/SearchFilter';
 import AddVehicleForm from '@/components/forms/AddVehicleForm';
@@ -279,28 +280,28 @@ export default function Vehicles() {
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={() => handleView(vehicle)}
-                        className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                        className="action-btn action-btn-view"
                         title="View details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleEdit(vehicle)}
-                        className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                        className="action-btn action-btn-edit"
                         title="Edit vehicle"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleScheduleMaintenance(vehicle)}
-                        className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                        className="action-btn action-btn-edit"
                         title="Schedule maintenance"
                       >
                         <Wrench className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDelete(vehicle)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className="action-btn action-btn-delete"
                         title="Delete vehicle"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -329,48 +330,37 @@ export default function Vehicles() {
             <ScheduleMaintenanceForm vehicle={selectedVehicle} onClose={() => { setShowMaintenanceModal(false); setSelectedVehicle(null); }} onSave={handleSave} />
           </Modal>
 
-          <Modal isOpen={showViewModal} onClose={() => { setShowViewModal(false); setSelectedVehicle(null); }} title="Vehicle Details">
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 pb-4 border-b">
-                <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-600 rounded-lg flex items-center justify-center shadow-lg">
-                  <Truck className="w-10 h-10 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">{selectedVehicle.plateNumber}</h3>
+          <Modal
+            isOpen={showViewModal}
+            onClose={() => { setShowViewModal(false); setSelectedVehicle(null); }}
+            title="Vehicle Details"
+            subtitle="Fleet record"
+            icon={<Truck className="w-5 h-5" />}
+          >
+            <div className="space-y-5">
+              <DetailHero
+                avatar={<Truck className="w-6 h-6" />}
+                title={selectedVehicle.plateNumber}
+                subtitle={[selectedVehicle.model, selectedVehicle.year].filter(Boolean).join(' · ') || selectedVehicle.type}
+                badges={
                   <Badge variant={getStatusBadge(selectedVehicle.status)}>
-                    {selectedVehicle.status.replace('_', ' ')}
+                    {selectedVehicle.status.replace(/_/g, ' ')}
                   </Badge>
-                </div>
+                }
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <DetailStat label="Type" value={selectedVehicle.type} icon={<Truck className="w-4 h-4" />} />
+                <DetailStat label="Capacity" value={`${Number(selectedVehicle.capacity || 0).toLocaleString()} kg`} icon={<Package className="w-4 h-4" />} tone="accent" />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-orange-50 p-4 rounded-lg">
-                  <label className="block text-sm font-medium text-orange-700 mb-1">Type</label>
-                  <p className="text-lg font-semibold text-orange-900">{selectedVehicle.type}</p>
-                </div>
-                <div className="bg-orange-50 p-4 rounded-lg">
-                  <label className="block text-sm font-medium text-orange-700 mb-1">Capacity</label>
-                  <p className="text-lg font-semibold text-orange-900">{selectedVehicle.capacity} kg</p>
-                </div>
-                {selectedVehicle.model && (
-                  <div className="bg-orange-50 p-4 rounded-lg">
-                    <label className="block text-sm font-medium text-orange-700 mb-1">Model</label>
-                    <p className="text-lg font-semibold text-orange-900">{selectedVehicle.model}</p>
-                  </div>
-                )}
-                {selectedVehicle.year && (
-                  <div className="bg-orange-50 p-4 rounded-lg">
-                    <label className="block text-sm font-medium text-orange-700 mb-1">Year</label>
-                    <p className="text-lg font-semibold text-orange-900">{selectedVehicle.year}</p>
-                  </div>
-                )}
-                <div className="bg-orange-50 p-4 rounded-lg col-span-2">
-                  <label className="block text-sm font-medium text-orange-700 mb-1">Last Maintenance</label>
-                  <p className="text-lg font-semibold text-orange-900">
+              <DetailSection title="Vehicle Info" icon={<Wrench className="w-4 h-4" />}>
+                <DetailGrid>
+                  <DetailField label="Model">{selectedVehicle.model || 'Not specified'}</DetailField>
+                  <DetailField label="Year">{selectedVehicle.year || 'Not specified'}</DetailField>
+                  <DetailField label="Last Maintenance" className="sm:col-span-2">
                     {selectedVehicle.lastMaintenance ? formatDate(selectedVehicle.lastMaintenance) : 'Never'}
-                  </p>
-                </div>
-              </div>
+                  </DetailField>
+                </DetailGrid>
+              </DetailSection>
             </div>
           </Modal>
         </>

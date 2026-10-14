@@ -1,4 +1,6 @@
+import { Package, MapPin, Tag, Wallet, Boxes, Info, CalendarClock, AlertTriangle } from 'lucide-react';
 import Badge from '../ui/Badge';
+import { DetailHero, DetailSection, DetailField, DetailGrid, DetailStat } from '../ui/Detail';
 import { formatDate } from '../../utils/formatters';
 
 interface ViewInventoryModalProps {
@@ -9,156 +11,95 @@ export default function ViewInventoryModal({ item }: ViewInventoryModalProps) {
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'ACTIVE': return 'success';
-      case 'INACTIVE': return 'gray';
       case 'DISCONTINUED': return 'error';
       default: return 'gray';
     }
   };
 
-  const getStockBadgeVariant = (current: number, min: number) => {
-    const percentage = (current / min) * 100;
-    if (percentage <= 25) return 'error';
-    if (percentage <= 50) return 'warning';
-    return 'success';
-  };
+  const quantity = Number(item.quantity) || 0;
+  const minQuantity = Number(item.minQuantity) || 0;
+  const unitPrice = Number(item.unitPrice) || 0;
 
-  const getStockStatus = (current: number, min: number) => {
-    if (current === 0) return 'Out of Stock';
-    if (current <= min) return 'Low Stock';
-    return 'In Stock';
-  };
+  const stockStatus = quantity === 0 ? 'Out of Stock' : quantity <= minQuantity ? 'Low Stock' : 'In Stock';
+  const stockVariant = quantity === 0 ? 'error' : quantity <= minQuantity ? 'warning' : 'success';
+  // Bar is full at twice the minimum, so the minimum sits at the midpoint
+  const stockPercent = minQuantity > 0 ? Math.min(100, Math.round((quantity / (minQuantity * 2)) * 100)) : 100;
+  const meterColor = quantity === 0 ? 'bg-error-500' : quantity <= minQuantity ? 'bg-warning-500' : 'bg-success-500';
 
   return (
-    <div className="space-y-6">
-      {/* Item Header */}
-      <div className="border-b pb-4">
-        <h3 className="text-xl font-semibold text-gray-900">{item.name}</h3>
-        <p className="text-gray-600 mt-1">Item Code: <code className="bg-gray-100 px-2 py-1 rounded text-sm">{item.code}</code></p>
+    <div className="space-y-5">
+      <DetailHero
+        avatar={<Package className="w-6 h-6" />}
+        title={item.name}
+        subtitle={<span className="font-mono">{item.code}</span>}
+        badges={
+          <>
+            <Badge variant={stockVariant}>{stockStatus}</Badge>
+            <Badge variant={getStatusBadgeVariant(item.status)} size="sm">{item.status}</Badge>
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <DetailStat
+          label="In Stock"
+          value={<>{quantity.toLocaleString()} <span className="text-sm font-medium text-gray-500">{item.unit}</span></>}
+          hint={`Minimum ${minQuantity.toLocaleString()} ${item.unit || ''}`}
+          icon={<Boxes className="w-4 h-4" />}
+          tone={stockVariant === 'success' ? 'success' : stockVariant === 'warning' ? 'warning' : 'error'}
+        />
+        <DetailStat label="Unit Price" value={`RWF ${unitPrice.toLocaleString()}`} icon={<Tag className="w-4 h-4" />} tone="accent" />
+        <DetailStat label="Total Value" value={`RWF ${(quantity * unitPrice).toLocaleString()}`} icon={<Wallet className="w-4 h-4" />} />
       </div>
 
-      {/* Item Details Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
-            <p className="text-gray-900">{item.name}</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <Badge variant="gray">{item.category}</Badge>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-            <p className="text-gray-900">{item.location}</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-            <p className="text-gray-900">{item.unit}</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Unit Category</label>
-            <p className="text-gray-900">{item.unitCategory || 'Not specified'}</p>
-          </div>
+      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-soft">
+        <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-500">
+          <span>Stock level</span>
+          <span className="tabular-nums">{quantity.toLocaleString()} / {(minQuantity * 2).toLocaleString()} target</span>
         </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock</label>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-gray-900">{item.quantity}</span>
-              <span className="text-gray-500">{item.unit}</span>
-              <Badge variant={getStockBadgeVariant(item.quantity, item.minQuantity)}>
-                {getStockStatus(item.quantity, item.minQuantity)}
-              </Badge>
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Quantity</label>
-            <p className="text-gray-900">{item.minQuantity} {item.unit}</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
-            <p className="text-gray-900 text-lg font-semibold">RWF {Number(item.unitPrice).toLocaleString()}</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Total Value</label>
-            <p className="text-gray-900 text-lg font-semibold">RWF {(item.quantity * item.unitPrice).toLocaleString()}</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <Badge variant={getStatusBadgeVariant(item.status)}>
-              {item.status}
-            </Badge>
-          </div>
+        <div className="relative h-2.5 overflow-hidden rounded-full bg-gray-100">
+          <div className={`h-full rounded-full ${meterColor} transition-all duration-700`} style={{ width: `${stockPercent}%` }} />
+          <div className="absolute inset-y-0 left-1/2 w-0.5 bg-gray-300" title="Minimum quantity" />
         </div>
       </div>
 
-      {/* Additional Information */}
-      <div className="border-t pt-6">
-        <h4 className="text-lg font-medium text-gray-900 mb-4">Additional Information</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {quantity <= minQuantity && (
+        <div className="flex items-start gap-3 rounded-2xl border border-warning-200 bg-warning-50 p-4">
+          <AlertTriangle className="mt-0.5 w-5 h-5 shrink-0 text-warning-600" />
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-            <p className="text-gray-900">{item.supplier || 'Not specified'}</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
-            <p className="text-gray-900">{item.barcode || 'Not specified'}</p>
-          </div>
-          
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <p className="text-gray-900">{item.description || 'No description provided'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Timestamps */}
-      <div className="border-t pt-6">
-        <h4 className="text-lg font-medium text-gray-900 mb-4">Record Information</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Created</label>
-            <p className="text-gray-900">{formatDate(item.createdAt)}</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Last Updated</label>
-            <p className="text-gray-900">{formatDate(item.lastUpdated)}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Stock Alert */}
-      {item.quantity <= item.minQuantity && (
-        <div className="border-t pt-6">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">Stock Alert</h3>
-                <p className="text-sm text-yellow-700 mt-1">
-                  This item is {item.quantity === 0 ? 'out of stock' : 'running low'}. 
-                  Consider restocking soon to avoid shortages.
-                </p>
-              </div>
-            </div>
+            <p className="text-sm font-semibold text-warning-800">Stock alert</p>
+            <p className="text-sm text-warning-700">
+              This item is {quantity === 0 ? 'out of stock' : 'running low'}. Consider restocking soon to avoid shortages.
+            </p>
           </div>
         </div>
       )}
+
+      <DetailSection title="Details" icon={<Info className="w-4 h-4" />}>
+        <DetailGrid>
+          <DetailField label="Category"><Badge variant="primary" size="sm">{item.category}</Badge></DetailField>
+          <DetailField label="Location">
+            <span className="inline-flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-accent-500" />
+              {item.location || '—'}
+            </span>
+          </DetailField>
+          <DetailField label="Unit">{item.unit || '—'}</DetailField>
+          <DetailField label="Unit Category">{item.unitCategory || 'Not specified'}</DetailField>
+          <DetailField label="Supplier">{item.supplier || 'Not specified'}</DetailField>
+          <DetailField label="Barcode"><span className="font-mono">{item.barcode || 'Not specified'}</span></DetailField>
+          <DetailField label="Description" className="sm:col-span-2">
+            <span className="font-normal text-gray-700">{item.description || 'No description provided'}</span>
+          </DetailField>
+        </DetailGrid>
+      </DetailSection>
+
+      <DetailSection title="Record" icon={<CalendarClock className="w-4 h-4" />}>
+        <DetailGrid>
+          <DetailField label="Created">{formatDate(item.createdAt)}</DetailField>
+          <DetailField label="Last Updated">{formatDate(item.lastUpdated || item.updatedAt)}</DetailField>
+        </DetailGrid>
+      </DetailSection>
     </div>
   );
 }

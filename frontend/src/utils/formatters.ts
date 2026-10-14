@@ -42,3 +42,13 @@ export const formatStockLevel = (current: number, min: number): string => {
   if (percentage <= 100) return 'Normal';
   return 'High';
 };
+
+export const initials = (name?: string): string => {
+  if (!name) return '?';
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase())
+    .join('');
+};

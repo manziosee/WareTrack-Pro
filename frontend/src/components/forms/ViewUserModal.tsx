@@ -1,9 +1,34 @@
+import { Mail, Phone, Shield, CalendarClock, LogIn, CheckCircle2, UserRound } from 'lucide-react';
 import Badge from '../ui/Badge';
-import { formatDate } from '../../utils/formatters';
+import { DetailHero, DetailSection, DetailField, DetailGrid, DetailStat } from '../ui/Detail';
+import { formatDate, initials } from '../../utils/formatters';
 
 interface ViewUserModalProps {
   user: any;
 }
+
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+  ADMIN: [
+    'Full system access and user management',
+    'Can create, edit, and delete all records',
+    'Access to all reports and analytics',
+  ],
+  WAREHOUSE_STAFF: [
+    'Inventory management and stock updates',
+    'Order processing and fulfillment',
+    'Access to inventory reports',
+  ],
+  DISPATCH_OFFICER: [
+    'Dispatch management and assignment',
+    'Vehicle and driver coordination',
+    'Delivery tracking and updates',
+  ],
+  DRIVER: [
+    'View assigned deliveries',
+    'Update delivery status',
+    'Access to delivery tracking',
+  ],
+};
 
 export default function ViewUserModal({ user }: ViewUserModalProps) {
   const getRoleBadgeVariant = (role: string) => {
@@ -16,110 +41,70 @@ export default function ViewUserModal({ user }: ViewUserModalProps) {
     }
   };
 
+  const roleLabel = (user.role || '').replace(/_/g, ' ');
+  const permissions = ROLE_PERMISSIONS[user.role] || [];
+
   return (
-    <div className="space-y-6">
-      {/* User Avatar and Basic Info */}
-      <div className="flex items-center space-x-4">
-        <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-medium text-xl">
-          {user.name.split(' ').map((n: string) => n[0]).join('')}
-        </div>
-        <div>
-          <h3 className="text-xl font-semibold text-gray-900">{user.name}</h3>
-          <p className="text-gray-600">{user.email}</p>
-        </div>
+    <div className="space-y-5">
+      <DetailHero
+        avatar={initials(user.name)}
+        title={user.name}
+        subtitle={user.email}
+        badges={
+          <>
+            <Badge variant={getRoleBadgeVariant(user.role)}>{roleLabel}</Badge>
+            <Badge variant={user.status === 'ACTIVE' ? 'success' : 'gray'} size="sm">{user.status}</Badge>
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <DetailStat
+          label="Last Login"
+          value={<span className="text-lg">{user.lastLogin ? formatDate(user.lastLogin) : 'Never'}</span>}
+          icon={<LogIn className="w-4 h-4" />}
+        />
+        <DetailStat
+          label="Member Since"
+          value={<span className="text-lg">{formatDate(user.createdAt)}</span>}
+          icon={<CalendarClock className="w-4 h-4" />}
+          tone="accent"
+        />
       </div>
 
-      {/* User Details Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-            <p className="text-gray-900">{user.name}</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-            <p className="text-gray-900">{user.email}</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-            <p className="text-gray-900">{user.phone || 'Not provided'}</p>
-          </div>
-        </div>
+      <DetailSection title="Contact" icon={<UserRound className="w-4 h-4" />}>
+        <DetailGrid>
+          <DetailField label="Full Name">{user.name}</DetailField>
+          <DetailField label="Email Address">
+            <a href={`mailto:${user.email}`} className="inline-flex items-center gap-1.5 text-primary-600 hover:underline">
+              <Mail className="w-3.5 h-3.5" />
+              {user.email}
+            </a>
+          </DetailField>
+          <DetailField label="Phone Number">
+            {user.phone ? (
+              <a href={`tel:${user.phone}`} className="inline-flex items-center gap-1.5 text-primary-600 hover:underline">
+                <Phone className="w-3.5 h-3.5" />
+                {user.phone}
+              </a>
+            ) : 'Not provided'}
+          </DetailField>
+          <DetailField label="Last Updated">{formatDate(user.updatedAt)}</DetailField>
+        </DetailGrid>
+      </DetailSection>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <Badge variant={getRoleBadgeVariant(user.role)}>
-              {user.role.replace(/_/g, ' ')}
-            </Badge>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <Badge variant={user.status === 'ACTIVE' ? 'success' : 'gray'}>
-              {user.status}
-            </Badge>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Last Login</label>
-            <p className="text-gray-900">{user.lastLogin ? formatDate(user.lastLogin) : 'Never'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Account Information */}
-      <div className="border-t pt-6">
-        <h4 className="text-lg font-medium text-gray-900 mb-4">Account Information</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Account Created</label>
-            <p className="text-gray-900">{formatDate(user.createdAt)}</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Last Updated</label>
-            <p className="text-gray-900">{formatDate(user.updatedAt)}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Role Permissions */}
-      <div className="border-t pt-6">
-        <h4 className="text-lg font-medium text-gray-900 mb-4">Role Permissions</h4>
-        <div className="space-y-2">
-          {user.role === 'ADMIN' && (
-            <div className="text-sm text-gray-600">
-              • Full system access and user management<br/>
-              • Can create, edit, and delete all records<br/>
-              • Access to all reports and analytics
-            </div>
-          )}
-          {user.role === 'WAREHOUSE_STAFF' && (
-            <div className="text-sm text-gray-600">
-              • Inventory management and stock updates<br/>
-              • Order processing and fulfillment<br/>
-              • Access to inventory reports
-            </div>
-          )}
-          {user.role === 'DISPATCH_OFFICER' && (
-            <div className="text-sm text-gray-600">
-              • Dispatch management and assignment<br/>
-              • Vehicle and driver coordination<br/>
-              • Delivery tracking and updates
-            </div>
-          )}
-          {user.role === 'DRIVER' && (
-            <div className="text-sm text-gray-600">
-              • View assigned deliveries<br/>
-              • Update delivery status<br/>
-              • Access to delivery tracking
-            </div>
-          )}
-        </div>
-      </div>
+      {permissions.length > 0 && (
+        <DetailSection title={`${roleLabel} Permissions`} icon={<Shield className="w-4 h-4" />}>
+          <ul className="grid grid-cols-1 gap-2">
+            {permissions.map((permission) => (
+              <li key={permission} className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm text-gray-700 shadow-sm">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-success-500" />
+                {permission}
+              </li>
+            ))}
+          </ul>
+        </DetailSection>
+      )}
     </div>
   );
 }

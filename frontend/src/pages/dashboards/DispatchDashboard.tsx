@@ -10,6 +10,8 @@ import AddVehicleForm from '../../components/forms/AddVehicleForm';
 import { ordersService } from '../../services/ordersService';
 import { formatOrderNumber, formatDate } from '../../utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { SERIES, chartMargin, gridProps, xAxisProps, yAxisProps, barProps, barCursor } from '@/components/charts/chartConfig';
+import { ChartTooltip } from '@/components/charts/chartTheme';
 
 export default function DispatchDashboard() {
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -144,12 +146,12 @@ export default function DispatchDashboard() {
         <Card>
           <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Weekly Dispatch Activity</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={dailyDispatch}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#FF8C42" radius={[8, 8, 0, 0]} />
+            <BarChart data={dailyDispatch} margin={chartMargin}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="day" {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip content={<ChartTooltip />} cursor={barCursor} />
+              <Bar {...barProps} dataKey="count" fill={SERIES[1]} name="Dispatches" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
