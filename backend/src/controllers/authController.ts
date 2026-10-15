@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/env';
+import { recordAudit } from '../middleware/audit';
 import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
 import { QueueService } from '../services/queueService';
@@ -383,6 +384,7 @@ export class AuthController {
 
       // Check if this is first login (lastLogin is null)
       const isFirstLogin = !user.lastLogin;
+      recordAudit({ userId: user.id, action: 'LOGIN', entityType: 'User', entityId: user.id, summary: `${user.name} signed in`, ipAddress: req.ip });
       
       await prisma.user.update({
         where: { id: user.id },

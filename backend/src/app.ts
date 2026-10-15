@@ -18,6 +18,9 @@ import testEmailRoutes from './routes/test-email';
 import analyticsRoutes from './routes/analytics';
 import featuresRoutes from './routes/features';
 import insightsRoutes from './routes/insights';
+import auditRoutes from './routes/audit';
+import savedFilterRoutes from './routes/savedFilters';
+import { auditTrail } from './middleware/audit';
 import swaggerUi from 'swagger-ui-express';
 import rateLimit from 'express-rate-limit';
 import { swaggerSpec, addUndocumentedRoutes } from './config/swagger';
@@ -135,7 +138,7 @@ app.get('/api', (req, res) => {
     endpoints: [
       '/api/auth', '/api/dashboard', '/api/inventory', '/api/orders', '/api/vehicles',
       '/api/drivers', '/api/dispatch', '/api/users', '/api/notifications', '/api/reports',
-      '/api/settings', '/api/password-reset', '/api/analytics', '/api/features', '/api/insights'
+      '/api/settings', '/api/password-reset', '/api/analytics', '/api/features', '/api/insights', '/api/audit', '/api/saved-filters'
     ]
   });
 });
@@ -157,11 +160,16 @@ addUndocumentedRoutes(swaggerSpec, [
   ['/api/settings', 'Settings', settingsRoutes],
   ['/api/features', 'Advanced Features', featuresRoutes],
   ['/api/insights', 'Insights', insightsRoutes],
+  ['/api/audit', 'Audit Log', auditRoutes],
+  ['/api/saved-filters', 'Saved Filters', savedFilterRoutes],
 ] as any);
 
 app.get('/api-docs.json', (req, res) => {
   res.json(swaggerSpec);
 });
+
+// Record every successful write in the audit log
+app.use('/api', auditTrail);
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customSiteTitle: 'WareTrack-Pro API Docs',
@@ -185,6 +193,8 @@ if (process.env.NODE_ENV !== 'production') {
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/features', featuresRoutes);
 app.use('/api/insights', insightsRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/saved-filters', savedFilterRoutes);
 
 // Unknown routes return JSON instead of Express's HTML page
 app.use((req, res) => {

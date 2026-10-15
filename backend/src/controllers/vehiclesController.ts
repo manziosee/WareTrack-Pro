@@ -4,12 +4,14 @@ import { prisma } from '../lib/prisma';
 export class VehiclesController {
   static async getVehicles(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 10, status, type, search } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const { page = 1, limit = 50, status, type, search } = req.query;
+      // Lists return up to 500 rows so the UI can sort, filter and page instantly
+      const pageSize = Math.min(Math.max(Number(limit) || 50, 1), 500);
+      const skip = (Math.max(Number(page) || 1, 1) - 1) * pageSize;
       
       const vehicles = await prisma.vehicle.findMany({
         skip,
-        take: Number(limit),
+        take: pageSize,
         where: {
           ...(status && { status: status as any }),
           ...(type && { type: type as string }),
@@ -68,7 +70,7 @@ export class VehiclesController {
       res.json({
         success: true,
         data: updatedVehicles,
-        pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
+        pagination: { page: Number(page), limit: pageSize, total, totalPages: Math.ceil(total / pageSize) }
       });
     } catch (error) {
       res.status(500).json({ 

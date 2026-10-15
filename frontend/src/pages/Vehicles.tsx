@@ -1,370 +1,235 @@
-import { useState, useEffect } from 'react';
-import { Plus, Edit, Wrench, Eye, Trash2, Truck, Package, AlertTriangle } from 'lucide-react';
-import Card from '@/components/ui/Card';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Plus, Eye, Edit, Trash2, Truck, Wrench, Package, CheckCircle2, Gauge, CalendarClock, RefreshCw } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
-import { DetailHero, DetailSection, DetailField, DetailGrid, DetailStat } from '@/components/ui/Detail';
 import Modal from '@/components/ui/Modal';
-import SearchFilter from '@/components/ui/SearchFilter';
+import Drawer from '@/components/ui/Drawer';
+import PageHeader from '@/components/ui/PageHeader';
+import StatCard from '@/components/ui/StatCard';
+import StatusBadge from '@/components/ui/StatusBadge';
+import EmptyState from '@/components/ui/EmptyState';
+import ActivityTimeline from '@/components/ui/ActivityTimeline';
+import { DetailHero, DetailSection, DetailField, DetailGrid, DetailStat } from '@/components/ui/Detail';
+import DataTable, { type Column } from '@/components/table/DataTable';
+import FilterChip from '@/components/table/FilterChip';
+import ExportMenu from '@/components/table/ExportMenu';
 import AddVehicleForm from '@/components/forms/AddVehicleForm';
 import EditVehicleForm from '@/components/forms/EditVehicleForm';
 import ScheduleMaintenanceForm from '@/components/forms/ScheduleMaintenanceForm';
 import { vehiclesService } from '@/services/vehiclesService';
+import { useList } from '@/hooks/useList';
+import { undoableAction } from '@/utils/undoableAction';
 import { formatDate } from '@/utils/formatters';
-import { exportToCSV, exportToPDF, exportToJSON } from '@/utils/exportUtils';
-import toast from 'react-hot-toast';
+import { statusLabel } from '@/utils/status';
+import { useAuth } from '@/context/AuthContext';
+
+function MaintenanceHistory({ vehicleId }: { vehicleId: number }) {
+  const { data = [], isLoading } = useQuery({
+    queryKey: ['maintenance', vehicleId],
+    queryFn: async () => {
+      const res = await vehiclesService.getMaintenanceHistory(vehicleId);
+      const list = res?.data ?? res;
+      return Array.isArray(list) ? list : [];
+    },
+  });
+  if (isLoading) return <p className="text-sm text-gray-500">Loading…</p>;
+  if (!data.length) return <EmptyState compact title="No maintenance recorded" />;
+  return (
+    <ul className="divide-y divide-gray-100">
+      {data.slice(0, 8).map((m: any) => (
+        <li key={m.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-gray-800">{statusLabel(m.type)} · {m.description}</span>
+            <span className="block text-xs text-gray-500">{formatDate(m.completedDate || m.scheduledDate)}{m.performedBy ? ` · ${m.performedBy}` : ''}</span>
+          </span>
+          <span className="shrink-0 text-right">
+            <span className="block text-xs font-semibold text-gray-900">RWF {Number(m.cost || 0).toLocaleString()}</span>
+            <StatusBadge status={m.completedDate ? 'COMPLETED' : 'SCHEDULED'} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default function Vehicles() {
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
-  const [vehicles, setVehicles] = useState<any[]>([]);
-  const [filteredVehicles, setFilteredVehicles] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const vehiclesData = await vehiclesService.getVehicles();
-      setVehicles(vehiclesData.data || []);
-    } catch (error) {
-      console.error('Failed to fetch vehicles:', error);
-      toast.error('Failed to load vehicles');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { user } = useAuth();
+  const canEdit = ['ADMIN', 'DISPATCH_OFFICER'].includes(user?.role || '');
+  const [params, setParams] = useSearchParams();
+  const { rows, loading, setRows, refresh } = useList<any>('vehicles', '/vehicles');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [type, setType] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
+  const [servicing, setServicing] = useState<any>(null);
+  const [viewId, setViewId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
-    setFilteredVehicles(vehicles);
-  }, [vehicles]);
-
-  const handleSearch = (searchTerm: string) => {
-    const filtered = vehicles.filter(vehicle =>
-      vehicle.plateNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.type.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredVehicles(filtered);
-  };
-
-  const handleFilter = (filters: any) => {
-    let filtered = [...vehicles];
-    
-    if (filters.status) {
-      filtered = filtered.filter(vehicle => vehicle.status === filters.status);
+    const view = Number(params.get('view'));
+    if (view) {
+      setViewId(view);
+      setParams({}, { replace: true });
     }
-    if (filters.type) {
-      filtered = filtered.filter(vehicle => vehicle.type === filters.type);
-    }
-    
-    setFilteredVehicles(filtered);
+  }, [params, setParams]);
+
+  const types = useMemo(() => Array.from(new Set(rows.map((v) => v.type))).sort(), [rows]);
+  const filtered = useMemo(() => rows.filter((v) => (!status || v.status === status) && (!type || v.type === type)), [rows, status, type]);
+  const viewing = rows.find((v) => v.id === viewId) || null;
+
+  const onSaved = () => {
+    setShowAdd(false);
+    setEditing(null);
+    setServicing(null);
+    refresh();
   };
 
-  const handleExport = (format: 'csv' | 'pdf' | 'json') => {
-    const exportData = filteredVehicles.map(vehicle => ({
-      'Plate Number': vehicle.plateNumber,
-      Type: vehicle.type,
-      'Capacity (kg)': vehicle.capacity,
-      Status: vehicle.status,
-      'Last Maintenance': vehicle.lastMaintenance ? formatDate(vehicle.lastMaintenance) : 'Never'
-    }));
-
-    switch (format) {
-      case 'csv':
-        exportToCSV(exportData, 'vehicles');
-        break;
-      case 'pdf':
-        exportToPDF(exportData, 'vehicles', 'Vehicles Report');
-        break;
-      case 'json':
-        exportToJSON(exportData, 'vehicles');
-        break;
-    }
-    toast.success(`Vehicles exported as ${format.toUpperCase()}`);
+  const removeVehicles = (targets: any[]) => {
+    const ids = new Set(targets.map((v) => v.id));
+    const snapshot = rows;
+    undoableAction({
+      message: targets.length === 1 ? `${targets[0].plateNumber} deleted` : `${targets.length} vehicles deleted`,
+      apply: () => {
+        setRows((list) => list.filter((v) => !ids.has(v.id)));
+        if (viewId && ids.has(viewId)) setViewId(null);
+      },
+      revert: () => setRows(() => snapshot),
+      commit: async () => {
+        for (const v of targets) {
+          const res = await vehiclesService.deleteVehicle(v.id);
+          if (res?.success === false) throw new Error(res?.error?.message || `Could not delete ${v.plateNumber}`);
+        }
+        refresh();
+      },
+    });
   };
 
-  const handleEdit = (vehicle: any) => {
-    setSelectedVehicle(vehicle);
-    setShowEditModal(true);
-  };
-
-  const handleScheduleMaintenance = (vehicle: any) => {
-    setSelectedVehicle(vehicle);
-    setShowMaintenanceModal(true);
-  };
-
-  const handleView = (vehicle: any) => {
-    setSelectedVehicle(vehicle);
-    setShowViewModal(true);
-  };
-
-  const handleDelete = async (vehicle: any) => {
-    if (window.confirm(`Are you sure you want to delete vehicle ${vehicle.plateNumber}?`)) {
-      try {
-        await vehiclesService.deleteVehicle(vehicle.id);
-        toast.success('Vehicle deleted successfully');
-        fetchData();
-      } catch (error) {
-        toast.error('Failed to delete vehicle');
-      }
-    }
-  };
-
-  const handleSave = () => {
-    setShowAddModal(false);
-    setShowEditModal(false);
-    setShowMaintenanceModal(false);
-    setSelectedVehicle(null);
-    fetchData();
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status.toUpperCase()) {
-      case 'AVAILABLE': return 'success';
-      case 'IN_USE': return 'warning';
-      case 'MAINTENANCE': return 'error';
-      case 'UNAVAILABLE': return 'gray';
-      default: return 'gray';
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
-      </div>
-    );
-  }
+  const columns: Column<any>[] = [
+    {
+      id: 'plate', header: 'Vehicle', required: true, accessor: (v) => v.plateNumber,
+      cell: (v) => (
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-50 text-accent-600"><Truck className="h-4 w-4" /></span>
+          <div>
+            <p className="font-semibold text-gray-900">{v.plateNumber}</p>
+            <p className="text-xs text-gray-500">{[v.vehicleModel || v.model, v.year].filter(Boolean).join(' · ') || v.type}</p>
+          </div>
+        </div>
+      ),
+    },
+    { id: 'type', header: 'Type', accessor: (v) => v.type },
+    { id: 'status', header: 'Status', accessor: (v) => v.status, cell: (v) => <StatusBadge status={v.status} /> },
+    { id: 'capacity', header: 'Capacity', align: 'right', accessor: (v) => v.capacity, cell: (v) => `${Number(v.capacity || 0).toLocaleString()} kg` },
+    { id: 'fuel', header: 'Fuel', accessor: (v) => v.fuelType || '' },
+    { id: 'service', header: 'Last service', accessor: (v) => (v.lastMaintenance ? new Date(v.lastMaintenance) : null), cell: (v) => <span className="text-gray-600">{v.lastMaintenance ? formatDate(v.lastMaintenance) : 'Never'}</span> },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* Header with orange theme */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="bg-orange-100 p-2 rounded-lg">
-              <Truck className="w-8 h-8 text-orange-600" />
-            </div>
-            Vehicle Fleet Management
-          </h1>
-          <p className="text-gray-600 mt-1">Manage your delivery fleet and maintenance schedules</p>
-        </div>
-        <Button variant="primary" onClick={() => setShowAddModal(true)} className="bg-orange-600 hover:bg-orange-700">
-          <Plus className="w-5 h-5 mr-2" />
-          Add Vehicle
-        </Button>
-      </div>
-
-      {/* Stats Cards with orange theme */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-orange-700 font-medium">Total Fleet</p>
-              <p className="text-3xl font-bold text-orange-900">{vehicles.length}</p>
-            </div>
-            <Truck className="w-10 h-10 text-orange-600" />
-          </div>
-        </Card>
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-700 font-medium">Available</p>
-              <p className="text-3xl font-bold text-green-900">
-                {vehicles.filter(v => v.status === 'AVAILABLE').length}
-              </p>
-            </div>
-            <Package className="w-10 h-10 text-green-600" />
-          </div>
-        </Card>
-        <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-yellow-700 font-medium">In Use</p>
-              <p className="text-3xl font-bold text-yellow-900">
-                {vehicles.filter(v => v.status === 'IN_USE').length}
-              </p>
-            </div>
-            <Truck className="w-10 h-10 text-yellow-600" />
-          </div>
-        </Card>
-        <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-red-700 font-medium">Maintenance</p>
-              <p className="text-3xl font-bold text-red-900">
-                {vehicles.filter(v => v.status === 'MAINTENANCE').length}
-              </p>
-            </div>
-            <AlertTriangle className="w-10 h-10 text-red-600" />
-          </div>
-        </Card>
-      </div>
-
-      {/* Search and Filters */}
-      <SearchFilter
-        onSearch={handleSearch}
-        onFilter={handleFilter}
-        onExport={handleExport}
-        showDateRange={false}
-        filterOptions={[
-          {
-            label: 'Status',
-            value: 'status',
-            options: [
-              { label: 'Available', value: 'AVAILABLE' },
-              { label: 'In Use', value: 'IN_USE' },
-              { label: 'Maintenance', value: 'MAINTENANCE' },
-              { label: 'Unavailable', value: 'UNAVAILABLE' }
-            ]
-          },
-          {
-            label: 'Type',
-            value: 'type',
-            options: [
-              { label: 'Truck', value: 'Truck' },
-              { label: 'Van', value: 'Van' },
-              { label: 'Motorcycle', value: 'Motorcycle' },
-              { label: 'Car', value: 'Car' }
-            ]
-          }
-        ]}
+    <div>
+      <PageHeader
+        title="Vehicles"
+        subtitle="Fleet status, capacity and maintenance"
+        breadcrumbs={[{ label: 'Fleet' }]}
+        icon={<Truck className="h-5 w-5" />}
+        actions={
+          <>
+            <button onClick={refresh} className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50" title="Refresh"><RefreshCw className="h-4 w-4" /></button>
+            {canEdit && <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="mr-1.5 h-4 w-4" /> Add vehicle</Button>}
+          </>
+        }
       />
 
-      {/* Vehicles Table with orange accents */}
-      <Card padding="none">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-orange-50 to-amber-50 border-b-2 border-orange-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-orange-900 uppercase tracking-wider">Plate Number</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-orange-900 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-orange-900 uppercase tracking-wider">Capacity</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-orange-900 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-orange-900 uppercase tracking-wider">Last Maintenance</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-orange-900 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredVehicles.map((vehicle: any) => (
-                <tr key={vehicle.id} className="hover:bg-orange-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-lg flex items-center justify-center">
-                        <Truck className="w-5 h-5 text-white" />
-                      </div>
-                      <span className="text-sm font-bold text-gray-900">{vehicle.plateNumber}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900 font-medium">{vehicle.type}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900 font-medium">{vehicle.capacity} kg</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={getStatusBadge(vehicle.status)}>
-                      {vehicle.status.replace('_', ' ')}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {vehicle.lastMaintenance ? formatDate(vehicle.lastMaintenance) : 'Never'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => handleView(vehicle)}
-                        className="action-btn action-btn-view"
-                        title="View details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleEdit(vehicle)}
-                        className="action-btn action-btn-edit"
-                        title="Edit vehicle"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleScheduleMaintenance(vehicle)}
-                        className="action-btn action-btn-edit"
-                        title="Schedule maintenance"
-                      >
-                        <Wrench className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(vehicle)}
-                        className="action-btn action-btn-delete"
-                        title="Delete vehicle"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatCard label="Vehicles" value={rows.length} icon={<Truck className="h-5 w-5" />} />
+        <StatCard label="Available" value={rows.filter((v) => v.status === 'AVAILABLE').length} icon={<CheckCircle2 className="h-5 w-5" />} tone="success" />
+        <StatCard label="On the road" value={rows.filter((v) => v.status === 'IN_USE').length} icon={<Gauge className="h-5 w-5" />} tone="info" />
+        <StatCard label="In maintenance" value={rows.filter((v) => v.status === 'MAINTENANCE').length} icon={<Wrench className="h-5 w-5" />} tone="warning" />
+      </div>
 
-      {/* Modals */}
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Vehicle">
-        <AddVehicleForm onClose={() => setShowAddModal(false)} onSave={handleSave} />
-      </Modal>
+      <DataTable
+        storageKey="vehicles"
+        rows={filtered}
+        columns={columns}
+        rowKey={(v) => v.id}
+        loading={loading}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search plate, model, type…"
+        activeKey={viewId}
+        onRowClick={(v) => setViewId(v.id)}
+        filters={
+          <>
+            <FilterChip label="Status" value={status} onChange={setStatus} options={['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'UNAVAILABLE'].map((s) => ({ value: s, label: statusLabel(s) }))} />
+            <FilterChip label="Type" value={type} onChange={setType} options={types.map((t) => ({ value: t, label: t }))} />
+          </>
+        }
+        toolbarRight={<ExportMenu getRows={() => filtered.map((v) => ({ Plate: v.plateNumber, Type: v.type, Status: v.status, 'Capacity (kg)': v.capacity, Fuel: v.fuelType || '', 'Last Service': v.lastMaintenance ? formatDate(v.lastMaintenance) : 'Never' }))} filename="vehicles" title="Vehicles Report" />}
+        rowActions={(v) => (
+          <>
+            <button onClick={() => setViewId(v.id)} className="action-btn action-btn-view" title="View"><Eye className="h-4 w-4" /></button>
+            {canEdit && <button onClick={() => setServicing(v)} className="action-btn action-btn-edit" title="Schedule maintenance"><Wrench className="h-4 w-4" /></button>}
+            {canEdit && <button onClick={() => setEditing(v)} className="action-btn action-btn-edit" title="Edit"><Edit className="h-4 w-4" /></button>}
+            {canEdit && <button onClick={() => removeVehicles([v])} className="action-btn action-btn-delete" title="Delete"><Trash2 className="h-4 w-4" /></button>}
+          </>
+        )}
+        bulkActions={canEdit ? (selected, clear) => (
+          <button onClick={() => { removeVehicles(selected); clear(); }} className="inline-flex h-8 items-center gap-1 rounded-lg bg-error-500 px-2.5 text-xs font-semibold text-white hover:bg-error-600"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
+        ) : undefined}
+        empty={!rows.length ? <EmptyState variant="delivery" title="No vehicles yet" description="Add your first vehicle to start dispatching." action={canEdit ? <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="mr-1.5 h-4 w-4" /> Add vehicle</Button> : undefined} /> : undefined}
+      />
 
-      {selectedVehicle && (
-        <>
-          <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setSelectedVehicle(null); }} title="Edit Vehicle">
-            <EditVehicleForm vehicle={selectedVehicle} onClose={() => { setShowEditModal(false); setSelectedVehicle(null); }} onSave={handleSave} />
-          </Modal>
-
-          <Modal isOpen={showMaintenanceModal} onClose={() => { setShowMaintenanceModal(false); setSelectedVehicle(null); }} title="Schedule Maintenance">
-            <ScheduleMaintenanceForm vehicle={selectedVehicle} onClose={() => { setShowMaintenanceModal(false); setSelectedVehicle(null); }} onSave={handleSave} />
-          </Modal>
-
-          <Modal
-            isOpen={showViewModal}
-            onClose={() => { setShowViewModal(false); setSelectedVehicle(null); }}
-            title="Vehicle Details"
-            subtitle="Fleet record"
-            icon={<Truck className="w-5 h-5" />}
-          >
-            <div className="space-y-5">
-              <DetailHero
-                avatar={<Truck className="w-6 h-6" />}
-                title={selectedVehicle.plateNumber}
-                subtitle={[selectedVehicle.model, selectedVehicle.year].filter(Boolean).join(' · ') || selectedVehicle.type}
-                badges={
-                  <Badge variant={getStatusBadge(selectedVehicle.status)}>
-                    {selectedVehicle.status.replace(/_/g, ' ')}
-                  </Badge>
-                }
-              />
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <DetailStat label="Type" value={selectedVehicle.type} icon={<Truck className="w-4 h-4" />} />
-                <DetailStat label="Capacity" value={`${Number(selectedVehicle.capacity || 0).toLocaleString()} kg`} icon={<Package className="w-4 h-4" />} tone="accent" />
-              </div>
-              <DetailSection title="Vehicle Info" icon={<Wrench className="w-4 h-4" />}>
-                <DetailGrid>
-                  <DetailField label="Model">{selectedVehicle.model || 'Not specified'}</DetailField>
-                  <DetailField label="Year">{selectedVehicle.year || 'Not specified'}</DetailField>
-                  <DetailField label="Last Maintenance" className="sm:col-span-2">
-                    {selectedVehicle.lastMaintenance ? formatDate(selectedVehicle.lastMaintenance) : 'Never'}
-                  </DetailField>
-                </DetailGrid>
-              </DetailSection>
+      <Drawer
+        open={Boolean(viewing)}
+        onClose={() => setViewId(null)}
+        title={viewing?.plateNumber || ''}
+        subtitle={viewing?.type}
+        icon={<Truck className="h-4 w-4" />}
+        width="lg"
+        footer={viewing && canEdit ? (
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setServicing(viewing)}><Wrench className="mr-1.5 h-4 w-4" /> Schedule service</Button>
+            <Button variant="secondary" size="sm" onClick={() => setEditing(viewing)}><Edit className="mr-1.5 h-4 w-4" /> Edit</Button>
+          </>
+        ) : undefined}
+      >
+        {viewing && (
+          <div className="space-y-5">
+            <DetailHero
+              avatar={<Truck className="h-6 w-6" />}
+              title={viewing.plateNumber}
+              subtitle={[viewing.vehicleModel || viewing.model, viewing.year].filter(Boolean).join(' · ') || viewing.type}
+              badges={<StatusBadge status={viewing.status} size="md" />}
+            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <DetailStat label="Type" value={viewing.type} icon={<Truck className="h-4 w-4" />} />
+              <DetailStat label="Capacity" value={`${Number(viewing.capacity || 0).toLocaleString()} kg`} icon={<Package className="h-4 w-4" />} tone="accent" />
             </div>
-          </Modal>
-        </>
-      )}
+            <DetailSection title="Details" icon={<CalendarClock className="h-4 w-4" />}>
+              <DetailGrid>
+                <DetailField label="Fuel">{viewing.fuelType || 'Not specified'}</DetailField>
+                <DetailField label="Year">{viewing.year || 'Not specified'}</DetailField>
+                <DetailField label="Last service">{viewing.lastMaintenance ? formatDate(viewing.lastMaintenance) : 'Never'}</DetailField>
+                <DetailField label="Added">{formatDate(viewing.createdAt)}</DetailField>
+              </DetailGrid>
+            </DetailSection>
+            <DetailSection title="Maintenance history" icon={<Wrench className="h-4 w-4" />}>
+              <MaintenanceHistory vehicleId={viewing.id} />
+            </DetailSection>
+            <ActivityTimeline entityType="Vehicle" entityId={viewing.id} />
+          </div>
+        )}
+      </Drawer>
+
+      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add vehicle" icon={<Plus className="h-5 w-5" />}>
+        <AddVehicleForm onClose={() => setShowAdd(false)} onSave={onSaved} />
+      </Modal>
+      <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)} title="Edit vehicle" subtitle={editing?.plateNumber} icon={<Edit className="h-5 w-5" />}>
+        {editing && <EditVehicleForm vehicle={editing} onClose={() => setEditing(null)} onSave={onSaved} />}
+      </Modal>
+      <Modal isOpen={Boolean(servicing)} onClose={() => setServicing(null)} title="Schedule maintenance" subtitle={servicing?.plateNumber} icon={<Wrench className="h-5 w-5" />}>
+        {servicing && <ScheduleMaintenanceForm vehicle={servicing} onClose={() => setServicing(null)} onSave={onSaved} />}
+      </Modal>
     </div>
   );
 }

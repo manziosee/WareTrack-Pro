@@ -1,335 +1,309 @@
-import { useState, useEffect } from 'react';
-import { Plus, Eye, Edit, Trash2, Receipt } from 'lucide-react';
-import Card from '@/components/ui/Card';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
+import { Plus, Eye, Edit, Trash2, Receipt, ShoppingCart, Clock, CheckCircle2, Wallet, KanbanSquare as Board, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
-import SearchFilter from '@/components/ui/SearchFilter';
+import Drawer from '@/components/ui/Drawer';
+import PageHeader from '@/components/ui/PageHeader';
+import StatCard from '@/components/ui/StatCard';
+import StatusBadge from '@/components/ui/StatusBadge';
+import EmptyState from '@/components/ui/EmptyState';
+import ActivityTimeline from '@/components/ui/ActivityTimeline';
+import DataTable, { type Column } from '@/components/table/DataTable';
+import FilterChip from '@/components/table/FilterChip';
+import SavedFilters from '@/components/table/SavedFilters';
+import ExportMenu from '@/components/table/ExportMenu';
 import CreateOrderForm from '@/components/forms/CreateOrderForm';
 import EditOrderForm from '@/components/forms/EditOrderForm';
 import ViewOrderModal from '@/components/forms/ViewOrderModal';
-import { formatOrderNumber, formatDate } from '@/utils/formatters';
 import { ordersService } from '@/services/ordersService';
-import { useRealTimeData } from '@/hooks/useRealTimeData';
-import { exportToCSV, exportToPDF, exportToJSON } from '@/utils/exportUtils';
-import toast from 'react-hot-toast';
+import { useList } from '@/hooks/useList';
+import { undoableAction } from '@/utils/undoableAction';
+import { formatDate } from '@/utils/formatters';
+import { statusLabel } from '@/utils/status';
+import { useAuth } from '@/context/AuthContext';
+
+const STATUSES = ['PENDING', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED', 'CANCELLED'];
+const PRIORITIES = ['HIGH', 'MEDIUM', 'LOW'];
+const PAYMENT = ['PAID', 'UNPAID', 'REFUNDED'];
+const opts = (values: string[]) => values.map((v) => ({ value: v, label: statusLabel(v) }));
+const rwf = (v: unknown) => `RWF ${Number(v || 0).toLocaleString()}`;
 
 export default function Orders() {
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [filteredOrders, setFilteredOrders] = useState<any[]>([]);
-  const [filters, setFilters] = useState<any>({});
-  
-  // Real-time data fetching
-  const { data: realtimeOrders, loading, refetch } = useRealTimeData(
-    () => ordersService.getOrders(filters)
+  const { user } = useAuth();
+  const canEdit = ['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER'].includes(user?.role || '');
+  const [params, setParams] = useSearchParams();
+  const { rows, loading, setRows, refresh } = useList<any>('orders', '/orders');
+
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [priority, setPriority] = useState('');
+  const [payment, setPayment] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
+  const [viewId, setViewId] = useState<number | null>(null);
+
+  // Deep links from the command palette: ?new=1 and ?view=<id>
+  useEffect(() => {
+    if (params.get('new') === '1') setShowCreate(true);
+    const view = Number(params.get('view'));
+    if (view) setViewId(view);
+    if (params.get('new') || params.get('view')) setParams({}, { replace: true });
+  }, [params, setParams]);
+
+  const filtered = useMemo(
+    () =>
+      rows.filter(
+        (o) =>
+          (!status || o.status === status) &&
+          (!priority || o.priority === priority) &&
+          (!payment || (o.paymentStatus || 'UNPAID') === payment)
+      ),
+    [rows, status, priority, payment]
   );
 
-  useEffect(() => {
-    if (realtimeOrders) {
-      setOrders(realtimeOrders.data || []);
-      setFilteredOrders(realtimeOrders.data || []);
-    }
-  }, [realtimeOrders]);
+  const viewing = rows.find((o) => o.id === viewId) || null;
 
-  const handleSearch = (searchTerm: string) => {
-    const filtered = orders.filter(order =>
-      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customerName?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredOrders(filtered);
+  const stats = useMemo(() => {
+    const open = rows.filter((o) => ['PENDING', 'DISPATCHED', 'IN_TRANSIT'].includes(o.status)).length;
+    const delivered = rows.filter((o) => o.status === 'DELIVERED');
+    const unpaid = rows.filter((o) => (o.paymentStatus || 'UNPAID') === 'UNPAID' && o.status !== 'CANCELLED');
+    return {
+      total: rows.length,
+      open,
+      delivered: delivered.length,
+      unpaidValue: unpaid.reduce((s, o) => s + Number(o.totalAmount || 0), 0),
+    };
+  }, [rows]);
+
+  const removeOrders = (targets: any[]) => {
+    const ids = new Set(targets.map((o) => o.id));
+    const snapshot = rows;
+    undoableAction({
+      message: targets.length === 1 ? `Order ${targets[0].orderNumber} deleted` : `${targets.length} orders deleted`,
+      apply: () => {
+        setRows((list) => list.filter((o) => !ids.has(o.id)));
+        if (viewId && ids.has(viewId)) setViewId(null);
+      },
+      revert: () => setRows(() => snapshot),
+      commit: async () => {
+        for (const o of targets) {
+          const res = await ordersService.deleteOrder(o.id);
+          if (res?.success === false) throw new Error(res?.error?.message || `Could not delete ${o.orderNumber}`);
+        }
+        refresh();
+      },
+    });
   };
 
-  const handleFilter = (newFilters: any) => {
-    setFilters(newFilters);
-    let filtered = [...orders];
-    
-    if (newFilters.status) {
-      filtered = filtered.filter(order => order.status === newFilters.status);
-    }
-    if (newFilters.priority) {
-      filtered = filtered.filter(order => order.priority === newFilters.priority);
-    }
-    if (newFilters.start && newFilters.end) {
-      filtered = filtered.filter(order => {
-        const orderDate = new Date(order.createdAt);
-        return orderDate >= new Date(newFilters.start) && orderDate <= new Date(newFilters.end);
-      });
-    }
-    
-    setFilteredOrders(filtered);
+  const changeStatus = async (targets: any[], next: string) => {
+    const ids = new Set(targets.map((o) => o.id));
+    setRows((list) => list.map((o) => (ids.has(o.id) ? { ...o, status: next } : o)));
+    const results = await Promise.all(targets.map((o) => ordersService.updateOrderStatus(o.id, { status: next }).catch(() => ({ success: false }))));
+    const failed = results.filter((r: any) => r?.success === false).length;
+    if (failed) toast.error(`${failed} order${failed === 1 ? '' : 's'} could not be updated`);
+    else toast.success(`${targets.length} order${targets.length === 1 ? '' : 's'} marked ${statusLabel(next).toLowerCase()}`);
+    refresh();
   };
 
-  const handleExport = (format: 'csv' | 'pdf' | 'json') => {
-    const exportData = filteredOrders.map(order => ({
-      'Order Number': order.orderNumber,
-      'Customer': order.customerName,
-      'Status': order.status,
-      'Priority': order.priority,
-      'Total Amount': order.totalAmount,
-      'Created': formatDate(order.createdAt),
-      'Delivery Address': order.deliveryAddress
+  const saveOrder = async (data: any) => {
+    const res = editing ? await ordersService.updateOrder(editing.id, data) : await ordersService.createOrder(data);
+    if (res?.success === false) {
+      toast.error(res?.error?.message || 'Could not save the order');
+      return;
+    }
+    toast.success(editing ? 'Order updated' : 'Order created');
+    setEditing(null);
+    setShowCreate(false);
+    refresh();
+  };
+
+  const columns: Column<any>[] = [
+    {
+      id: 'orderNumber', header: 'Order', required: true, accessor: (o) => o.orderNumber,
+      cell: (o) => (
+        <div>
+          <p className="font-semibold text-gray-900">{o.orderNumber}</p>
+          <p className="text-xs text-gray-500">{formatDate(o.createdAt)}</p>
+        </div>
+      ),
+    },
+    {
+      id: 'customer', header: 'Customer', accessor: (o) => o.customerName,
+      cell: (o) => (
+        <div className="max-w-[16rem]">
+          <p className="truncate font-medium text-gray-800">{o.customerName}</p>
+          <p className="truncate text-xs text-gray-500">{o.deliveryAddress}</p>
+        </div>
+      ),
+    },
+    { id: 'status', header: 'Status', accessor: (o) => o.status, cell: (o) => <StatusBadge status={o.status} /> },
+    { id: 'priority', header: 'Priority', accessor: (o) => PRIORITIES.indexOf(o.priority), cell: (o) => <StatusBadge status={o.priority} /> },
+    { id: 'total', header: 'Total', align: 'right', accessor: (o) => Number(o.totalAmount || 0), cell: (o) => <span className="font-semibold text-gray-900">{rwf(o.totalAmount)}</span> },
+    { id: 'payment', header: 'Payment', accessor: (o) => o.paymentStatus || 'UNPAID', cell: (o) => <StatusBadge status={o.paymentStatus || 'UNPAID'} /> },
+    { id: 'driver', header: 'Driver', accessor: (o) => o.driver?.name || '', cell: (o) => <span className="text-gray-600">{o.driver?.name || '—'}</span> },
+    {
+      id: 'scheduled', header: 'Scheduled', accessor: (o) => (o.timeSlotStart || o.scheduledDate ? new Date(o.timeSlotStart || o.scheduledDate) : null),
+      cell: (o) => <span className="text-gray-600">{o.timeSlotStart || o.scheduledDate ? formatDate(o.timeSlotStart || o.scheduledDate) : '—'}</span>,
+    },
+    { id: 'items', header: 'Items', align: 'right', defaultHidden: true, accessor: (o) => o.items?.length || 0 },
+    { id: 'method', header: 'Pay method', defaultHidden: true, accessor: (o) => statusLabel(o.paymentMethod) },
+  ];
+
+  const exportRows = (list: any[]) =>
+    list.map((o) => ({
+      'Order Number': o.orderNumber,
+      Customer: o.customerName,
+      Status: o.status,
+      Priority: o.priority,
+      'Total Amount': Number(o.totalAmount || 0),
+      Payment: o.paymentStatus || 'UNPAID',
+      Created: formatDate(o.createdAt),
+      'Delivery Address': o.deliveryAddress,
     }));
 
-    switch (format) {
-      case 'csv':
-        exportToCSV(exportData, 'orders');
-        break;
-      case 'pdf':
-        exportToPDF(exportData, 'orders', 'Orders Report');
-        break;
-      case 'json':
-        exportToJSON(exportData, 'orders');
-        break;
-    }
-    toast.success(`Orders exported as ${format.toUpperCase()}`);
-  };
-
-  const handleView = (order: any) => {
-    setSelectedOrder(order);
-    setShowViewModal(true);
-  };
-
-  const handleEdit = (order: any) => {
-    setSelectedOrder(order);
-    setShowEditModal(true);
-  };
-
-  const handleDelete = async (orderId: number) => {
-    if (window.confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
-      try {
-        // Optimistic update - remove order from UI immediately
-        setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
-        setFilteredOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
-        
-        await ordersService.deleteOrder(orderId);
-        toast.success('Order deleted successfully');
-      } catch (error) {
-        console.error('Failed to delete order:', error);
-        toast.error('Failed to delete order');
-        // Revert optimistic update on error
-        refetch();
-      }
-    }
-  };
-
-  const handleSaveOrder = async (orderData: any) => {
-    try {
-      if (selectedOrder) {
-        await ordersService.updateOrder(selectedOrder.id, orderData);
-        toast.success('Order updated successfully');
-      } else {
-        await ordersService.createOrder(orderData);
-        toast.success('Order created successfully');
-      }
-      setShowEditModal(false);
-      setShowCreateModal(false);
-      setSelectedOrder(null);
-      refetch();
-    } catch (error) {
-      console.error('Failed to save order:', error);
-      toast.error('Failed to save order');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-
-
-  const getStatusBadgeVariant = (status: string) => {
-    const normalizedStatus = status.toLowerCase();
-    switch (normalizedStatus) {
-      case 'delivered': return 'success';
-      case 'in_transit': return 'info';
-      case 'dispatched': return 'warning';
-      case 'pending': return 'gray';
-      case 'cancelled': return 'error';
-      default: return 'gray';
-    }
-  };
-
-  const getPriorityBadgeVariant = (priority: string) => {
-    const normalizedPriority = priority.toLowerCase();
-    switch (normalizedPriority) {
-      case 'high': return 'error';
-      case 'medium': return 'warning';
-      case 'low': return 'gray';
-      default: return 'gray';
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-3xl font-bold text-gray-900">Delivery Orders</h1>
-          <p className="text-gray-600 mt-1">Create and manage delivery orders</p>
-        </div>
-        <Button variant="primary" onClick={() => setShowCreateModal(true)}>
-          <Plus className="w-5 h-5 mr-2" />
-          Create Order
-        </Button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-        <Card>
-          <p className="text-sm text-gray-600">Total Orders</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{orders.length}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">Pending</p>
-          <p className="text-2xl font-bold text-gray-600 mt-1">{orders.filter(o => o.status === 'PENDING').length}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">Dispatched</p>
-          <p className="text-2xl font-bold text-warning-600 mt-1">{orders.filter(o => o.status === 'DISPATCHED').length}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">In Transit</p>
-          <p className="text-2xl font-bold text-accent-600 mt-1">{orders.filter(o => o.status === 'IN_TRANSIT').length}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">Delivered</p>
-          <p className="text-2xl font-bold text-success-600 mt-1">{orders.filter(o => o.status === 'DELIVERED').length}</p>
-        </Card>
-      </div>
-
-      {/* Search and Filters */}
-      <SearchFilter
-        onSearch={handleSearch}
-        onFilter={handleFilter}
-        onExport={handleExport}
-        showDateRange={true}
-        filterOptions={[
-          {
-            label: 'Status',
-            value: 'status',
-            options: [
-              { label: 'Pending', value: 'PENDING' },
-              { label: 'Dispatched', value: 'DISPATCHED' },
-              { label: 'In Transit', value: 'IN_TRANSIT' },
-              { label: 'Delivered', value: 'DELIVERED' },
-              { label: 'Cancelled', value: 'CANCELLED' }
-            ]
-          },
-          {
-            label: 'Priority',
-            value: 'priority',
-            options: [
-              { label: 'High', value: 'high' },
-              { label: 'Medium', value: 'medium' },
-              { label: 'Low', value: 'low' }
-            ]
-          }
-        ]}
+    <div>
+      <PageHeader
+        title="Orders"
+        subtitle="Every customer order, from creation to delivery"
+        icon={<ShoppingCart className="h-5 w-5" />}
+        actions={
+          <>
+            <Link to="/orders/board" className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+              <Board className="h-4 w-4" /> Board view
+            </Link>
+            <button onClick={refresh} className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50" title="Refresh">
+              <RefreshCw className="h-4 w-4" />
+            </button>
+            {canEdit && (
+              <Button onClick={() => setShowCreate(true)} size="sm">
+                <Plus className="mr-1.5 h-4 w-4" /> New order
+              </Button>
+            )}
+          </>
+        }
       />
 
-      {/* Orders Table */}
-      <Card padding="none">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order #</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <code className="text-sm font-medium bg-primary-50 text-primary-700 px-2 py-1 rounded">
-                      {formatOrderNumber(order.id)}
-                    </code>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{order.customerName}</div>
-                    <div className="text-sm text-gray-500">{order.contactNumber}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={getPriorityBadgeVariant(order.priority || 'low')}>
-                      {(order.priority || 'Low').charAt(0).toUpperCase() + (order.priority || 'low').slice(1).toLowerCase()}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={getStatusBadgeVariant(order.status || 'pending')}>
-                      {(order.status || 'Pending').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(order.createdAt)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.scheduledDate ? formatDate(order.scheduledDate) : '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => handleView(order)}
-                        className="action-btn action-btn-view"
-                        title="View order details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleEdit(order)}
-                        className="action-btn action-btn-edit"
-                        title="Edit order"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(order.id)}
-                        className="action-btn action-btn-delete"
-                        title="Delete order"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatCard label="All orders" value={stats.total} icon={<Receipt className="h-5 w-5" />} />
+        <StatCard label="Open" value={stats.open} icon={<Clock className="h-5 w-5" />} tone="accent" />
+        <StatCard label="Delivered" value={stats.delivered} icon={<CheckCircle2 className="h-5 w-5" />} tone="success" />
+        <StatCard label="Unpaid value" value={stats.unpaidValue} prefix="RWF " compact icon={<Wallet className="h-5 w-5" />} tone="warning" />
+      </div>
 
-      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create New Order">
-        <CreateOrderForm onClose={() => setShowCreateModal(false)} onSave={handleSaveOrder} />
-      </Modal>
-
-      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Order Details" subtitle="Order information and progress" icon={<Receipt className="w-5 h-5" />} size="lg">
-        {selectedOrder && <ViewOrderModal order={selectedOrder} />}
-      </Modal>
-
-      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Order" size="lg">
-        {selectedOrder && (
-          <EditOrderForm 
-            order={selectedOrder} 
-            onClose={() => setShowEditModal(false)}
-            onSave={handleSaveOrder}
-          />
+      <DataTable
+        storageKey="orders"
+        rows={filtered}
+        columns={columns}
+        rowKey={(o) => o.id}
+        loading={loading}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search order number, customer, address…"
+        initialSort={{ id: 'orderNumber', dir: 'desc' }}
+        activeKey={viewId}
+        onRowClick={(o) => setViewId(o.id)}
+        filters={
+          <>
+            <FilterChip label="Status" value={status} onChange={setStatus} options={opts(STATUSES)} />
+            <FilterChip label="Priority" value={priority} onChange={setPriority} options={opts(PRIORITIES)} />
+            <FilterChip label="Payment" value={payment} onChange={setPayment} options={opts(PAYMENT)} />
+          </>
+        }
+        toolbarRight={
+          <>
+            <SavedFilters
+              page="orders"
+              current={{ search, status, priority, payment }}
+              onApply={(f) => {
+                setSearch(f.search || '');
+                setStatus(f.status || '');
+                setPriority(f.priority || '');
+                setPayment(f.payment || '');
+              }}
+            />
+            <ExportMenu getRows={() => exportRows(filtered)} filename="orders" title="Orders Report" />
+          </>
+        }
+        rowActions={(o) => (
+          <>
+            <button onClick={() => setViewId(o.id)} className="action-btn action-btn-view" title="View"><Eye className="h-4 w-4" /></button>
+            {canEdit && <button onClick={() => setEditing(o)} className="action-btn action-btn-edit" title="Edit"><Edit className="h-4 w-4" /></button>}
+            {canEdit && <button onClick={() => removeOrders([o])} className="action-btn action-btn-delete" title="Delete"><Trash2 className="h-4 w-4" /></button>}
+          </>
         )}
+        bulkActions={
+          canEdit
+            ? (selected, clear) => (
+                <>
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (e.target.value) changeStatus(selected, e.target.value).then(clear);
+                      e.target.value = '';
+                    }}
+                    className="h-8 rounded-lg border border-accent-200 bg-white px-2 text-xs font-medium text-gray-700"
+                  >
+                    <option value="" disabled>Change status…</option>
+                    {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+                  </select>
+                  <ExportMenu getRows={() => exportRows(selected)} filename="orders-selected" title="Selected Orders" label="Export selected" />
+                  <button onClick={() => { removeOrders(selected); clear(); }} className="inline-flex h-8 items-center gap-1 rounded-lg bg-error-500 px-2.5 text-xs font-semibold text-white hover:bg-error-600">
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </button>
+                </>
+              )
+            : undefined
+        }
+        empty={
+          <EmptyState
+            title={rows.length ? 'No orders match these filters' : 'No orders yet'}
+            description={rows.length ? 'Try clearing a filter.' : 'Create your first order to start tracking deliveries.'}
+            variant={rows.length ? 'search' : 'empty'}
+            action={!rows.length && canEdit ? <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="mr-1.5 h-4 w-4" /> Create your first order</Button> : undefined}
+          />
+        }
+      />
+
+      <Drawer
+        open={Boolean(viewing)}
+        onClose={() => setViewId(null)}
+        title={viewing ? viewing.orderNumber : ''}
+        subtitle={viewing?.customerName}
+        icon={<Receipt className="h-4 w-4" />}
+        width="xl"
+        footer={
+          viewing && canEdit ? (
+            <>
+              <select
+                value=""
+                onChange={(e) => e.target.value && changeStatus([viewing], e.target.value)}
+                className="h-9 rounded-xl border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700"
+              >
+                <option value="">Change status…</option>
+                {STATUSES.filter((s) => s !== viewing.status).map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+              </select>
+              <Button variant="secondary" size="sm" onClick={() => setEditing(viewing)}><Edit className="mr-1.5 h-4 w-4" /> Edit</Button>
+              <Button variant="error" size="sm" onClick={() => removeOrders([viewing])}><Trash2 className="mr-1.5 h-4 w-4" /> Delete</Button>
+            </>
+          ) : undefined
+        }
+      >
+        {viewing && (
+          <div className="space-y-5">
+            <ViewOrderModal order={viewing} />
+            <ActivityTimeline entityType="Order" entityId={viewing.id} />
+          </div>
+        )}
+      </Drawer>
+
+      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="New order" subtitle="Add the customer, items and delivery details" icon={<Plus className="h-5 w-5" />} size="xl">
+        <CreateOrderForm onClose={() => setShowCreate(false)} onSave={saveOrder} />
+      </Modal>
+      <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)} title="Edit order" subtitle={editing?.orderNumber} icon={<Edit className="h-5 w-5" />} size="xl">
+        {editing && <EditOrderForm order={editing} onClose={() => setEditing(null)} onSave={saveOrder} />}
       </Modal>
     </div>
   );

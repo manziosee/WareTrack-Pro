@@ -4,12 +4,14 @@ import { prisma } from '../lib/prisma';
 export class DriversController {
   static async getDrivers(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 10, status, search } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const { page = 1, limit = 50, status, search } = req.query;
+      // Lists return up to 500 rows so the UI can sort, filter and page instantly
+      const pageSize = Math.min(Math.max(Number(limit) || 50, 1), 500);
+      const skip = (Math.max(Number(page) || 1, 1) - 1) * pageSize;
 
       const drivers = await prisma.driver.findMany({
         skip,
-        take: Number(limit),
+        take: pageSize,
         where: {
           ...(status && { status: status as any }),
           ...(search && {
@@ -61,7 +63,7 @@ export class DriversController {
       res.json({
         success: true,
         data: updatedDrivers,
-        pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
+        pagination: { page: Number(page), limit: pageSize, total, totalPages: Math.ceil(total / pageSize) }
       });
     } catch (error) {
       res.status(500).json({ 

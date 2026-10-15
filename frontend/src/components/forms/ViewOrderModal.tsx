@@ -48,7 +48,7 @@ export default function ViewOrderModal({ order }: ViewOrderModalProps) {
     <div className="space-y-5">
       <DetailHero
         avatar={<Receipt className="w-6 h-6" />}
-        title={`Order ${formatOrderNumber(order.id)}`}
+        title={`Order ${order.orderNumber || formatOrderNumber(order.id)}`}
         subtitle={`Created ${formatDate(order.createdAt)}`}
         badges={
           <>

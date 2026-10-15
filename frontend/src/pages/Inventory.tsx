@@ -1,364 +1,252 @@
-import { useState, useEffect } from 'react';
-import { Plus, Eye, Edit, Trash2, AlertTriangle, Package } from 'lucide-react';
-import Card from '@/components/ui/Card';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Plus, Eye, Edit, Trash2, Package, Boxes, PackageX, AlertTriangle, Wallet, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
-import SearchFilter from '@/components/ui/SearchFilter';
+import Drawer from '@/components/ui/Drawer';
+import PageHeader from '@/components/ui/PageHeader';
+import StatCard from '@/components/ui/StatCard';
+import StatusBadge from '@/components/ui/StatusBadge';
+import EmptyState from '@/components/ui/EmptyState';
+import ActivityTimeline from '@/components/ui/ActivityTimeline';
+import DataTable, { type Column } from '@/components/table/DataTable';
+import FilterChip from '@/components/table/FilterChip';
+import SavedFilters from '@/components/table/SavedFilters';
+import ExportMenu from '@/components/table/ExportMenu';
 import AddInventoryForm from '@/components/forms/AddInventoryForm';
 import EditInventoryForm from '@/components/forms/EditInventoryForm';
 import ViewInventoryModal from '@/components/forms/ViewInventoryModal';
-import { formatDate, formatStockLevel } from '@/utils/formatters';
 import { inventoryService } from '@/services/inventoryService';
-import { useRealTimeData } from '@/hooks/useRealTimeData';
-import { exportToCSV, exportToPDF, exportToJSON } from '@/utils/exportUtils';
-import { cache } from '@/utils/cache';
-import toast from 'react-hot-toast';
+import { useList } from '@/hooks/useList';
+import { undoableAction } from '@/utils/undoableAction';
+import { useAuth } from '@/context/AuthContext';
+
+const stockLevel = (i: any) => (i.quantity === 0 ? 'OUT_OF_STOCK' : i.quantity <= i.minQuantity ? 'LOW_STOCK' : 'IN_STOCK');
+const rwf = (v: number) => `RWF ${Math.round(v).toLocaleString()}`;
 
 export default function Inventory() {
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [inventory, setInventory] = useState<any[]>([]);
-  const [filteredInventory, setFilteredInventory] = useState<any[]>([]);
-  const [stats, setStats] = useState<any>(null);
-  const [currentPage] = useState(1);
-  const [filters, setFilters] = useState<any>({});
-  
-  // Real-time data fetching
-  const { data: realtimeInventory, loading, refetch } = useRealTimeData(
-    () => inventoryService.getInventory({ ...filters, page: currentPage, limit: 20 })
+  const { user } = useAuth();
+  const canEdit = ['ADMIN', 'WAREHOUSE_STAFF'].includes(user?.role || '');
+  const [params, setParams] = useSearchParams();
+  const { rows, loading, setRows, refresh } = useList<any>('inventory', '/inventory');
+
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  const [level, setLevel] = useState('');
+  const [status, setStatus] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
+  const [viewId, setViewId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (params.get('new') === '1') setShowAdd(true);
+    const view = Number(params.get('view'));
+    if (view) setViewId(view);
+    if (params.get('new') || params.get('view')) setParams({}, { replace: true });
+  }, [params, setParams]);
+
+  const categories = useMemo(() => Array.from(new Set(rows.map((i) => i.category))).sort(), [rows]);
+  const filtered = useMemo(
+    () => rows.filter((i) => (!category || i.category === category) && (!level || stockLevel(i) === level) && (!status || i.status === status)),
+    [rows, category, level, status]
   );
+  const viewing = rows.find((i) => i.id === viewId) || null;
 
-  const fetchStats = async () => {
-    try {
-      const statsData = await inventoryService.getStats();
-      setStats(statsData);
-    } catch (error) {
-      console.error('Failed to fetch inventory stats:', error);
-    }
+  const stats = useMemo(() => ({
+    skus: rows.length,
+    low: rows.filter((i) => stockLevel(i) === 'LOW_STOCK').length,
+    out: rows.filter((i) => stockLevel(i) === 'OUT_OF_STOCK').length,
+    value: rows.reduce((s, i) => s + i.quantity * Number(i.unitPrice || 0), 0),
+  }), [rows]);
+
+  const removeItems = (targets: any[]) => {
+    const ids = new Set(targets.map((i) => i.id));
+    const snapshot = rows;
+    undoableAction({
+      message: targets.length === 1 ? `${targets[0].name} deleted` : `${targets.length} items deleted`,
+      apply: () => {
+        setRows((list) => list.filter((i) => !ids.has(i.id)));
+        if (viewId && ids.has(viewId)) setViewId(null);
+      },
+      revert: () => setRows(() => snapshot),
+      commit: async () => {
+        for (const i of targets) {
+          const res = await inventoryService.deleteInventoryItem(i.id);
+          if (res?.success === false) throw new Error(res?.error?.message || `Could not delete ${i.name}`);
+        }
+        refresh();
+      },
+    });
   };
 
-  useEffect(() => {
-    fetchStats();
-    
-    // Check for lowStock query parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const lowStockParam = urlParams.get('lowStock');
-    if (lowStockParam === 'true') {
-      // Filter to show only low stock items
-      const lowStockItems = inventory.filter(item => item.quantity < item.minQuantity);
-      setFilteredInventory(lowStockItems);
+  const saveItem = async (data: any) => {
+    const res = editing ? await inventoryService.updateInventoryItem(editing.id, data) : await inventoryService.createInventoryItem(data);
+    if (res?.success === false) {
+      toast.error(res?.error?.message || 'Could not save the item');
+      return;
     }
-  }, []);
-
-  useEffect(() => {
-    if (realtimeInventory) {
-      setInventory(realtimeInventory.data || []);
-      
-      // Check for lowStock query parameter
-      const urlParams = new URLSearchParams(window.location.search);
-      const lowStockParam = urlParams.get('lowStock');
-      if (lowStockParam === 'true') {
-        // Filter to show only low stock items
-        const lowStockItems = (realtimeInventory.data || []).filter((item: any) => item.quantity < item.minQuantity);
-        setFilteredInventory(lowStockItems);
-      } else {
-        setFilteredInventory(realtimeInventory.data || []);
-      }
-    }
-  }, [realtimeInventory]);
-
-  const handleSearch = async (searchTerm: string) => {
-    const newFilters = { ...filters, search: searchTerm };
-    setFilters(newFilters);
-    
-    try {
-      const response = await inventoryService.getInventory({ ...newFilters, page: currentPage, limit: 20 });
-      setInventory(response.data || []);
-      setFilteredInventory(response.data || []);
-    } catch (error) {
-      console.error('Search failed:', error);
-    }
+    toast.success(editing ? 'Item updated' : 'Item added');
+    setEditing(null);
+    setShowAdd(false);
+    refresh();
   };
 
-  const handleFilter = async (newFilters: any) => {
-    const updatedFilters = { ...filters, ...newFilters };
-    setFilters(updatedFilters);
-    
-    try {
-      const response = await inventoryService.getInventory({ ...updatedFilters, page: currentPage, limit: 20 });
-      setInventory(response.data || []);
-      setFilteredInventory(response.data || []);
-    } catch (error) {
-      console.error('Filter failed:', error);
-    }
-  };
+  const columns: Column<any>[] = [
+    {
+      id: 'name', header: 'Item', required: true, accessor: (i) => i.name,
+      cell: (i) => (
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600"><Package className="h-4 w-4" /></span>
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-gray-900">{i.name}</p>
+            <p className="font-mono text-xs text-gray-500">{i.code}</p>
+          </div>
+        </div>
+      ),
+    },
+    { id: 'category', header: 'Category', accessor: (i) => i.category, cell: (i) => <span className="whitespace-nowrap rounded-lg bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{i.category}</span> },
+    {
+      id: 'stock', header: 'Stock', align: 'right', accessor: (i) => i.quantity,
+      cell: (i) => {
+        const ratio = i.minQuantity ? Math.min(1, i.quantity / (i.minQuantity * 2)) : 1;
+        const lvl = stockLevel(i);
+        return (
+          <div className="ml-auto w-28">
+            <p className="font-semibold text-gray-900">{i.quantity.toLocaleString()} <span className="text-xs font-normal text-gray-500">{i.unit}</span></p>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100">
+              <div className={`h-full rounded-full ${lvl === 'IN_STOCK' ? 'bg-success-500' : lvl === 'LOW_STOCK' ? 'bg-warning-500' : 'bg-error-500'}`} style={{ width: `${Math.max(4, ratio * 100)}%` }} />
+            </div>
+          </div>
+        );
+      },
+    },
+    { id: 'level', header: 'Level', accessor: (i) => stockLevel(i), cell: (i) => <StatusBadge status={stockLevel(i)} /> },
+    { id: 'min', header: 'Minimum', align: 'right', accessor: (i) => i.minQuantity },
+    { id: 'price', header: 'Unit price', align: 'right', accessor: (i) => Number(i.unitPrice || 0), cell: (i) => rwf(Number(i.unitPrice || 0)) },
+    { id: 'value', header: 'Stock value', align: 'right', accessor: (i) => i.quantity * Number(i.unitPrice || 0), cell: (i) => <span className="font-semibold">{rwf(i.quantity * Number(i.unitPrice || 0))}</span> },
+    { id: 'location', header: 'Location', accessor: (i) => i.location },
+    { id: 'supplier', header: 'Supplier', defaultHidden: true, accessor: (i) => i.supplier || '' },
+    { id: 'status', header: 'Status', defaultHidden: true, accessor: (i) => i.status, cell: (i) => <StatusBadge status={i.status} /> },
+  ];
 
-  const handleExport = (format: 'csv' | 'pdf' | 'json') => {
-    const exportData = filteredInventory.map(item => ({
-      Name: item.name,
-      Code: item.code,
-      Category: item.category,
-      Quantity: item.quantity,
-      'Min Quantity': item.minQuantity,
-      'Unit Price': item.unitPrice,
-      Location: item.location,
-      Status: item.status
+  const exportRows = (list: any[]) =>
+    list.map((i) => ({
+      Name: i.name, Code: i.code, Category: i.category, Quantity: i.quantity, 'Min Quantity': i.minQuantity,
+      'Unit Price': Number(i.unitPrice || 0), Location: i.location, Status: stockLevel(i),
     }));
 
-    switch (format) {
-      case 'csv':
-        exportToCSV(exportData, 'inventory');
-        break;
-      case 'pdf':
-        exportToPDF(exportData, 'inventory', 'Inventory Report');
-        break;
-      case 'json':
-        exportToJSON(exportData, 'inventory');
-        break;
-    }
-    toast.success(`Inventory exported as ${format.toUpperCase()}`);
-  };
-
-  const handleView = (item: any) => {
-    setSelectedItem(item);
-    setShowViewModal(true);
-  };
-
-  const handleEdit = (item: any) => {
-    setSelectedItem(item);
-    setShowEditModal(true);
-  };
-
-  const handleDelete = async (itemId: number) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
-      try {
-        await inventoryService.deleteInventoryItem(itemId);
-        toast.success('Item deleted successfully');
-        refetch();
-        fetchStats();
-      } catch (error) {
-        console.error('Failed to delete item:', error);
-        toast.error('Failed to delete item');
-      }
-    }
-  };
-
-  const handleSaveItem = async (itemData: any) => {
-    try {
-      if (selectedItem) {
-        await inventoryService.updateInventoryItem(selectedItem.id, itemData);
-        toast.success('Item updated successfully');
-      } else {
-        await inventoryService.createInventoryItem(itemData);
-        toast.success('Item created successfully');
-      }
-      
-      // Clear cache to ensure fresh data
-      cache.clearPattern('inventory');
-      cache.clearPattern('/api/');
-      
-      setShowViewModal(false);
-      setShowEditModal(false);
-      setShowAddModal(false);
-      setSelectedItem(null);
-      
-      // Force refresh data with delay to ensure backend is updated
-      setTimeout(async () => {
-        await refetch();
-        await fetchStats();
-      }, 1000);
-    } catch (error) {
-      console.error('Failed to save item:', error);
-      toast.error('Failed to save item');
-      throw error; // Re-throw to let form handle the error
-    }
-  };
-
-  if (loading && inventory.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  const getStockBadgeVariant = (current: number, min: number) => {
-    const percentage = (current / min) * 100;
-    if (percentage <= 25) return 'error';
-    if (percentage <= 50) return 'warning';
-    return 'success';
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-3xl font-bold text-gray-900">Inventory Management</h1>
-          <p className="text-gray-600 mt-1">Track and manage warehouse stock levels</p>
-        </div>
-        <Button variant="primary" onClick={() => setShowAddModal(true)}>
-          <Plus className="w-5 h-5 mr-2" />
-          Add Item
-        </Button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <p className="text-sm text-gray-600">Total Items</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{stats?.totalItems || 0}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">Total Value</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">RWF {stats?.totalValue?.toLocaleString() || '0'}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">Low Stock</p>
-          <p className="text-2xl font-bold text-error-600 mt-1">{stats?.lowStock || 0}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">Out of Stock</p>
-          <p className="text-2xl font-bold text-error-600 mt-1">{stats?.outOfStock || 0}</p>
-        </Card>
-      </div>
-
-      {/* Search and Filters */}
-      <SearchFilter
-        onSearch={handleSearch}
-        onFilter={handleFilter}
-        onExport={handleExport}
-        showDateRange={false}
-        filterOptions={[
-          {
-            label: 'Category',
-            value: 'category',
-            options: [
-              { label: 'Electronics', value: 'Electronics' },
-              { label: 'Furniture', value: 'Furniture' },
-              { label: 'Office Supplies', value: 'Office Supplies' },
-              { label: 'Equipment', value: 'Equipment' },
-              { label: 'Tools', value: 'Tools' },
-              { label: 'Materials', value: 'Materials' }
-            ]
-          },
-          {
-            label: 'Status',
-            value: 'status',
-            options: [
-              { label: 'Active', value: 'ACTIVE' },
-              { label: 'Inactive', value: 'INACTIVE' },
-              { label: 'Discontinued', value: 'DISCONTINUED' }
-            ]
-          }
-        ]}
+    <div>
+      <PageHeader
+        title="Inventory"
+        subtitle="Stock levels, values and locations across your warehouses"
+        breadcrumbs={[{ label: 'Warehouse' }]}
+        icon={<Boxes className="h-5 w-5" />}
+        actions={
+          <>
+            <button onClick={refresh} className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50" title="Refresh">
+              <RefreshCw className="h-4 w-4" />
+            </button>
+            {canEdit && <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="mr-1.5 h-4 w-4" /> Add item</Button>}
+          </>
+        }
       />
 
-      {/* Inventory Table */}
-      <Card padding="none">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredInventory.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <code className="text-sm bg-gray-100 px-2 py-1 rounded">{item.code}</code>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant="gray">{item.category}</Badge>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      {item.quantity < item.minQuantity && (
-                        <AlertTriangle className="w-4 h-4 text-error-500" />
-                      )}
-                      <span className="text-sm font-medium text-gray-900">
-                        {item.quantity} {item.unit}
-                      </span>
-                      <span className="text-xs text-gray-500">/ {item.minQuantity}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-900">
-                      RWF {Number(item.unitPrice || 0).toLocaleString()}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.location}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={getStockBadgeVariant(item.quantity, item.minQuantity)}>
-                      {formatStockLevel(item.quantity, item.minQuantity)}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(item.lastUpdated)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => handleView(item)}
-                        className="action-btn action-btn-view"
-                        title="View item details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleEdit(item)}
-                        className="action-btn action-btn-edit"
-                        title="Edit item"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(item.id)}
-                        className="action-btn action-btn-delete"
-                        title="Delete item"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatCard label="Products" value={stats.skus} icon={<Boxes className="h-5 w-5" />} />
+        <StatCard label="Low stock" value={stats.low} icon={<AlertTriangle className="h-5 w-5" />} tone="warning" />
+        <StatCard label="Out of stock" value={stats.out} icon={<PackageX className="h-5 w-5" />} tone="error" />
+        <StatCard label="Stock value" value={stats.value} prefix="RWF " compact icon={<Wallet className="h-5 w-5" />} tone="success" />
+      </div>
 
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Inventory Item">
-        <AddInventoryForm onClose={() => setShowAddModal(false)} onSave={handleSaveItem} />
-      </Modal>
-
-      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Inventory Item Details" subtitle="Stock levels and item information" icon={<Package className="w-5 h-5" />} size="lg">
-        {selectedItem && <ViewInventoryModal item={selectedItem} />}
-      </Modal>
-
-      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Inventory Item">
-        {selectedItem && (
-          <EditInventoryForm 
-            item={selectedItem} 
-            onClose={() => setShowEditModal(false)}
-            onSave={handleSaveItem}
-          />
+      <DataTable
+        storageKey="inventory"
+        rows={filtered}
+        columns={columns}
+        rowKey={(i) => i.id}
+        loading={loading}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name, code, location…"
+        initialSort={{ id: 'name', dir: 'asc' }}
+        activeKey={viewId}
+        onRowClick={(i) => setViewId(i.id)}
+        filters={
+          <>
+            <FilterChip label="Category" value={category} onChange={setCategory} options={categories.map((c) => ({ value: c, label: c }))} />
+            <FilterChip label="Stock level" value={level} onChange={setLevel} options={[{ value: 'IN_STOCK', label: 'In stock' }, { value: 'LOW_STOCK', label: 'Low stock' }, { value: 'OUT_OF_STOCK', label: 'Out of stock' }]} />
+            <FilterChip label="Status" value={status} onChange={setStatus} options={[{ value: 'ACTIVE', label: 'Active' }, { value: 'INACTIVE', label: 'Inactive' }, { value: 'DISCONTINUED', label: 'Discontinued' }]} />
+          </>
+        }
+        toolbarRight={
+          <>
+            <SavedFilters
+              page="inventory"
+              current={{ search, category, level, status }}
+              onApply={(f) => { setSearch(f.search || ''); setCategory(f.category || ''); setLevel(f.level || ''); setStatus(f.status || ''); }}
+            />
+            <ExportMenu getRows={() => exportRows(filtered)} filename="inventory" title="Inventory Report" />
+          </>
+        }
+        rowActions={(i) => (
+          <>
+            <button onClick={() => setViewId(i.id)} className="action-btn action-btn-view" title="View"><Eye className="h-4 w-4" /></button>
+            {canEdit && <button onClick={() => setEditing(i)} className="action-btn action-btn-edit" title="Edit"><Edit className="h-4 w-4" /></button>}
+            {canEdit && <button onClick={() => removeItems([i])} className="action-btn action-btn-delete" title="Delete"><Trash2 className="h-4 w-4" /></button>}
+          </>
         )}
+        bulkActions={
+          canEdit
+            ? (selected, clear) => (
+                <>
+                  <ExportMenu getRows={() => exportRows(selected)} filename="inventory-selected" title="Selected Items" label="Export selected" />
+                  <button onClick={() => { removeItems(selected); clear(); }} className="inline-flex h-8 items-center gap-1 rounded-lg bg-error-500 px-2.5 text-xs font-semibold text-white hover:bg-error-600">
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </button>
+                </>
+              )
+            : undefined
+        }
+        empty={
+          <EmptyState
+            variant={rows.length ? 'search' : 'empty'}
+            title={rows.length ? 'No items match these filters' : 'Your inventory is empty'}
+            description={rows.length ? 'Try clearing a filter.' : 'Add your first product to start tracking stock.'}
+            action={!rows.length && canEdit ? <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="mr-1.5 h-4 w-4" /> Add your first item</Button> : undefined}
+          />
+        }
+      />
+
+      <Drawer
+        open={Boolean(viewing)}
+        onClose={() => setViewId(null)}
+        title={viewing?.name || ''}
+        subtitle={viewing?.code}
+        icon={<Package className="h-4 w-4" />}
+        width="xl"
+        footer={
+          viewing && canEdit ? (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => setEditing(viewing)}><Edit className="mr-1.5 h-4 w-4" /> Edit</Button>
+              <Button variant="error" size="sm" onClick={() => removeItems([viewing])}><Trash2 className="mr-1.5 h-4 w-4" /> Delete</Button>
+            </>
+          ) : undefined
+        }
+      >
+        {viewing && (
+          <div className="space-y-5">
+            <ViewInventoryModal item={viewing} />
+            <ActivityTimeline entityType="InventoryItem" entityId={viewing.id} />
+          </div>
+        )}
+      </Drawer>
+
+      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add inventory item" icon={<Plus className="h-5 w-5" />} size="lg">
+        <AddInventoryForm onClose={() => setShowAdd(false)} onSave={saveItem} />
+      </Modal>
+      <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)} title="Edit item" subtitle={editing?.name} icon={<Edit className="h-5 w-5" />} size="lg">
+        {editing && <EditInventoryForm item={editing} onClose={() => setEditing(null)} onSave={saveItem} />}
       </Modal>
     </div>
   );

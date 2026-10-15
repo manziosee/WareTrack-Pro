@@ -36,10 +36,27 @@ api.interceptors.request.use((config) => {
 // Response interceptor to handle errors and cache responses
 api.interceptors.response.use(
   (response) => {
-    // Cache GET responses
-    if (response.config.method === 'get') {
+    const method = (response.config.method || 'get').toLowerCase();
+    const ok = response.status >= 200 && response.status < 300;
+
+    // Any successful change makes cached lists stale
+    if (method !== 'get' && ok) {
+      cache.clear();
+    }
+
+    // Cache successful GET responses briefly
+    if (method === 'get' && ok) {
       const cacheKey = `${response.config.url}_${JSON.stringify(response.config.params || {})}`;
-      cache.set(cacheKey, response.data, 2); // Cache for 2 minutes
+      cache.set(cacheKey, response.data, 0.5);
+    }
+
+    // 4xx responses don't throw (validateStatus), so handle an expired session here
+    const isAuthCall = (response.config.url || '').includes('/auth/');
+    if (response.status === 401 && !isAuthCall && localStorage.getItem('token')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      cache.clear();
+      if (!window.location.pathname.startsWith('/login')) window.location.href = '/login?expired=1';
     }
     return response;
   },

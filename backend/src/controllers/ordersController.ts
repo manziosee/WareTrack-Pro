@@ -5,12 +5,14 @@ import { QueueService } from '../services/queueService';
 export class OrdersController {
   static async getOrders(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 10, search, status } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const { page = 1, limit = 50, search, status } = req.query;
+      // Lists return up to 500 rows so the UI can sort, filter and page instantly
+      const pageSize = Math.min(Math.max(Number(limit) || 50, 1), 500);
+      const skip = (Math.max(Number(page) || 1, 1) - 1) * pageSize;
 
       const orders = await prisma.deliveryOrder.findMany({
         skip,
-        take: Number(limit),
+        take: pageSize,
         where: {
           ...(status && { status: status as any }),
           ...(search && {
@@ -33,7 +35,7 @@ export class OrdersController {
       res.json({
         success: true,
         data: orders,
-        pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
+        pagination: { page: Number(page), limit: pageSize, total, totalPages: Math.ceil(total / pageSize) }
       });
     } catch (error) {
       console.error('Get orders error:', error);

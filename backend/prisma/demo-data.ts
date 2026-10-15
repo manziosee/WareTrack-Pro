@@ -297,8 +297,10 @@ async function main() {
           ? weighted([['DELIVERED', 60], ['IN_TRANSIT', 15], ['DISPATCHED', 12], ['PENDING', 8], ['FAILED', 3], ['CANCELLED', 2]])
           : weighted([['PENDING', 40], ['DISPATCHED', 25], ['IN_TRANSIT', 20], ['DELIVERED', 15]])) as any;
 
-      const scheduledDate = new Date(createdAt.getTime() + int(2, 30) * HOUR);
-      scheduledDate.setMinutes(0, 0, 0);
+      // Same day or next day, inside business hours (08:00–18:00)
+      const scheduledDate = new Date(createdAt.getTime() + (chance(0.6) ? 0 : DAY));
+      scheduledDate.setHours(Math.max(createdAt.getHours() + (chance(0.6) ? 2 : 0), 8) > 16 ? int(8, 12) : Math.max(createdAt.getHours() + 2, 8), 0, 0, 0);
+      if (scheduledDate <= createdAt) scheduledDate.setTime(scheduledDate.getTime() + DAY);
       const slotStart = new Date(scheduledDate);
       const slotEnd = new Date(slotStart.getTime() + 2 * HOUR);
       const slaHours = priority === 'HIGH' ? 24 : priority === 'MEDIUM' ? 48 : 96;
