@@ -8,21 +8,26 @@ const cache = CacheService.getInstance();
 export class UsersController {
   static async getUsers(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 10, search, role } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const { page = 1, limit = 10, search, role, status } = req.query;
+      const take = Math.min(Math.max(Number(limit) || 10, 1), 200);
+      const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
+
+      const where: any = {
+        ...(role && { role: role as any }),
+        ...(status && { status: status as any }),
+        ...(search && {
+          OR: [
+            { name: { contains: search as string, mode: 'insensitive' } },
+            { email: { contains: search as string, mode: 'insensitive' } }
+          ]
+        })
+      };
 
       const users = await prisma.user.findMany({
         skip,
-        take: Number(limit),
-        where: {
-          ...(role && { role: role as any }),
-          ...(search && {
-            OR: [
-              { name: { contains: search as string, mode: 'insensitive' } },
-              { email: { contains: search as string, mode: 'insensitive' } }
-            ]
-          })
-        },
+        take,
+        where,
+        orderBy: { createdAt: 'desc' },
         select: {
           id: true,
           firstName: true,
@@ -38,12 +43,12 @@ export class UsersController {
         }
       });
 
-      const total = await prisma.user.count();
+      const total = await prisma.user.count({ where });
 
       res.json({
         success: true,
         data: users,
-        pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) }
+        pagination: { page: Number(page), limit: take, total, totalPages: Math.ceil(total / take) }
       });
     } catch (error) {
       res.status(500).json({ 
@@ -166,7 +171,7 @@ export class UsersController {
       }
 
       // Validate status
-      const validStatuses = ['ACTIVE', 'INACTIVE'];
+      const validStatuses = ['ACTIVE', 'INACTIVE', 'PENDING'];
       if (status && !validStatuses.includes(status)) {
         return res.status(400).json({ 
           success: false,

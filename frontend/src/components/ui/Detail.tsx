@@ -11,9 +11,9 @@ interface DetailHeroProps {
 
 export function DetailHero({ avatar, title, subtitle, badges }: DetailHeroProps) {
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400 p-5 text-white shadow-glow">
+    <div className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#2F5778_0%,#3A6D96_45%,#4682B4_100%)] p-5 text-white shadow-glow">
       <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-      <div className="pointer-events-none absolute -bottom-12 right-16 h-32 w-32 rounded-full bg-accent-500/30 blur-2xl" />
+      <div className="pointer-events-none absolute -bottom-12 right-16 h-32 w-32 rounded-full bg-[#FF8C42]/30 blur-2xl" />
       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4 min-w-0">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-xl font-bold ring-1 ring-white/30 backdrop-blur">
@@ -21,7 +21,7 @@ export function DetailHero({ avatar, title, subtitle, badges }: DetailHeroProps)
           </div>
           <div className="min-w-0">
             <h3 className="truncate text-xl font-bold">{title}</h3>
-            {subtitle && <div className="truncate text-sm text-primary-50/90">{subtitle}</div>}
+            {subtitle && <div className="truncate text-sm text-white/80">{subtitle}</div>}
           </div>
         </div>
         {badges && <div className="flex flex-wrap items-center gap-2">{badges}</div>}

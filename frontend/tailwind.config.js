@@ -1,84 +1,26 @@
+const steps = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
+const scale = (name) =>
+  Object.fromEntries(steps.map((step) => [step, `rgb(var(--c-${name}-${step}) / <alpha-value>)`]));
+
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
+      // Every scale reads from CSS variables (see src/styles/theme.css) so dark mode
+      // can swap shades globally without touching each component
       colors: {
-        primary: {
-          50: '#E0EAF3',
-          100: '#C1D6E7',
-          200: '#A1C1DB',
-          300: '#82ACCE',
-          400: '#6397C2',
-          500: '#4682B4',
-          600: '#3A6D96',
-          700: '#2F5778',
-          800: '#23415A',
-          900: '#172B3C',
-        },
-        accent: {
-          50: '#FFF4E6',
-          100: '#FFE9CC',
-          200: '#FFDD99',
-          300: '#FFD166',
-          400: '#FFC533',
-          500: '#FF8C42',
-          600: '#E67A32',
-          700: '#CC6B2C',
-          800: '#B35C26',
-          900: '#994D20',
-        },
-        success: {
-          50: '#ECFDF5',
-          100: '#D1FAE5',
-          200: '#A7F3D0',
-          300: '#6EE7B7',
-          400: '#34D399',
-          500: '#10B981',
-          600: '#059669',
-          700: '#047857',
-          800: '#065F46',
-          900: '#064E3B',
-        },
-        warning: {
-          50: '#FFFBEB',
-          100: '#FEF3C7',
-          200: '#FDE68A',
-          300: '#FCD34D',
-          400: '#FBBF24',
-          500: '#F59E0B',
-          600: '#D97706',
-          700: '#B45309',
-          800: '#92400E',
-          900: '#78350F',
-        },
-        error: {
-          50: '#FEF2F2',
-          100: '#FEE2E2',
-          200: '#FECACA',
-          300: '#FCA5A5',
-          400: '#F87171',
-          500: '#EF4444',
-          600: '#DC2626',
-          700: '#B91C1C',
-          800: '#991B1B',
-          900: '#7F1D1D',
-        },
-        info: {
-          50: '#EFF6FF',
-          100: '#DBEAFE',
-          200: '#BFDBFE',
-          300: '#93C5FD',
-          400: '#60A5FA',
-          500: '#3B82F6',
-          600: '#2563EB',
-          700: '#1D4ED8',
-          800: '#1E40AF',
-          900: '#1E3A8A',
-        },
+        primary: scale('primary'),
+        accent: scale('accent'),
+        success: scale('success'),
+        warning: scale('warning'),
+        error: scale('error'),
+        info: scale('info'),
+        gray: scale('gray'),
       },
       fontFamily: {
         sans: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
@@ -103,11 +45,36 @@ export default {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-10px)' },
         },
+        'wave': {
+          '0%, 60%, 100%': { transform: 'rotate(0deg)' },
+          '10%, 30%': { transform: 'rotate(14deg)' },
+          '20%': { transform: 'rotate(-8deg)' },
+          '40%': { transform: 'rotate(-4deg)' },
+          '50%': { transform: 'rotate(10deg)' },
+        },
+        'shimmer': {
+          '100%': { transform: 'translateX(100%)' },
+        },
+        'slide-in-left': {
+          from: { transform: 'translateX(-100%)' },
+          to: { transform: 'translateX(0)' },
+        },
+        'slide-in-right': {
+          from: { transform: 'translateX(100%)' },
+          to: { transform: 'translateX(0)' },
+        },
+        'page-in': {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.2s ease-out',
         'pop-in': 'pop-in 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
         'float': 'float 6s ease-in-out infinite',
+        'shimmer': 'shimmer 1.6s infinite',
+        'slide-in-right': 'slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        'page-in': 'page-in 0.3s ease-out',
       },
     },
   },

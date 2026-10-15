@@ -1,172 +1,147 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import {
-  LayoutDashboard,
-  Users,
-  Package,
-  ShoppingCart,
-  Truck,
-  Car,
-  MapPin,
-  BarChart3,
-  Settings,
-  LogOut,
-  Menu,
-  X,
-  Bell,
-  UserCheck
-} from 'lucide-react';
+import { LogOut, ChevronsLeft, ChevronsRight, Search } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { navForRole } from '@/config/navigation';
+import { useNavBadges } from '@/hooks/useNavBadges';
+import Logo from '../ui/Logo';
+import { useI18n } from '@/i18n/I18nContext';
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Users', href: '/users', icon: Users },
-  { name: 'Inventory', href: '/inventory', icon: Package },
-  { name: 'Orders', href: '/orders', icon: ShoppingCart },
-  { name: 'Dispatch', href: '/dispatch', icon: Truck },
-  { name: 'Drivers', href: '/drivers', icon: UserCheck },
-  { name: 'Vehicles', href: '/vehicles', icon: Car },
-  { name: 'Tracking', href: '/tracking', icon: MapPin },
-  { name: 'Reports', href: '/reports', icon: BarChart3 },
-  { name: 'Notifications', href: '/notifications', icon: Bell },
-];
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+  onOpenSearch: () => void;
+}
 
-export default function Sidebar() {
+function Tooltip({ label }: { label: string }) {
+  return (
+    <span className="pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-gray-700">
+      {label}
+    </span>
+  );
+}
+
+export default function Sidebar({ collapsed, onToggle, onOpenSearch }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const badges = useNavBadges();
+  const { t } = useI18n();
+  const sections = navForRole(user?.role);
 
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      setIsCollapsed(mobile);
-    };
-
-    checkScreenSize();
-    window.addEventListener('resize', checkScreenSize);
-    return () => window.removeEventListener('resize', checkScreenSize);
-  }, []);
-
-  // Filter navigation based on user role
-  const getFilteredNavigation = () => {
-    if (!user) return [];
-
-    switch (user.role) {
-      case 'ADMIN':
-        return navigation; // Admin sees everything
-      case 'WAREHOUSE_STAFF':
-        return navigation.filter(item =>
-          ['Dashboard', 'Inventory', 'Orders', 'Reports', 'Notifications'].includes(item.name)
-        );
-      case 'DISPATCH_OFFICER':
-        return navigation.filter(item =>
-          ['Dashboard', 'Orders', 'Dispatch', 'Drivers', 'Vehicles', 'Tracking', 'Reports', 'Notifications'].includes(item.name)
-        );
-      case 'DRIVER':
-        return navigation.filter(item =>
-          ['Dashboard', 'Drivers', 'Vehicles', 'Tracking', 'Notifications'].includes(item.name)
-        );
-      default:
-        return navigation.filter(item =>
-          ['Dashboard', 'Notifications'].includes(item.name)
-        );
-    }
-  };
-
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 
   return (
-    <div className={`flex flex-col h-full bg-white border-r border-gray-200 transition-all duration-300 relative ${isCollapsed ? 'w-16' : 'w-64'}`}>
-      {/* Logo */}
-      <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-4 py-5 border-b border-gray-200`}>
-        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
-          <Package className="w-6 h-6 text-white" />
-        </div>
-        {!isCollapsed && (
-          <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-xl text-gray-900 truncate">WareTrack</h1>
-            <p className="text-xs text-gray-500">Pro</p>
-          </div>
-        )}
-        {!isMobile && (
-          <button
-            type="button"
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
-            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isCollapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
-          </button>
-        )}
+    <div className={`relative flex h-full flex-col border-r border-gray-100 bg-white transition-[width] duration-300 ${collapsed ? 'w-[4.5rem]' : 'w-64'}`}>
+      {/* Brand */}
+      <div className={`flex h-16 items-center border-b border-gray-100 ${collapsed ? 'justify-center px-2' : 'px-5'}`}>
+        <Logo collapsed={collapsed} />
+      </div>
+
+      {/* Collapse toggle */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="absolute -right-3 top-[3.25rem] z-10 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition hover:text-primary-600"
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {collapsed ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+      </button>
+
+      {/* Search shortcut */}
+      <div className={`px-3 pt-4 ${collapsed ? 'flex justify-center' : ''}`}>
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          className={`group relative flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 text-sm text-gray-500 transition hover:border-primary-200 hover:text-gray-700 ${
+            collapsed ? 'h-10 w-10 justify-center' : 'w-full px-3 py-2'
+          }`}
+        >
+          <Search className="h-4 w-4 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="flex-1 text-left">{t('Search…')}</span>
+              <kbd className="rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">Ctrl K</kbd>
+            </>
+          )}
+          {collapsed && <Tooltip label="Search (Ctrl K)" />}
+        </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-2 py-4 space-y-1">
-        {getFilteredNavigation().map((item) => (
-          <NavLink
-            key={item.name}
-            to={item.href}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group relative ${
-                isActive
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-              }`
-            }
-            title={isCollapsed ? item.name : ''}
-          >
-            <item.icon className="w-5 h-5 flex-shrink-0" />
-            {!isCollapsed && <span className="truncate">{item.name}</span>}
-            {isCollapsed && (
-              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
-                {item.name}
-              </div>
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+        {sections.map((section) => (
+          <div key={section.title}>
+            {!collapsed && (
+              <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">{t(section.title)}</p>
             )}
-          </NavLink>
+            {collapsed && <div className="mx-auto mb-2 h-px w-6 bg-gray-100" />}
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const count = item.badge ? badges[item.badge] : 0;
+                return (
+                  <NavLink
+                    key={item.href}
+                    to={item.href}
+                    className={({ isActive }) =>
+                      `group relative flex items-center rounded-xl text-sm font-medium transition-all ${
+                        collapsed ? 'h-10 justify-center' : 'gap-3 px-3 py-2'
+                      } ${
+                        isActive
+                          ? 'bg-accent-50 text-accent-700 shadow-[inset_3px_0_0_0] shadow-accent-500'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <item.icon className={`h-[1.15rem] w-[1.15rem] shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-accent-600' : ''}`} />
+                        {!collapsed && <span className="flex-1 truncate">{t(item.name)}</span>}
+                        {count > 0 && (
+                          <span
+                            className={`flex items-center justify-center rounded-full bg-accent-500 font-semibold text-white ${
+                              collapsed ? 'absolute right-1.5 top-1.5 h-4 min-w-4 px-1 text-[9px]' : 'h-5 min-w-5 px-1.5 text-[10px]'
+                            }`}
+                          >
+                            {count > 99 ? '99+' : count}
+                          </span>
+                        )}
+                        {collapsed && <Tooltip label={t(item.name)} />}
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </nav>
 
-      {/* Bottom Actions */}
-      <div className="px-2 py-4 border-t border-gray-200 space-y-1">
-        {/* Settings - Available for all roles */}
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            `flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group relative ${
-              isActive
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-            }`
-          }
-          title={isCollapsed ? 'Settings' : ''}
-        >
-          <Settings className="w-5 h-5 flex-shrink-0" />
-          {!isCollapsed && <span className="truncate">Settings</span>}
-          {isCollapsed && (
-            <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
-              Settings
-            </div>
+      {/* User + logout */}
+      <div className="border-t border-gray-100 p-3">
+        <div className={`flex items-center gap-3 rounded-xl ${collapsed ? 'justify-center' : 'bg-gray-50 p-2'}`}>
+          {!collapsed && (
+            <>
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 text-xs font-bold text-white">
+                {(user?.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-gray-900">{user?.name}</p>
+                <p className="truncate text-[10px] text-gray-500">{(user?.role || '').replace(/_/g, ' ').toLowerCase()}</p>
+              </div>
+            </>
           )}
-        </NavLink>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} w-full px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors group relative`}
-          title={isCollapsed ? 'Logout' : ''}
-        >
-          <LogOut className="w-5 h-5 flex-shrink-0" />
-          {!isCollapsed && <span className="truncate">Logout</span>}
-          {isCollapsed && (
-            <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
-              Logout
-            </div>
-          )}
-        </button>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="group relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 transition hover:bg-error-50 hover:text-error-600"
+            title="Log out"
+          >
+            <LogOut className="h-4 w-4" />
+            {collapsed && <Tooltip label={t('Log out')} />}
+          </button>
+        </div>
       </div>
     </div>
   );

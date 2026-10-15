@@ -11,116 +11,127 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  firstName String?  @map("first_name")
-  lastName  String?  @map("last_name")
-  name      String
-  email     String   @unique
-  password  String
-  phone     String?
-  role      UserRole @default(WAREHOUSE_STAFF)
-  status    UserStatus @default(ACTIVE)
-  lastLogin DateTime? @map("last_login")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id               Int        @id @default(autoincrement())
+  firstName        String?    @map("first_name")
+  lastName         String?    @map("last_name")
+  name             String
+  email            String     @unique
+  password         String
+  phone            String?
+  role             UserRole   @default(WAREHOUSE_STAFF)
+  status           UserStatus @default(ACTIVE)
+  lastLogin        DateTime?  @map("last_login")
+  twoFactorEnabled Boolean    @default(false) @map("two_factor_enabled")
+  totpSecret       String?    @map("totp_secret")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
 
   // Relations
-  createdOrders    DeliveryOrder[] @relation("CreatedBy")
-  createdDispatches Dispatch[] @relation("CreatedBy")
-  driverProfile    Driver?
-  managedDrivers   Driver[] @relation("ManagerDrivers")
-  managedVehicles  Vehicle[] @relation("ManagerVehicles")
-  inventoryHistory InventoryHistory[]
+  createdOrders           DeliveryOrder[]          @relation("CreatedBy")
+  createdDispatches       Dispatch[]               @relation("CreatedBy")
+  driverProfile           Driver?
+  managedDrivers          Driver[]                 @relation("ManagerDrivers")
+  managedVehicles         Vehicle[]                @relation("ManagerVehicles")
+  inventoryHistory        InventoryHistory[]
   notificationPreferences NotificationPreferences?
-  systemConfiguration SystemConfiguration?
-  reportSettings ReportSettings?
-  notifications Notification[]
-  sentMessages ChatMessage[] @relation("SentMessages")
-  receivedMessages ChatMessage[] @relation("ReceivedMessages")
-  preferences UserPreferences?
-  barcodeGenerations BarcodeLog[]
+  systemConfiguration     SystemConfiguration?
+  reportSettings          ReportSettings?
+  notifications           Notification[]
+  sentMessages            ChatMessage[]            @relation("SentMessages")
+  receivedMessages        ChatMessage[]            @relation("ReceivedMessages")
+  preferences             UserPreferences?
+  barcodeGenerations      BarcodeLog[]
+  savedFilters            SavedFilter[]
+  savedReports            SavedReport[]
 
   @@map("users")
 }
 
 model InventoryItem {
-  id           Int      @id @default(autoincrement())
+  id           Int             @id @default(autoincrement())
   name         String
-  code         String   @unique
+  code         String          @unique
   category     String
-  quantity     Int      @default(0)
-  minQuantity  Int      @default(0) @map("min_quantity")
+  quantity     Int             @default(0)
+  minQuantity  Int             @default(0) @map("min_quantity")
   unit         String
-  unitCategory String   @map("unit_category")
+  unitCategory String          @map("unit_category")
   location     String
   barcode      String?
-  unitPrice    Decimal  @default(0) @map("unit_price")
+  unitPrice    Decimal         @default(0) @map("unit_price")
   status       InventoryStatus @default(ACTIVE)
   supplier     String?
   description  String?
-  lastUpdated  DateTime @default(now()) @map("last_updated")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  lastUpdated  DateTime        @default(now()) @map("last_updated")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
 
   // Relations
   orderItems       OrderItem[]
   inventoryHistory InventoryHistory[]
   forecasts        InventoryForecast[]
   barcodeLogs      BarcodeLog[]
+  warehouseStock   WarehouseStock[]
+  transfers        StockTransfer[]
+  purchaseItems    PurchaseOrderItem[]
+  batches          InventoryBatch[]
 
   @@map("inventory_items")
 }
 
 model Vehicle {
-  id              Int      @id @default(autoincrement())
-  managerId       Int?     @map("manager_id")
-  plateNumber     String   @unique @map("plate_number")
+  id              Int           @id @default(autoincrement())
+  managerId       Int?          @map("manager_id")
+  plateNumber     String        @unique @map("plate_number")
   type            String
   capacity        Int
   status          VehicleStatus @default(AVAILABLE)
-  lastMaintenance DateTime? @map("last_maintenance")
-  fuelType        String?  @map("fuel_type")
-  vehicleModel    String?  @map("vehicle_model")
+  lastMaintenance DateTime?     @map("last_maintenance")
+  fuelType        String?       @map("fuel_type")
+  vehicleModel    String?       @map("vehicle_model")
   year            Int?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  manager             User? @relation("ManagerVehicles", fields: [managerId], references: [id])
-  orders              DeliveryOrder[]
-  dispatches          Dispatch[]
-  currentDrivers      Driver[]
-  maintenanceRecords  MaintenanceRecord[]
-  healthRecords       VehicleHealth[]
+  manager            User?               @relation("ManagerVehicles", fields: [managerId], references: [id])
+  orders             DeliveryOrder[]
+  dispatches         Dispatch[]
+  currentDrivers     Driver[]
+  maintenanceRecords MaintenanceRecord[]
+  healthRecords      VehicleHealth[]
 
   @@map("vehicles")
 }
 
 model Driver {
-  id                Int      @id @default(autoincrement())
-  userId            Int?     @unique @map("user_id")
-  managerId         Int?     @map("manager_id")
-  name              String
-  email             String?
-  licenseNumber     String   @unique @map("license_number")
-  phone             String
-  status            DriverStatus @default(AVAILABLE)
-  currentVehicleId  Int?     @map("current_vehicle_id")
-  experience        Int?
-  rating            Decimal?
-  address           String?
-  dateOfBirth       DateTime? @map("date_of_birth")
-  hireDate          DateTime? @map("hire_date")
-  licenseExpiry     DateTime? @map("license_expiry")
-  emergencyContact  String?  @map("emergency_contact")
-  emergencyContactName String? @map("emergency_contact_name")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                   Int          @id @default(autoincrement())
+  userId               Int?         @unique @map("user_id")
+  managerId            Int?         @map("manager_id")
+  name                 String
+  email                String?
+  licenseNumber        String       @unique @map("license_number")
+  phone                String
+  status               DriverStatus @default(AVAILABLE)
+  currentVehicleId     Int?         @map("current_vehicle_id")
+  experience           Int?
+  rating               Decimal?
+  address              String?
+  dateOfBirth          DateTime?    @map("date_of_birth")
+  hireDate             DateTime?    @map("hire_date")
+  licenseExpiry        DateTime?    @map("license_expiry")
+  emergencyContact     String?      @map("emergency_contact")
+  emergencyContactName String?      @map("emergency_contact_name")
+  currentLat           Decimal?     @map("current_lat") @db.Decimal(10, 7)
+  currentLng           Decimal?     @map("current_lng") @db.Decimal(10, 7)
+  lastLocationAt       DateTime?    @map("last_location_at")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
 
   // Relations
-  user           User? @relation(fields: [userId], references: [id], onDelete: Cascade)
-  manager        User? @relation("ManagerDrivers", fields: [managerId], references: [id])
-  currentVehicle Vehicle? @relation(fields: [currentVehicleId], references: [id])
+  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  manager        User?               @relation("ManagerDrivers", fields: [managerId], references: [id])
+  currentVehicle Vehicle?            @relation(fields: [currentVehicleId], references: [id])
   orders         DeliveryOrder[]
   dispatches     Dispatch[]
   achievements   DriverAchievement[]
@@ -131,48 +142,62 @@ model Driver {
 }
 
 model DeliveryOrder {
-  id                   Int      @id @default(autoincrement())
-  orderNumber          String   @unique @map("order_number")
-  customerId           Int      @map("customer_id")
-  customerName         String   @map("customer_name")
-  deliveryAddress      String   @map("delivery_address")
-  contactNumber        String   @map("contact_number")
+  id                   Int           @id @default(autoincrement())
+  orderNumber          String        @unique @map("order_number")
+  customerId           Int           @map("customer_id")
+  customerName         String        @map("customer_name")
+  deliveryAddress      String        @map("delivery_address")
+  contactNumber        String        @map("contact_number")
   priority             OrderPriority @default(MEDIUM)
-  status               OrderStatus @default(PENDING)
-  orderType            String   @map("order_type")
-  paymentMethod        String   @map("payment_method")
-  totalAmount          Decimal  @default(0) @map("total_amount")
-  deliveryInstructions String?  @map("delivery_instructions")
-  driverId             Int?     @map("driver_id")
-  vehicleId            Int?     @map("vehicle_id")
-  createdBy            Int      @map("created_by")
-  scheduledDate        DateTime? @map("scheduled_date")
-  deliveredAt          DateTime? @map("delivered_at")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  status               OrderStatus   @default(PENDING)
+  orderType            String        @map("order_type")
+  paymentMethod        String        @map("payment_method")
+  totalAmount          Decimal       @default(0) @map("total_amount")
+  deliveryInstructions String?       @map("delivery_instructions")
+  driverId             Int?          @map("driver_id")
+  vehicleId            Int?          @map("vehicle_id")
+  createdBy            Int           @map("created_by")
+  scheduledDate        DateTime?     @map("scheduled_date")
+  deliveredAt          DateTime?     @map("delivered_at")
+  customerEmail        String?       @map("customer_email")
+  latitude             Decimal?      @db.Decimal(10, 7)
+  longitude            Decimal?      @db.Decimal(10, 7)
+  timeSlotStart        DateTime?     @map("time_slot_start")
+  timeSlotEnd          DateTime?     @map("time_slot_end")
+  slaDeadline          DateTime?     @map("sla_deadline")
+  paymentStatus        String        @default("UNPAID") @map("payment_status")
+  warehouseId          Int?          @map("warehouse_id")
+  failureReason        String?       @map("failure_reason")
+  deliveryAttempts     Int           @default(0) @map("delivery_attempts")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  driver       Driver? @relation(fields: [driverId], references: [id])
-  vehicle      Vehicle? @relation(fields: [vehicleId], references: [id])
-  createdByUser User @relation("CreatedBy", fields: [createdBy], references: [id])
-  items        OrderItem[]
-  dispatches   Dispatch[]
-  proofs       DeliveryProof[]
-  ratings      CustomerRating[]
+  warehouse     Warehouse?       @relation(fields: [warehouseId], references: [id])
+  returns       ReturnRequest[]
+  payments      Payment[]
+  invoice       Invoice?
+  driver        Driver?          @relation(fields: [driverId], references: [id])
+  vehicle       Vehicle?         @relation(fields: [vehicleId], references: [id])
+  createdByUser User             @relation("CreatedBy", fields: [createdBy], references: [id])
+  items         OrderItem[]
+  dispatches    Dispatch[]
+  proofs        DeliveryProof[]
+  ratings       CustomerRating[]
 
   @@map("delivery_orders")
 }
 
 model OrderItem {
-  id        Int      @id @default(autoincrement())
-  orderId   Int      @map("order_id")
-  itemId    Int      @map("item_id")
-  itemName  String   @map("item_name")
-  quantity  Int
-  unit      String
-  unitPrice Decimal  @map("unit_price")
-  totalPrice Decimal @map("total_price")
-  createdAt DateTime @default(now()) @map("created_at")
+  id         Int      @id @default(autoincrement())
+  orderId    Int      @map("order_id")
+  itemId     Int      @map("item_id")
+  itemName   String   @map("item_name")
+  quantity   Int
+  unit       String
+  unitPrice  Decimal  @map("unit_price")
+  totalPrice Decimal  @map("total_price")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   // Relations
   order DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -182,47 +207,47 @@ model OrderItem {
 }
 
 model Dispatch {
-  id                Int      @id @default(autoincrement())
-  orderId           Int      @map("order_id")
-  driverId          Int      @map("driver_id")
-  vehicleId         Int      @map("vehicle_id")
-  scheduledDate     DateTime @map("scheduled_date")
-  dispatchedAt      DateTime? @map("dispatched_at")
-  estimatedDelivery DateTime? @map("estimated_delivery")
-  actualDelivery    DateTime? @map("actual_delivery")
-  fuelAllowance     Decimal  @default(0) @map("fuel_allowance")
+  id                Int            @id @default(autoincrement())
+  orderId           Int            @map("order_id")
+  driverId          Int            @map("driver_id")
+  vehicleId         Int            @map("vehicle_id")
+  scheduledDate     DateTime       @map("scheduled_date")
+  dispatchedAt      DateTime?      @map("dispatched_at")
+  estimatedDelivery DateTime?      @map("estimated_delivery")
+  actualDelivery    DateTime?      @map("actual_delivery")
+  fuelAllowance     Decimal        @default(0) @map("fuel_allowance")
   route             String?
   notes             String?
   status            DispatchStatus @default(PENDING)
-  createdBy         Int      @map("created_by")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  createdBy         Int            @map("created_by")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
 
   // Relations
-  order         DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  driver        Driver @relation(fields: [driverId], references: [id])
-  vehicle       Vehicle @relation(fields: [vehicleId], references: [id])
-  createdByUser User @relation("CreatedBy", fields: [createdBy], references: [id])
+  order         DeliveryOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driver        Driver         @relation(fields: [driverId], references: [id])
+  vehicle       Vehicle        @relation(fields: [vehicleId], references: [id])
+  createdByUser User           @relation("CreatedBy", fields: [createdBy], references: [id])
   proof         DeliveryProof?
 
   @@map("dispatches")
 }
 
 model MaintenanceRecord {
-  id                   Int      @id @default(autoincrement())
-  vehicleId            Int      @map("vehicle_id")
-  type                 String
-  description          String
-  cost                 Decimal  @default(0)
-  odometerReading      Int?     @map("odometer_reading")
-  nextServiceOdometer  Int?     @map("next_service_odometer")
-  nextServiceDate      DateTime? @map("next_service_date")
-  performedBy          String?  @map("performed_by")
-  notes                String?
-  scheduledDate        DateTime @map("scheduled_date")
-  completedDate        DateTime? @map("completed_date")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  id                  Int       @id @default(autoincrement())
+  vehicleId           Int       @map("vehicle_id")
+  type                String
+  description         String
+  cost                Decimal   @default(0)
+  odometerReading     Int?      @map("odometer_reading")
+  nextServiceOdometer Int?      @map("next_service_odometer")
+  nextServiceDate     DateTime? @map("next_service_date")
+  performedBy         String?   @map("performed_by")
+  notes               String?
+  scheduledDate       DateTime  @map("scheduled_date")
+  completedDate       DateTime? @map("completed_date")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   // Relations
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
@@ -233,7 +258,7 @@ model MaintenanceRecord {
 model InventoryHistory {
   id               Int      @id @default(autoincrement())
   itemId           Int      @map("item_id")
-  action           String   // stock_in, stock_out, adjustment
+  action           String // stock_in, stock_out, adjustment
   quantity         Int
   previousQuantity Int      @map("previous_quantity")
   newQuantity      Int      @map("new_quantity")
@@ -243,21 +268,21 @@ model InventoryHistory {
   performedAt      DateTime @default(now()) @map("performed_at")
 
   // Relations
-  item        InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  performedByUser User @relation(fields: [performedBy], references: [id])
+  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  performedByUser User          @relation(fields: [performedBy], references: [id])
 
   @@map("inventory_history")
 }
 
 model NotificationPreferences {
-  id              Int     @id @default(autoincrement())
-  userId          Int     @unique @map("user_id")
-  emailEnabled    Boolean @default(true) @map("email_enabled")
-  smsEnabled      Boolean @default(false) @map("sms_enabled")
-  orderUpdates    Boolean @default(true) @map("order_updates")
-  lowStockAlerts  Boolean @default(true) @map("low_stock_alerts")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique @map("user_id")
+  emailEnabled   Boolean  @default(true) @map("email_enabled")
+  smsEnabled     Boolean  @default(false) @map("sms_enabled")
+  orderUpdates   Boolean  @default(true) @map("order_updates")
+  lowStockAlerts Boolean  @default(true) @map("low_stock_alerts")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -266,14 +291,14 @@ model NotificationPreferences {
 }
 
 model SystemConfiguration {
-  id          Int     @id @default(autoincrement())
-  userId      Int     @unique @map("user_id")
-  language    String  @default("en")
-  timezone    String  @default("UTC")
-  dateFormat  String  @default("MM/DD/YYYY") @map("date_format")
-  currency    String  @default("RWF")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         Int      @id @default(autoincrement())
+  userId     Int      @unique @map("user_id")
+  language   String   @default("en")
+  timezone   String   @default("UTC")
+  dateFormat String   @default("MM/DD/YYYY") @map("date_format")
+  currency   String   @default("RWF")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -282,14 +307,14 @@ model SystemConfiguration {
 }
 
 model ReportSettings {
-  id                Int     @id @default(autoincrement())
-  userId            Int     @unique @map("user_id")
-  autoReportsEnabled Boolean @default(false) @map("auto_reports_enabled")
-  reportFrequency   String  @default("weekly") @map("report_frequency")
-  reportFormat      String  @default("pdf") @map("report_format")
-  emailReports      Boolean @default(true) @map("email_reports")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                 Int      @id @default(autoincrement())
+  userId             Int      @unique @map("user_id")
+  autoReportsEnabled Boolean  @default(false) @map("auto_reports_enabled")
+  reportFrequency    String   @default("weekly") @map("report_frequency")
+  reportFormat       String   @default("pdf") @map("report_format")
+  emailReports       Boolean  @default(true) @map("email_reports")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -298,15 +323,15 @@ model ReportSettings {
 }
 
 model Notification {
-  id        Int      @id @default(autoincrement())
-  userId    Int?     @map("user_id")
+  id        Int                  @id @default(autoincrement())
+  userId    Int?                 @map("user_id")
   type      NotificationType
   title     String
   message   String
   severity  NotificationSeverity @default(INFO)
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  read      Boolean              @default(false)
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
 
   // Relations
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -325,6 +350,7 @@ enum UserRole {
 enum UserStatus {
   ACTIVE
   INACTIVE
+  PENDING
 }
 
 enum OrderStatus {
@@ -333,6 +359,8 @@ enum OrderStatus {
   IN_TRANSIT
   DELIVERED
   CANCELLED
+  FAILED
+  RETURNED
 }
 
 enum OrderPriority {
@@ -374,6 +402,10 @@ enum NotificationType {
   ORDER_UPDATE
   DELIVERY_COMPLETE
   WELCOME
+  SLA_RISK
+  ANOMALY
+  MESSAGE
+  PURCHASE_ORDER
 }
 
 enum NotificationSeverity {
@@ -396,7 +428,7 @@ model DeliveryProof {
   longitude        Decimal? @db.Decimal(11, 8)
   createdAt        DateTime @default(now()) @map("created_at")
 
-  dispatch Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  dispatch Dispatch      @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
   order    DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("delivery_proofs")
@@ -520,15 +552,15 @@ model CustomerRating {
 }
 
 model VehicleHealth {
-  id                        Int       @id @default(autoincrement())
-  vehicleId                 Int       @map("vehicle_id")
-  odometerReading           Int       @map("odometer_reading")
-  fuelEfficiency            Decimal?  @map("fuel_efficiency") @db.Decimal(5, 2)
-  engineHours               Int?      @map("engine_hours")
-  healthScore               Int?      @map("health_score")
-  predictedMaintenanceDate  DateTime? @map("predicted_maintenance_date") @db.Date
-  maintenanceCostEstimate   Decimal?  @map("maintenance_cost_estimate") @db.Decimal(10, 2)
-  recordedAt                DateTime  @default(now()) @map("recorded_at")
+  id                       Int       @id @default(autoincrement())
+  vehicleId                Int       @map("vehicle_id")
+  odometerReading          Int       @map("odometer_reading")
+  fuelEfficiency           Decimal?  @map("fuel_efficiency") @db.Decimal(5, 2)
+  engineHours              Int?      @map("engine_hours")
+  healthScore              Int?      @map("health_score")
+  predictedMaintenanceDate DateTime? @map("predicted_maintenance_date") @db.Date
+  maintenanceCostEstimate  Decimal?  @map("maintenance_cost_estimate") @db.Decimal(10, 2)
+  recordedAt               DateTime  @default(now()) @map("recorded_at")
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
@@ -536,13 +568,14 @@ model VehicleHealth {
 }
 
 model UserPreferences {
-  id         Int      @id @default(autoincrement())
-  userId     Int      @unique @map("user_id")
-  theme      String   @default("light")
-  autoTheme  Boolean  @default(false) @map("auto_theme")
-  language   String   @default("en")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique @map("user_id")
+  theme           String   @default("light")
+  autoTheme       Boolean  @default(false) @map("auto_theme")
+  language        String   @default("en")
+  dashboardLayout Json?    @map("dashboard_layout")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -562,4 +595,272 @@ model BarcodeLog {
 
   @@index([itemId])
   @@map("barcode_logs")
+}
+
+// ---------------------------------------------------------------------------
+// v2.3: warehouses, purchasing, returns, payments, audit and platform tables
+// ---------------------------------------------------------------------------
+
+model Warehouse {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String   @unique
+  address   String?
+  city      String?
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+  capacity  Int?
+  managerId Int?     @map("manager_id")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  stock          WarehouseStock[]
+  transfersOut   StockTransfer[]  @relation("TransferFrom")
+  transfersIn    StockTransfer[]  @relation("TransferTo")
+  orders         DeliveryOrder[]
+  batches        InventoryBatch[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("warehouses")
+}
+
+model WarehouseStock {
+  id          Int      @id @default(autoincrement())
+  warehouseId Int      @map("warehouse_id")
+  itemId      Int      @map("item_id")
+  quantity    Int      @default(0)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  warehouse Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, itemId])
+  @@map("warehouse_stock")
+}
+
+model StockTransfer {
+  id              Int       @id @default(autoincrement())
+  transferNumber  String    @unique @map("transfer_number")
+  fromWarehouseId Int       @map("from_warehouse_id")
+  toWarehouseId   Int       @map("to_warehouse_id")
+  itemId          Int       @map("item_id")
+  quantity        Int
+  status          String    @default("PENDING")
+  notes           String?
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  fromWarehouse Warehouse     @relation("TransferFrom", fields: [fromWarehouseId], references: [id], onDelete: Cascade)
+  toWarehouse   Warehouse     @relation("TransferTo", fields: [toWarehouseId], references: [id], onDelete: Cascade)
+  item          InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("stock_transfers")
+}
+
+model Supplier {
+  id           Int      @id @default(autoincrement())
+  name         String
+  contactName  String?  @map("contact_name")
+  email        String?
+  phone        String?
+  address      String?
+  leadTimeDays Int      @default(7) @map("lead_time_days")
+  rating       Decimal? @db.Decimal(3, 1)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  purchaseOrders PurchaseOrder[]
+
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id            Int       @id @default(autoincrement())
+  poNumber      String    @unique @map("po_number")
+  supplierId    Int       @map("supplier_id")
+  warehouseId   Int?      @map("warehouse_id")
+  status        String    @default("DRAFT")
+  expectedDate  DateTime? @map("expected_date")
+  receivedAt    DateTime? @map("received_at")
+  totalAmount   Decimal   @default(0) @map("total_amount") @db.Decimal(14, 2)
+  notes         String?
+  autoGenerated Boolean   @default(false) @map("auto_generated")
+  createdBy     Int?      @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  supplier  Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  warehouse Warehouse?          @relation(fields: [warehouseId], references: [id])
+  items     PurchaseOrderItem[]
+  batches   InventoryBatch[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id               Int     @id @default(autoincrement())
+  purchaseOrderId  Int     @map("purchase_order_id")
+  itemId           Int     @map("item_id")
+  quantity         Int
+  receivedQuantity Int     @default(0) @map("received_quantity")
+  unitCost         Decimal @default(0) @map("unit_cost") @db.Decimal(12, 2)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item          InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_order_items")
+}
+
+model InventoryBatch {
+  id              Int       @id @default(autoincrement())
+  itemId          Int       @map("item_id")
+  batchNumber     String    @map("batch_number")
+  quantity        Int
+  expiryDate      DateTime? @map("expiry_date")
+  receivedAt      DateTime  @default(now()) @map("received_at")
+  warehouseId     Int?      @map("warehouse_id")
+  purchaseOrderId Int?      @map("purchase_order_id")
+
+  item          InventoryItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse     Warehouse?     @relation(fields: [warehouseId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+
+  @@index([expiryDate])
+  @@map("inventory_batches")
+}
+
+model ReturnRequest {
+  id              Int       @id @default(autoincrement())
+  returnNumber    String    @unique @map("return_number")
+  orderId         Int       @map("order_id")
+  type            String    @default("RETURN")
+  reason          String
+  status          String    @default("REQUESTED")
+  rescheduledDate DateTime? @map("rescheduled_date")
+  refundAmount    Decimal   @default(0) @map("refund_amount") @db.Decimal(14, 2)
+  notes           String?
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  resolvedAt      DateTime? @map("resolved_at")
+
+  order DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("return_requests")
+}
+
+model Payment {
+  id          Int       @id @default(autoincrement())
+  orderId     Int       @map("order_id")
+  provider    String
+  phoneNumber String?   @map("phone_number")
+  amount      Decimal   @db.Decimal(14, 2)
+  currency    String    @default("RWF")
+  status      String    @default("PENDING")
+  externalRef String?   @map("external_ref")
+  message     String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+
+  order DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+model Invoice {
+  id            Int       @id @default(autoincrement())
+  invoiceNumber String    @unique @map("invoice_number")
+  orderId       Int       @unique @map("order_id")
+  subtotal      Decimal   @db.Decimal(14, 2)
+  tax           Decimal   @default(0) @db.Decimal(14, 2)
+  total         Decimal   @db.Decimal(14, 2)
+  status        String    @default("UNPAID")
+  issuedAt      DateTime  @default(now()) @map("issued_at")
+  dueDate       DateTime? @map("due_date")
+  paidAt        DateTime? @map("paid_at")
+
+  order DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("invoices")
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?     @map("user_id")
+  userName   String?  @map("user_name")
+  userRole   String?  @map("user_role")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  summary    String
+  changes    Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model OtpCode {
+  id        Int      @id @default(autoincrement())
+  email     String
+  purpose   String   @default("LOGIN")
+  codeHash  String   @map("code_hash")
+  userId    Int?     @map("user_id")
+  attempts  Int      @default(0)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([email, purpose])
+  @@map("otp_codes")
+}
+
+model Webhook {
+  id              Int       @id @default(autoincrement())
+  url             String
+  events          String[]
+  secret          String
+  active          Boolean   @default(true)
+  description     String?
+  lastStatus      Int?      @map("last_status")
+  lastDeliveredAt DateTime? @map("last_delivered_at")
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@map("webhooks")
+}
+
+model SavedFilter {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  page      String
+  name      String
+  filters   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, page])
+  @@map("saved_filters")
+}
+
+model SavedReport {
+  id         Int       @id @default(autoincrement())
+  userId     Int       @map("user_id")
+  name       String
+  config     Json
+  schedule   String    @default("NONE")
+  recipients String?
+  lastSentAt DateTime? @map("last_sent_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("saved_reports")
 }

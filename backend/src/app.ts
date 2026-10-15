@@ -17,6 +17,7 @@ import passwordResetRoutes from './routes/passwordReset';
 import testEmailRoutes from './routes/test-email';
 import analyticsRoutes from './routes/analytics';
 import featuresRoutes from './routes/features';
+import insightsRoutes from './routes/insights';
 import swaggerUi from 'swagger-ui-express';
 import rateLimit from 'express-rate-limit';
 import { swaggerSpec, addUndocumentedRoutes } from './config/swagger';
@@ -134,7 +135,7 @@ app.get('/api', (req, res) => {
     endpoints: [
       '/api/auth', '/api/dashboard', '/api/inventory', '/api/orders', '/api/vehicles',
       '/api/drivers', '/api/dispatch', '/api/users', '/api/notifications', '/api/reports',
-      '/api/settings', '/api/password-reset', '/api/analytics', '/api/features'
+      '/api/settings', '/api/password-reset', '/api/analytics', '/api/features', '/api/insights'
     ]
   });
 });
@@ -155,6 +156,7 @@ addUndocumentedRoutes(swaggerSpec, [
   ['/api/analytics', 'Analytics', analyticsRoutes],
   ['/api/settings', 'Settings', settingsRoutes],
   ['/api/features', 'Advanced Features', featuresRoutes],
+  ['/api/insights', 'Insights', insightsRoutes],
 ] as any);
 
 app.get('/api-docs.json', (req, res) => {
@@ -182,6 +184,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/features', featuresRoutes);
+app.use('/api/insights', insightsRoutes);
 
 // Unknown routes return JSON instead of Express's HTML page
 app.use((req, res) => {

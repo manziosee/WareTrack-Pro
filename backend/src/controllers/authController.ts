@@ -114,7 +114,7 @@ export class AuthController {
             role: userRole as any,
             // Self-registered accounts wait for an admin to approve them;
             // only the very first user (the initial admin) is active straight away
-            status: isFirstUser ? 'ACTIVE' : 'INACTIVE'
+            status: isFirstUser ? 'ACTIVE' : 'PENDING'
           }
         });
 
@@ -228,6 +228,16 @@ export class AuthController {
         });
       }
 
+      if (user.status === 'PENDING') {
+        return res.status(403).json({ 
+          success: false,
+          error: {
+            code: 'ACCOUNT_PENDING',
+            message: 'Your account is waiting for an administrator to approve it. You will be able to sign in once it is activated.'
+          }
+        });
+      }
+
       // Check if user account is active
       if (user.status === 'INACTIVE') {
         return res.status(403).json({ 
@@ -254,8 +264,11 @@ export class AuthController {
 
       // Send OTP via email
       const emailSent = await EmailService.sendLoginOTP(email, user.name, otp);
-      
-      if (!emailSent) {
+
+      // Local development without email configured: print the code instead
+      if (!emailSent && process.env.NODE_ENV !== 'production') {
+        console.log(`🔐 [dev] Login OTP for ${email}: ${otp}`);
+      } else if (!emailSent) {
         return res.status(500).json({
           success: false,
           error: {

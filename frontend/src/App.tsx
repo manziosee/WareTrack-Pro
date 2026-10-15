@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { I18nProvider } from './i18n/I18nContext';
 import MainLayout from './components/layout/MainLayout';
 import RoleGuard from './components/ui/RoleGuard';
 import Landing from './pages/Landing';
@@ -24,6 +26,8 @@ import ViewOrder from './pages/ViewOrder';
 import EditOrder from './pages/EditOrder';
 import About from './pages/About';
 import Notifications from './pages/Notifications';
+import NotFound from './pages/NotFound';
+import ForceLight from './components/layout/ForceLight';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,15 +41,17 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+      <I18nProvider>
       <AuthProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           {/* Public Routes */}
-          <Route path="/" element={<Landing />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/" element={<ForceLight><Landing /></ForceLight>} />
+          <Route path="/about" element={<ForceLight><About /></ForceLight>} />
+          <Route path="/login" element={<ForceLight><Login /></ForceLight>} />
+          <Route path="/register" element={<ForceLight><Register /></ForceLight>} />
+          <Route path="/forgot-password" element={<ForceLight><ForgotPassword /></ForceLight>} />
           
           {/* Protected Routes */}
           <Route path="/dashboard" element={<MainLayout><Dashboard /></MainLayout>} />
@@ -152,10 +158,21 @@ function App() {
           {/* Notifications - All authenticated users */}
           <Route path="/notifications" element={<MainLayout><Notifications /></MainLayout>} />
 
+          <Route path="*" element={<NotFound />} />
+
         </Routes>
         </BrowserRouter>
-        <Toaster position="top-right" />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            className: '!rounded-xl !bg-white !text-gray-900 !text-sm !shadow-lift !border !border-gray-100',
+            success: { iconTheme: { primary: '#10B981', secondary: '#fff' } },
+            error: { iconTheme: { primary: '#EF4444', secondary: '#fff' } },
+          }}
+        />
       </AuthProvider>
+      </I18nProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

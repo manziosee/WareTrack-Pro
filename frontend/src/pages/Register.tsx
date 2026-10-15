@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Package, Truck, Shield, Users } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Package, Truck, Users } from 'lucide-react';
 import { authService } from '@/services/authService';
 import toast from 'react-hot-toast';
+import AuthShowcase from '@/components/layout/AuthShowcase';
+import Logo from '@/components/ui/Logo';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -44,62 +46,23 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-accent-50 flex">
-      {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-accent-600 to-accent-800 p-12 flex-col justify-between text-white">
-        <div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="bg-white/20 p-3 rounded-xl">
-              <Package className="w-8 h-8" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">WareTrack-Pro</h1>
-              <p className="text-accent-100">Join Our Platform</p>
-            </div>
-          </div>
-          
-          <div className="space-y-6">
-            <h2 className="text-4xl font-bold leading-tight">
-              Start Managing<br />
-              Your Warehouse Today
-            </h2>
-            <p className="text-xl text-accent-100 leading-relaxed">
-              Join thousands of businesses using WareTrack-Pro for efficient warehouse management
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-6">
-          <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm">
-            <Truck className="w-8 h-8 mb-3" />
-            <h3 className="font-semibold mb-1">Real-time Tracking</h3>
-            <p className="text-sm text-accent-100">Monitor deliveries in real-time</p>
-          </div>
-          <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm">
-            <Shield className="w-8 h-8 mb-3" />
-            <h3 className="font-semibold mb-1">Enterprise Ready</h3>
-            <p className="text-sm text-accent-100">Built for scale and security</p>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50 flex">
+      <AuthShowcase
+        title="Run a smarter warehouse, starting today."
+        subtitle="Create your account. An administrator approves new accounts before the first sign-in."
+      />
 
       {/* Right Side - Register Form */}
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
-            <div className="bg-accent-600 p-3 rounded-xl">
-              <Package className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">WareTrack-Pro</h1>
-              <p className="text-gray-600">Create Account</p>
-            </div>
-          </div>
+          <Link to="/" className="mb-8 flex justify-center lg:hidden">
+            <Logo />
+          </Link>
 
           <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-gray-900 mb-1.5">Create Account</h2>
               <p className="text-gray-600">Join WareTrack-Pro and start managing your warehouse</p>
             </div>
 

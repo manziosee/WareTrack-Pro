@@ -1,416 +1,131 @@
-import { MapPin, Clock, CheckCircle, Navigation, Phone, Package, TrendingUp, Award } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import Card from '@/components/ui/Card';
-import RefreshButton from '@/components/ui/RefreshButton';
-import Badge from '@/components/ui/Badge';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { SERIES, chartMargin, gridProps, xAxisProps, yAxisProps, lineProps, tooltipCursor } from '@/components/charts/chartConfig';
-import { AreaGradient, ChartTooltip } from '@/components/charts/chartTheme';
-import api from '@/services/api';
-import { analyticsService } from '@/services/analyticsService';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { CheckCircle2, CalendarCheck, Clock, Star, Wallet, Trophy, Route, BarChart3, PieChart, Sun, Award, Navigation } from 'lucide-react';
+import { useDashboardData } from '@/services/insightsService';
+import Greeting from '@/components/dashboard/Greeting';
+import HeroCard from '@/components/dashboard/HeroCard';
+import DashboardGrid, { type DashboardCard } from '@/components/dashboard/DashboardGrid';
+import DashboardToolbar from '@/components/dashboard/DashboardToolbar';
+import StatCard from '@/components/ui/StatCard';
+import EmptyState from '@/components/ui/EmptyState';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
+import { BarsChart, DonutChart } from '@/components/charts/Widgets';
+import { RouteList, Leaderboard } from '@/components/dashboard/Lists';
+import { STATUS } from '@/components/charts/chartConfig';
 
 export default function DriverDashboard() {
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [performanceData, setPerformanceData] = useState<any[]>([]);
-  const [perfMetric, setPerfMetric] = useState<'deliveries' | 'revenue'>('deliveries');
-  const [performancePeriod, setPerformancePeriod] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading, isError, dataUpdatedAt, refetch } = useDashboardData();
+  const [editing, setEditing] = useState(false);
 
-  const fetchDriverData = async () => {
-    try {
-      const [response] = await Promise.all([
-        api.get('/dashboard/summary')
-      ]);
-      if (response.data.success) {
-        setDashboardData(response.data.data);
-      }
-      
-      // Fetch performance data with selected period
-      try {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const driverId = user.driverId || user.id;
-        if (driverId) {
-          const performance = await analyticsService.getDriverPerformanceById(driverId, performancePeriod);
-          setPerformanceData(performance?.performanceData || []);
-        }
-      } catch (analyticsError: any) {
-        console.log('Analytics not available, using fallback data');
-        // Fallback: Generate sample data for visualization
-        const periods = performancePeriod === 'daily' ? 7 : performancePeriod === 'weekly' ? 8 : 6;
-        const fallbackData = Array.from({ length: periods }, (_, i) => {
-          const date = new Date();
-          if (performancePeriod === 'daily') {
-            date.setDate(date.getDate() - (periods - 1 - i));
-            return {
-              period: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-              deliveries: 0,
-              revenue: 0,
-              successRate: 0
-            };
-          } else if (performancePeriod === 'weekly') {
-            date.setDate(date.getDate() - ((periods - 1 - i) * 7));
-            return {
-              period: `Week ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-              deliveries: 0,
-              revenue: 0,
-              successRate: 0
-            };
-          } else {
-            date.setMonth(date.getMonth() - (periods - 1 - i));
-            return {
-              period: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-              deliveries: 0,
-              revenue: 0,
-              successRate: 0
-            };
-          }
-        });
-        setPerformanceData(fallbackData);
-      }
-    } catch (error) {
-      console.error('Failed to fetch driver data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDriverData();
-  }, [performancePeriod]);
-
-  if (loading) {
+  if (isLoading) return <DashboardSkeleton />;
+  if (isError || !data) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      <EmptyState
+        variant="error"
+        title="We couldn't load your dashboard"
+        description="The server may be waking up. This usually takes under a minute."
+        action={<button onClick={() => refetch()} className="rounded-xl bg-primary-500 px-4 py-2 text-sm font-medium text-white">Try again</button>}
+      />
+    );
+  }
+
+  if (!data.driver) {
+    return (
+      <div>
+        <Greeting summary="Your driver profile isn't set up yet." />
+        <EmptyState
+          variant="delivery"
+          title="No driver profile linked to your account"
+          description="Ask a dispatch officer or admin to link your account to a driver profile. Your deliveries will then appear here."
+        />
       </div>
     );
   }
 
-  const driverStats = dashboardData?.driverStats;
-  const statCards = [
-    { 
-      label: 'Completed Today', 
-      value: driverStats?.completedToday || 0, 
-      icon: CheckCircle, 
-      color: 'bg-success-500'
+  const { hero, stats, charts, lists } = data;
+
+  const cards: DashboardCard[] = [
+    {
+      id: 'route', title: "Today's route", subtitle: 'Stops in order, tap the arrow to navigate', icon: <Route className="h-4 w-4" />, span: 2,
+      action: <Link to="/my-deliveries" className="text-xs font-semibold text-primary-600 hover:underline">Open my deliveries</Link>,
+      render: () => <RouteList stops={lists.route} />,
     },
-    { 
-      label: 'Remaining', 
-      value: driverStats?.remaining || 0, 
-      icon: Clock, 
-      color: 'bg-warning-500'
+    {
+      id: 'rank', title: 'Leaderboard', subtitle: 'This month', icon: <Trophy className="h-4 w-4" />,
+      render: () => <Leaderboard rows={charts.leaderboard} />,
     },
-    { 
-      label: 'Distance (km)', 
-      value: driverStats?.distance || 0, 
-      icon: Navigation, 
-      color: 'bg-info-500'
+    {
+      id: 'stats', title: 'My numbers', span: 3, bare: true,
+      render: () => (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3 2xl:grid-cols-6">
+          <StatCard label="Completed today" value={stats.completedToday.value} icon={<CheckCircle2 className="h-5 w-5" />} tone="success" />
+          <StatCard label="This week" value={stats.week.value} change={stats.week.change} trend={stats.week.trend} icon={<CalendarCheck className="h-5 w-5" />} />
+          <StatCard label="On time" value={stats.onTime.value} suffix="%" decimals={1} trend={stats.onTime.trend} icon={<Clock className="h-5 w-5" />} tone="info" />
+          <StatCard label="My rating" value={stats.rating.value} decimals={1} suffix="★" icon={<Star className="h-5 w-5" />} tone="warning" />
+          <StatCard label="Value delivered · 30d" value={stats.deliveredValue.value} prefix="RWF " compact icon={<Wallet className="h-5 w-5" />} tone="accent" />
+          <StatCard label="My rank" value={stats.rank.value} prefix="#" suffix={` of ${stats.rank.of}`} icon={<Award className="h-5 w-5" />} tone="primary" />
+        </div>
+      ),
     },
-    { 
-      label: 'Earnings (RWF)', 
-      value: (driverStats?.earnings || 0).toLocaleString(), 
-      icon: Package, 
-      color: 'bg-primary-500'
-    }
+    {
+      id: 'deliveries', title: 'My deliveries', subtitle: 'Last 14 days', icon: <BarChart3 className="h-4 w-4" />, span: 2,
+      render: () => <BarsChart data={charts.deliveries} series={[{ key: 'value', name: 'Delivered', color: STATUS.good }]} height={220} highlightMax />,
+    },
+    {
+      id: 'onTimeSplit', title: 'On time vs late', subtitle: 'Last 30 days', icon: <PieChart className="h-4 w-4" />,
+      render: () => (
+        <DonutChart
+          data={charts.onTimeSplit.map((d: any) => ({ ...d, color: d.name === 'Late' ? STATUS.critical : STATUS.good }))}
+          centerLabel="Delivered"
+          height={180}
+        />
+      ),
+    },
+    {
+      id: 'byHour', title: 'When I deliver', subtitle: 'Completed drops by hour', icon: <Sun className="h-4 w-4" />, span: 2,
+      render: () => <BarsChart data={charts.byHour} xKey="hour" series={[{ key: 'value', name: 'Deliveries' }]} height={200} highlightMax />,
+    },
+    {
+      id: 'ratings', title: 'Customer ratings', subtitle: 'All time', icon: <Star className="h-4 w-4" />,
+      render: () => (
+        <ul className="space-y-2">
+          {charts.ratingMix.map((r: any) => {
+            const total = charts.ratingMix.reduce((s: number, x: any) => s + x.value, 0) || 1;
+            return (
+              <li key={r.name} className="flex items-center gap-3 text-xs">
+                <span className="w-7 font-semibold text-gray-700">{r.name}</span>
+                <span className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+                  <span className="block h-full rounded-full bg-warning-500" style={{ width: `${(r.value / total) * 100}%` }} />
+                </span>
+                <span className="w-6 text-right tabular-nums text-gray-500">{r.value}</span>
+              </li>
+            );
+          })}
+        </ul>
+      ),
+    },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-3xl font-bold text-gray-900">Driver Dashboard</h1>
-          <p className="text-gray-600 mt-1">Your delivery assignments and progress</p>
-        </div>
-        <RefreshButton onRefresh={fetchDriverData} />
-      </div>
-
-      {/* Driver Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat) => (
-          <Card key={stat.label} className="hover:shadow-lg transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-              </div>
-              <div className={`${stat.color} p-3 rounded-lg`}>
-                <stat.icon className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Current Delivery */}
-      {driverStats?.currentDelivery && (
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-heading text-lg font-semibold text-gray-900">Current Delivery</h3>
-            <Badge variant={
-              driverStats.currentDelivery.status === 'IN_TRANSIT' ? 'info' :
-              driverStats.currentDelivery.status === 'DELIVERED' ? 'success' : 'warning'
-            }>
-              {driverStats.currentDelivery.status.replace('_', ' ')}
-            </Badge>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Delivery Details</h4>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Package className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="font-medium text-gray-900">{driverStats.currentDelivery.orderNumber}</p>
-                    <p className="text-sm text-gray-600">{driverStats.currentDelivery.customerName}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="font-medium text-gray-900">Delivery Address</p>
-                    <p className="text-sm text-gray-600">{driverStats.currentDelivery.deliveryAddress}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Phone className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="font-medium text-gray-900">Customer Contact</p>
-                    <p className="text-sm text-gray-600">{driverStats.currentDelivery.customerPhone}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="font-medium text-gray-900">ETA</p>
-                    <p className="text-sm text-gray-600">{new Date(driverStats.currentDelivery.eta).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Items to Deliver</h4>
-              <div className="space-y-2">
-                {driverStats.currentDelivery.items?.map((item: any, index: number) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <span className="text-sm text-gray-700">{item.name}</span>
-                    <span className="text-sm font-medium text-gray-900">Qty: {item.quantity}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <button 
-                  onClick={() => window.location.href = '/tracking'}
-                  className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors"
-                >
-                  Update Delivery Status
-                </button>
-                <button 
-                  onClick={() => window.open(`tel:${driverStats.currentDelivery.customerPhone}`)}
-                  className="w-full bg-success-600 text-white py-2 px-4 rounded-lg hover:bg-success-700 transition-colors"
-                >
-                  Call Customer
-                </button>
-                <button 
-                  onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(driverStats.currentDelivery.deliveryAddress)}`)}
-                  className="w-full bg-info-600 text-white py-2 px-4 rounded-lg hover:bg-info-700 transition-colors"
-                >
-                  Open in Maps
-                </button>
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Driver Actions and Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary-600" />
-              My Performance
-            </div>
-            <select
-              value={performancePeriod}
-              onChange={(e) => setPerformancePeriod(e.target.value as 'daily' | 'weekly' | 'monthly')}
-              className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="daily">Last 7 Days</option>
-              <option value="weekly">Last 8 Weeks</option>
-              <option value="monthly">Last 6 Months</option>
-            </select>
-          </h3>
-          <div className="mb-3 flex w-fit rounded-xl bg-gray-100 p-1 text-xs font-medium">
-            {([['deliveries', 'Deliveries'], ['revenue', 'Revenue']] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setPerfMetric(key)}
-                className={`rounded-lg px-3 py-1.5 transition-all ${
-                  perfMetric === key ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={performanceData} margin={chartMargin}>
-              <defs>
-                <AreaGradient id="driverPerfFill" color={perfMetric === 'deliveries' ? SERIES[0] : SERIES[2]} />
-              </defs>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="period" {...xAxisProps} />
-              <YAxis {...yAxisProps} />
-              <Tooltip
-                content={
-                  <ChartTooltip
-                    valueFormatter={(v) => perfMetric === 'revenue' ? `RWF ${Number(v).toLocaleString()}` : Number(v).toLocaleString()}
-                  />
-                }
-                cursor={tooltipCursor}
-              />
-              <Area
-                {...lineProps}
-                dataKey={perfMetric}
-                stroke={perfMetric === 'deliveries' ? SERIES[0] : SERIES[2]}
-                fill="url(#driverPerfFill)"
-                name={perfMetric === 'deliveries' ? 'Deliveries' : 'Revenue'}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div className="p-3 bg-primary-50 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <Award className="w-4 h-4 text-primary-600" />
-                <span className="text-xs text-primary-600 font-medium">Success Rate</span>
-              </div>
-              <p className="text-2xl font-bold text-primary-700">
-                {performanceData.length > 0 
-                  ? Math.round(performanceData[performanceData.length - 1]?.successRate || 0)
-                  : 0}%
-              </p>
-            </div>
-            <div className="p-3 bg-success-50 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <TrendingUp className="w-4 h-4 text-success-600" />
-                <span className="text-xs text-success-600 font-medium">Total Revenue</span>
-              </div>
-              <p className="text-2xl font-bold text-success-700">
-                RWF {performanceData.reduce((sum, d) => sum + (d.revenue || 0), 0).toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Today's Schedule</h3>
-          <div className="space-y-3">
-            {driverStats?.todaySchedule && driverStats.todaySchedule.length > 0 ? (
-              driverStats.todaySchedule.map((delivery: any, index: number) => {
-                const getStatusColor = (status: string) => {
-                  switch (status) {
-                    case 'DELIVERED': return 'bg-green-50 text-green-800';
-                    case 'IN_TRANSIT': return 'bg-blue-50 text-blue-800';
-                    case 'DISPATCHED': return 'bg-yellow-50 text-yellow-800';
-                    case 'PENDING': return 'bg-gray-50 text-gray-800';
-                    default: return 'bg-gray-50 text-gray-800';
-                  }
-                };
-
-                const getStatusIcon = (status: string) => {
-                  switch (status) {
-                    case 'DELIVERED': return <CheckCircle className="w-5 h-5 text-green-600" />;
-                    case 'IN_TRANSIT': return <Clock className="w-5 h-5 text-blue-600" />;
-                    case 'DISPATCHED': return <Clock className="w-5 h-5 text-yellow-600" />;
-                    case 'PENDING': return <Clock className="w-5 h-5 text-gray-600" />;
-                    default: return <Clock className="w-5 h-5 text-gray-600" />;
-                  }
-                };
-
-                const formatTime = (time: string) => {
-                  return new Date(time).toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
-                    minute: '2-digit', 
-                    hour12: true 
-                  });
-                };
-
-                return (
-                  <div key={index} className={`flex items-start justify-between p-3 rounded-lg ${getStatusColor(delivery.status)}`}>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium">{delivery.orderNumber}</p>
-                        {getStatusIcon(delivery.status)}
-                      </div>
-                      <p className="text-sm mb-1">{delivery.customerName}</p>
-                      <p className="text-xs text-gray-600">{delivery.deliveryAddress}</p>
-                      <p className="text-xs mt-1">
-                        {delivery.status === 'DELIVERED' 
-                          ? `Delivered at ${formatTime(delivery.deliveredAt || delivery.time)}`
-                          : `Scheduled: ${formatTime(delivery.scheduledDate || delivery.time)}`
-                        }
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <Clock className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>No deliveries scheduled for today</p>
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          <div className="space-y-3">
-            <button 
-              onClick={() => window.location.href = '/tracking'}
-              className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
-            >
-              <Navigation className="w-5 h-5" />
-              View All Deliveries
-            </button>
-            <button 
-              onClick={() => window.location.href = '/profile'}
-              className="w-full bg-gray-100 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-            >
-              <Package className="w-5 h-5" />
-              Update Profile
-            </button>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-3">Performance Summary</h4>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Total Distance Today</span>
-                <span className="font-medium text-blue-600">{driverStats?.distance || 0} km</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Earnings Today</span>
-                <span className="font-medium text-green-600">RWF {(driverStats?.earnings || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Completion Rate</span>
-                <span className="font-medium text-purple-600">
-                  {driverStats?.completedToday && (driverStats.completedToday + driverStats.remaining) > 0 
-                    ? Math.round((driverStats.completedToday / (driverStats.completedToday + driverStats.remaining)) * 100)
-                    : 0}%
-                </span>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
+    <div>
+      <Greeting
+        summary={hero.caption}
+        actions={<DashboardToolbar editing={editing} onToggleEditing={() => setEditing((v) => !v)} updatedAt={dataUpdatedAt} />}
+      />
+      <HeroCard
+        label={hero.label}
+        value={hero.value}
+        caption={hero.caption}
+        series={hero.series}
+        icon={<Navigation className="h-3.5 w-3.5" />}
+        extras={[
+          { label: 'Done today', value: stats.completedToday.value },
+          { label: 'On time', value: `${stats.onTime.value}%` },
+          { label: 'Rating', value: `${stats.rating.value}★` },
+          { label: 'Rank', value: `#${stats.rank.value}` },
+        ]}
+      />
+      <DashboardGrid storageKey="driver" cards={cards} editing={editing} />
     </div>
   );
 }

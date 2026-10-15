@@ -1,349 +1,191 @@
-import { Package, Truck, CheckCircle, AlertTriangle, Users, Settings, TrendingUp, PieChart as PieChartIcon, Activity, Gauge } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import Card from '@/components/ui/Card';
-import RefreshButton from '@/components/ui/RefreshButton';
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { SERIES, STATUS, chartMargin, gridProps, xAxisProps, yAxisProps, lineProps, barProps, tooltipCursor, barCursor, legendProps, compactNumber } from '@/components/charts/chartConfig';
-import { AreaGradient, ChartTooltip, ChartCard, ChartEmpty, DonutCenter, DonutLegend } from '@/components/charts/chartTheme';
-import Badge from '@/components/ui/Badge';
-import { dashboardService } from '@/services/dashboardService';
-import { analyticsService } from '@/services/analyticsService';
+import { useState } from 'react';
+import {
+  ShoppingCart, Wallet, Clock, Users, PackageX, UserPlus, TrendingUp, PieChart, Activity, CalendarDays, Flag,
+  Building2, Package, CreditCard, Warehouse, Trophy, Truck, MapPin, AlertTriangle, History, DollarSign,
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useDashboardData } from '@/services/insightsService';
+import Greeting from '@/components/dashboard/Greeting';
+import HeroCard from '@/components/dashboard/HeroCard';
+import DashboardGrid, { type DashboardCard } from '@/components/dashboard/DashboardGrid';
+import DashboardToolbar from '@/components/dashboard/DashboardToolbar';
+import StatCard from '@/components/ui/StatCard';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
+import EmptyState from '@/components/ui/EmptyState';
+import { TrendChart, BarsChart, DonutChart, BarList, formatRWF } from '@/components/charts/Widgets';
+import { AtRiskList, ActivityFeed, RestockList, Leaderboard } from '@/components/dashboard/Lists';
+import { STATUS } from '@/components/charts/chartConfig';
+import { statusLabel } from '@/utils/status';
+
+const paymentLabel: Record<string, string> = { MTN_MOMO: 'MTN MoMo', AIRTEL_MONEY: 'Airtel Money', CASH: 'Cash', BANK_TRANSFER: 'Bank transfer', CARD: 'Card' };
+const paymentColor: Record<string, string> = { MTN_MOMO: '#FFC533', AIRTEL_MONEY: '#E0578A', CASH: '#2A9D8F', BANK_TRANSFER: '#3B7DC4', CARD: '#8B5CF6' };
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<any>(null);
-  const [trends, setTrends] = useState<any[]>([]);
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
-  const [inventoryByCategory, setInventoryByCategory] = useState<any[]>([]);
-  const [orderTrends, setOrderTrends] = useState<any[]>([]);
-  const [fleetData, setFleetData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading, isError, dataUpdatedAt, refetch } = useDashboardData();
+  const [editing, setEditing] = useState(false);
 
-  const [trendMetric, setTrendMetric] = useState<'revenue' | 'orderCount'>('revenue');
-
-  const fetchDashboardData = async () => {
-    try {
-      const [dashboardStats, dashboardTrends, dashboardOrders] = await Promise.all([
-        dashboardService.getStats(),
-        dashboardService.getTrends(),
-        dashboardService.getRecentOrders(5)
-      ]);
-
-      setStats(dashboardStats);
-      setTrends(dashboardTrends);
-      setRecentOrders(dashboardOrders || []);
-      
-      // Try to fetch analytics data, fallback to empty if not available
-      try {
-        const [categoryData, orders, fleet] = await Promise.all([
-          analyticsService.getCategoryDistribution(),
-          analyticsService.getOrderTrends(6),
-          analyticsService.getFleetUtilization()
-        ]);
-        setInventoryByCategory(categoryData || []);
-        setOrderTrends(orders || []);
-        setFleetData(fleet || []);
-      } catch (analyticsError) {
-        console.log('Analytics endpoints not available yet');
-        setInventoryByCategory([]);
-        setOrderTrends([]);
-        setFleetData([]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  if (loading) {
+  if (isLoading) return <DashboardSkeleton />;
+  if (isError || !data) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
+      <EmptyState
+        variant="error"
+        title="We couldn't load your dashboard"
+        description="The server may be waking up. This usually takes under a minute."
+        action={<button onClick={() => refetch()} className="rounded-xl bg-primary-500 px-4 py-2 text-sm font-medium text-white">Try again</button>}
+      />
     );
   }
 
-  const statCards = [
-    { 
-      label: 'Total Inventory', 
-      value: stats?.totalInventory?.value || 0, 
-      icon: Package, 
-      color: 'bg-primary-500', 
-      change: `${stats?.totalInventory?.percentage >= 0 ? '+' : ''}${stats?.totalInventory?.percentage || 0}%`,
-      link: '/inventory'
+  const { hero, stats, charts, lists } = data;
+
+  const cards: DashboardCard[] = [
+    {
+      id: 'stats',
+      title: 'Key numbers',
+      span: 3,
+      bare: true,
+      render: () => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <StatCard label="Orders · 7 days" value={stats.orders.value} change={stats.orders.change} trend={stats.orders.trend} icon={<ShoppingCart className="h-5 w-5" />} to="/orders" />
+          <StatCard label="Revenue · 7 days" value={stats.revenue.value} prefix="RWF " compact change={stats.revenue.change} trend={stats.revenue.trend} icon={<Wallet className="h-5 w-5" />} tone="success" to="/reports" />
+          <StatCard label="On-time delivery" value={stats.onTime.value} suffix="%" decimals={1} change={stats.onTime.change} changeLabel="pts vs prior 30d" trend={stats.onTime.trend} icon={<Clock className="h-5 w-5" />} tone="info" />
+          <StatCard label="Drivers working" value={stats.activeDrivers.value} suffix={` / ${stats.activeDrivers.total}`} icon={<Users className="h-5 w-5" />} tone="accent" to="/drivers" />
+          <StatCard label="Items to restock" value={stats.lowStock.value} icon={<PackageX className="h-5 w-5" />} tone={stats.lowStock.value > 0 ? 'warning' : 'success'} to="/inventory" />
+          <StatCard label="Awaiting approval" value={stats.pendingUsers.value} suffix={` · ${stats.pendingUsers.activeUsers} active`} icon={<UserPlus className="h-5 w-5" />} tone={stats.pendingUsers.value > 0 ? 'error' : 'primary'} to="/users" />
+        </div>
+      ),
     },
-    { 
-      label: 'Deliveries Today', 
-      value: stats?.deliveriesToday?.value || 0, 
-      icon: CheckCircle, 
-      color: 'bg-success-500', 
-      change: `${stats?.deliveriesToday?.percentage >= 0 ? '+' : ''}${stats?.deliveriesToday?.percentage || 0}%`,
-      link: '/orders'
+    {
+      id: 'revenueTrend', title: 'Revenue and orders', subtitle: 'Last 30 days', icon: <TrendingUp className="h-4 w-4" />, span: 2,
+      render: () => (
+        <TrendChart
+          data={charts.revenueTrend}
+          toggle
+          height={260}
+          series={[{ key: 'revenue', name: 'Revenue' }, { key: 'orders', name: 'Orders', color: '#FF8C42' }]}
+          valueFormatter={(v) => (Number(v) > 1000 ? formatRWF(Number(v)) : String(v))}
+        />
+      ),
     },
-    { 
-      label: 'Active Users', 
-      value: stats?.activeUsers?.value || 0, 
-      icon: Users, 
-      color: 'bg-info-500', 
-      change: `${stats?.activeUsers?.percentage >= 0 ? '+' : ''}${stats?.activeUsers?.percentage || 0}%`,
-      link: '/users'
+    {
+      id: 'statusMix', title: 'Order status', subtitle: 'Orders created in the last 30 days', icon: <PieChart className="h-4 w-4" />,
+      render: () => <DonutChart data={charts.statusMix} centerLabel="Orders" statusColors />,
     },
-    { 
-      label: 'Fleet Status', 
-      value: stats?.fleetStatus?.value || 0, 
-      icon: Truck, 
-      color: 'bg-accent-500', 
-      change: `${stats?.fleetStatus?.percentage >= 0 ? '+' : ''}${stats?.fleetStatus?.percentage || 0}%`,
-      link: '/vehicles'
+    {
+      id: 'onTimeTrend', title: 'On-time rate', subtitle: 'Weekly, target 90%', icon: <Activity className="h-4 w-4" />,
+      render: () => (
+        <TrendChart
+          data={charts.onTimeTrend}
+          series={[{ key: 'onTime', name: 'On time', color: STATUS.good }]}
+          height={200}
+          referenceY={90}
+          yFormatter={(v) => `${v}%`}
+          valueFormatter={(v) => `${v}%`}
+        />
+      ),
     },
-    { 
-      label: 'System Alerts', 
-      value: stats?.systemAlerts?.value || 0, 
-      icon: AlertTriangle, 
-      color: 'bg-error-500', 
-      change: `${stats?.systemAlerts?.percentage >= 0 ? '+' : ''}${stats?.systemAlerts?.percentage || 0}%`,
-      link: '/settings'
+    {
+      id: 'byWeekday', title: 'Busiest days', subtitle: 'Orders by weekday, last 30 days', icon: <CalendarDays className="h-4 w-4" />,
+      render: () => <BarsChart data={charts.byWeekday} xKey="name" series={[{ key: 'value', name: 'Orders' }]} height={200} highlightMax />,
+    },
+    {
+      id: 'priorityMix', title: 'Priority mix', subtitle: 'Last 30 days', icon: <Flag className="h-4 w-4" />,
+      render: () => <DonutChart data={charts.priorityMix} centerLabel="Orders" statusColors height={180} />,
+    },
+    {
+      id: 'topCustomers', title: 'Top customers', subtitle: 'Delivered revenue, last 30 days', icon: <Building2 className="h-4 w-4" />,
+      render: () => <BarList data={charts.topCustomers.map((c: any) => ({ name: c.name, value: c.revenue, secondary: `${c.orders} orders` }))} format={formatRWF} />,
+    },
+    {
+      id: 'topProducts', title: 'Best-selling products', subtitle: 'Revenue, last 30 days', icon: <Package className="h-4 w-4" />,
+      render: () => <BarList data={charts.topProducts.map((p: any) => ({ name: p.name, value: p.revenue, secondary: `${p.units} units` }))} format={formatRWF} color="#2A9D8F" />,
+    },
+    {
+      id: 'paymentMix', title: 'Payment methods', subtitle: 'Paid orders, last 30 days', icon: <CreditCard className="h-4 w-4" />,
+      render: () => (
+        <DonutChart
+          data={charts.paymentMix.map((p: any) => ({ name: paymentLabel[p.name] || p.name, value: p.value, color: paymentColor[p.name] }))}
+          centerLabel="Paid"
+          height={180}
+        />
+      ),
+    },
+    {
+      id: 'inventoryValue', title: 'Stock value by category', subtitle: 'Current inventory, RWF', icon: <DollarSign className="h-4 w-4" />, span: 2,
+      render: () => <BarsChart data={charts.inventoryByCategory} xKey="name" series={[{ key: 'value', name: 'Stock value' }]} height={220} valueFormatter={(v) => formatRWF(Number(v))} />,
+    },
+    {
+      id: 'stockByWarehouse', title: 'Stock by warehouse', subtitle: 'Units held and space used', icon: <Warehouse className="h-4 w-4" />,
+      render: () => (
+        <BarList
+          data={charts.stockByWarehouse.map((w: any) => ({ name: w.name, value: w.units, secondary: w.utilization != null ? `${w.utilization}% full` : undefined }))}
+          format={(v) => `${v.toLocaleString()} units`}
+          color="#8B5CF6"
+        />
+      ),
+    },
+    {
+      id: 'leaderboard', title: 'Driver leaderboard', subtitle: 'Last 30 days', icon: <Trophy className="h-4 w-4" />, span: 2,
+      action: <Link to="/drivers" className="text-xs font-semibold text-primary-600 hover:underline">All drivers</Link>,
+      render: () => <Leaderboard rows={charts.leaderboard} />,
+    },
+    {
+      id: 'fleet', title: 'Fleet status', subtitle: 'Vehicles right now', icon: <Truck className="h-4 w-4" />,
+      render: () => (
+        <div className="space-y-5">
+          <DonutChart data={charts.vehicleStatus} centerLabel="Vehicles" statusColors height={160} />
+          <div className="flex flex-wrap gap-2">
+            {charts.driverStatus.map((d: any) => (
+              <span key={d.name} className="rounded-lg bg-gray-50 px-2.5 py-1 text-xs text-gray-600">
+                {statusLabel(d.name)} drivers: <b className="text-gray-900">{d.value}</b>
+              </span>
+            ))}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'areaMix', title: 'Deliveries by area', subtitle: 'Kigali neighbourhoods, last 30 days', icon: <MapPin className="h-4 w-4" />,
+      render: () => <BarList data={charts.areaMix} format={(v) => `${v} orders`} color="#E0578A" />,
+    },
+    {
+      id: 'atRisk', title: 'Deliveries at risk', subtitle: 'Due within 12 hours or overdue', icon: <AlertTriangle className="h-4 w-4" />,
+      render: () => <AtRiskList items={lists.atRisk} />,
+    },
+    {
+      id: 'restock', title: 'Restock soon', subtitle: 'Lowest stock first', icon: <PackageX className="h-4 w-4" />,
+      action: <Link to="/inventory" className="text-xs font-semibold text-primary-600 hover:underline">Inventory</Link>,
+      render: () => <RestockList items={lists.restock} />,
+    },
+    {
+      id: 'activity', title: 'Recent activity', subtitle: 'Latest changes across the system', icon: <History className="h-4 w-4" />, span: 2,
+      render: () => <ActivityFeed items={lists.activity} />,
     },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-1">Complete system overview and management</p>
-        </div>
-        <RefreshButton onRefresh={fetchDashboardData} />
-      </div>
-
-      {/* Admin Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        {statCards.map((stat) => (
-          <Card key={stat.label} className="hover:shadow-lg transition-shadow cursor-pointer">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                <p className="text-xs text-success-600 mt-2">{stat.change} from last week</p>
-              </div>
-              <div className={`${stat.color} p-3 rounded-lg`}>
-                <stat.icon className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Admin Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard
-          title={trendMetric === 'revenue' ? 'Revenue Trend' : 'Orders Trend'}
-          subtitle={trendMetric === 'revenue' ? 'Monthly revenue in RWF' : 'Orders placed per month'}
-          icon={<TrendingUp className="w-5 h-5" />}
-          action={
-            <div className="flex rounded-xl bg-gray-100 p-1 text-xs font-medium">
-              {([['revenue', 'Revenue'], ['orderCount', 'Orders']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setTrendMetric(key)}
-                  className={`rounded-lg px-3 py-1.5 transition-all ${
-                    trendMetric === key ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          }
-        >
-          {orderTrends.length === 0 ? <ChartEmpty /> : (
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={orderTrends} margin={chartMargin}>
-                <defs>
-                  <AreaGradient id="adminTrendFill" color={trendMetric === 'revenue' ? SERIES[0] : SERIES[1]} />
-                </defs>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="month" {...xAxisProps} />
-                <YAxis {...yAxisProps} />
-                <Tooltip
-                  content={
-                    <ChartTooltip
-                      valueFormatter={(v) => trendMetric === 'revenue' ? `RWF ${compactNumber(Number(v))}` : Number(v).toLocaleString()}
-                    />
-                  }
-                  cursor={tooltipCursor}
-                />
-                <Area
-                  {...lineProps}
-                  dataKey={trendMetric}
-                  stroke={trendMetric === 'revenue' ? SERIES[0] : SERIES[1]}
-                  fill="url(#adminTrendFill)"
-                  name={trendMetric === 'revenue' ? 'Revenue' : 'Orders'}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        <ChartCard
-          title="Inventory by Category"
-          subtitle="Number of items in each category"
-          icon={<PieChartIcon className="w-5 h-5" />}
-        >
-          {inventoryByCategory.length === 0 ? <ChartEmpty /> : (() => {
-            // Keep at most 5 named slices; fold the rest into "Other" so colours never repeat
-            const sorted = [...inventoryByCategory].sort((a, b) => (b.count || 0) - (a.count || 0));
-            const top = sorted.slice(0, 5);
-            const rest = sorted.slice(5).reduce((sum, c) => sum + (c.count || 0), 0);
-            const slices = [
-              ...top.map((c, i) => ({ name: c.category, value: c.count || 0, color: SERIES[i] })),
-              ...(rest > 0 ? [{ name: 'Other', value: rest, color: STATUS.neutral }] : []),
-            ];
-            const total = slices.reduce((sum, c) => sum + c.value, 0);
-            return (
-              <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-6">
-                <div className="relative h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={slices}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius="62%"
-                        outerRadius="92%"
-                        paddingAngle={2}
-                        cornerRadius={6}
-                        stroke="#fff"
-                        strokeWidth={2}
-                      >
-                        {slices.map((slice) => (
-                          <Cell key={slice.name} fill={slice.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<ChartTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <DonutCenter total={total.toLocaleString()} label="Items" />
-                </div>
-                <DonutLegend items={slices} />
-              </div>
-            );
-          })()}
-        </ChartCard>
-
-        <ChartCard
-          title="System Performance"
-          subtitle="Completed, pending and cancelled orders"
-          icon={<Activity className="w-5 h-5" />}
-        >
-          {trends.length === 0 ? <ChartEmpty /> : (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={trends} margin={chartMargin}>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="date" {...xAxisProps} />
-                <YAxis {...yAxisProps} />
-                <Tooltip content={<ChartTooltip />} cursor={tooltipCursor} />
-                <Legend {...legendProps} />
-                <Line {...lineProps} dataKey="completed" stroke={STATUS.good} name="Completed" />
-                <Line {...lineProps} dataKey="pending" stroke={STATUS.warning} name="Pending" strokeDasharray="5 4" />
-                <Line {...lineProps} dataKey="cancelled" stroke={STATUS.critical} name="Cancelled" />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        <ChartCard
-          title="Fleet Utilization"
-          subtitle="Vehicles by current status"
-          icon={<Gauge className="w-5 h-5" />}
-        >
-          {fleetData.length === 0 ? <ChartEmpty /> : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={fleetData} margin={chartMargin}>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="status" {...xAxisProps} />
-                <YAxis {...yAxisProps} />
-                <Tooltip content={<ChartTooltip />} cursor={barCursor} />
-                <Bar {...barProps} dataKey="count" fill={SERIES[0]} name="Vehicles" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-      </div>
-
-      {/* Admin Management Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Recent Orders</h3>
-          <div className="space-y-3">
-            {recentOrders.slice(0, 5).map((order) => (
-              <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-900">{order.orderNumber}</p>
-                  <p className="text-sm text-gray-600">{order.customerName}</p>
-                </div>
-                <Badge variant={
-                  order.status === 'DELIVERED' ? 'success' :
-                  order.status === 'IN_TRANSIT' ? 'info' :
-                  order.status === 'DISPATCHED' ? 'warning' : 'gray'
-                }>
-                  {order.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">System Health</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Database</span>
-              <Badge variant="success">Online</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">API Server</span>
-              <Badge variant="success">Healthy</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Email Service</span>
-              <Badge variant="success">Active</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Storage</span>
-              <Badge variant="warning">85% Used</Badge>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          <div className="space-y-3">
-            <button className="w-full p-3 text-left bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors">
-              <div className="flex items-center gap-3">
-                <Users className="w-5 h-5 text-primary-600" />
-                <span className="font-medium text-primary-700">Manage Users</span>
-              </div>
-            </button>
-            <button className="w-full p-3 text-left bg-success-50 hover:bg-success-100 rounded-lg transition-colors">
-              <div className="flex items-center gap-3">
-                <Package className="w-5 h-5 text-success-600" />
-                <span className="font-medium text-success-700">Add Inventory</span>
-              </div>
-            </button>
-            <button className="w-full p-3 text-left bg-info-50 hover:bg-info-100 rounded-lg transition-colors">
-              <div className="flex items-center gap-3">
-                <Settings className="w-5 h-5 text-info-600" />
-                <span className="font-medium text-info-700">System Settings</span>
-              </div>
-            </button>
-          </div>
-        </Card>
-      </div>
+    <div>
+      <Greeting
+        summary={`${stats.scheduledToday} deliveries scheduled today · ${stats.lowStock.value} items need restocking`}
+        actions={<DashboardToolbar editing={editing} onToggleEditing={() => setEditing((v) => !v)} updatedAt={dataUpdatedAt} />}
+      />
+      <HeroCard
+        label={hero.label}
+        value={hero.value}
+        prefix="RWF "
+        compact
+        change={hero.change}
+        caption={hero.caption}
+        series={hero.series}
+        icon={<Wallet className="h-3.5 w-3.5" />}
+        extras={[
+          { label: 'Scheduled today', value: stats.scheduledToday },
+          { label: 'On time', value: `${stats.onTime.value}%` },
+          { label: 'Orders · 7d', value: stats.orders.value },
+          { label: 'To approve', value: stats.pendingUsers.value },
+        ]}
+      />
+      <DashboardGrid storageKey="admin" cards={cards} editing={editing} />
     </div>
   );
 }

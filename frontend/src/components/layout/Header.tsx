@@ -1,436 +1,249 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bell, Search, User, Settings, LogOut, ChevronDown, CheckCheck, Package, ShoppingCart, Truck, Car } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell, Search, Settings, LogOut, CheckCheck, Moon, Sun, Menu, User as UserIcon, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { notificationService } from '@/services/notificationService';
-import type { Notification } from '@/services/notificationService';
+import { useTheme } from '@/context/ThemeContext';
+import { notificationService, type Notification } from '@/services/notificationService';
+import { LogoMark } from '../ui/Logo';
+import LanguageSwitcher from './LanguageSwitcher';
+import { useI18n } from '@/i18n/I18nContext';
 
-export default function Header() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const userDropdownRef = useRef<HTMLDivElement>(null);
-  const notificationRef = useRef<HTMLDivElement>(null);
+interface HeaderProps {
+  onOpenSearch: () => void;
+  onOpenMobileNav: () => void;
+}
 
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [notificationLoading, setNotificationLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const [expandedNotification, setExpandedNotification] = useState<number | null>(null);
+const timeAgo = (date: string) => {
+  const minutes = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+};
 
-  const getTimeAgo = (date: string): string => {
-    const now = new Date();
-    const diffInMs = now.getTime() - new Date(date).getTime();
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
-    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+const severityDot: Record<string, string> = {
+  error: 'bg-error-500',
+  critical: 'bg-error-500',
+  warning: 'bg-warning-500',
+  success: 'bg-success-500',
+  info: 'bg-info-500',
+};
 
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    return `${diffInDays}d ago`;
-  };
-
-  // Fetch unread count and recent notifications
-  const fetchNotifications = useCallback(async () => {
-    try {
-      setNotificationLoading(true);
-      const [statsData, notifData] = await Promise.all([
-        notificationService.getStats(),
-        notificationService.getNotifications({ limit: 10, unreadOnly: true }) // Only fetch unread
-      ]);
-      setUnreadCount(statsData.unread || 0);
-      setNotifications(notifData.data || []);
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
-      setNotifications([]);
-      setUnreadCount(0);
-    } finally {
-      setNotificationLoading(false);
-    }
-  }, []);
-
+function useClickOutside(ref: React.RefObject<HTMLElement>, onOutside: () => void) {
   useEffect(() => {
-    fetchNotifications();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, [fetchNotifications]);
-
-  const handleMarkAllAsRead = async () => {
-    try {
-      await notificationService.markAllAsRead();
-      setUnreadCount(0);
-      setNotifications([]); // Clear all notifications from bell
-    } catch (error) {
-      console.error('Failed to mark all as read:', error);
-    }
-  };
-
-  const handleMarkOneAsRead = async (id: number) => {
-    try {
-      await notificationService.markAsRead(id);
-      // Remove the notification from the list
-      setNotifications(prev => prev.filter(n => n.id !== id));
-      setUnreadCount(prev => Math.max(0, prev - 1));
-      // Collapse after marking as read
-      setTimeout(() => setExpandedNotification(null), 500);
-    } catch (error) {
-      console.error('Failed to mark as read:', error);
-    }
-  };
-
-  const handleNotificationClick = (notification: Notification) => {
-    // Always expand and mark as read for unread notifications
-    setExpandedNotification(notification.id);
-    // Mark as read after a short delay to show the expanded state
-    setTimeout(() => handleMarkOneAsRead(notification.id), 300);
-  };
-
-  const getNotificationTypeColor = (severity: string) => {
-    switch (severity?.toLowerCase()) {
-      case 'warning': return 'bg-warning-500';
-      case 'success': return 'bg-success-500';
-      case 'error': return 'bg-error-500';
-      case 'info': return 'bg-primary-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
-        setShowUserDropdown(false);
-      }
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowSearchResults(false);
-      }
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onOutside();
     };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ref, onOutside]);
+}
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+export default function Header({ onOpenSearch, onOpenMobileNav }: HeaderProps) {
+  const { user, logout } = useAuth();
+  const { isDark, toggle } = useTheme();
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const userRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside(notifRef, () => setShowNotifications(false));
+  useClickOutside(userRef, () => setShowUserMenu(false));
+
+  const { data: recent = [] } = useQuery({
+    queryKey: ['notifications', 'recent-unread'],
+    queryFn: async () => (await notificationService.getNotifications({ limit: 8, unreadOnly: true })).data || [],
+    enabled: Boolean(user),
+    refetchInterval: 60_000,
+  });
+
+  const { data: unread = 0 } = useQuery({
+    queryKey: ['badge', 'unreadNotifications'],
+    queryFn: async () => Number((await notificationService.getStats())?.unread) || 0,
+    enabled: Boolean(user),
+    refetchInterval: 60_000,
+  });
+
+  const refreshNotifications = () => {
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    queryClient.invalidateQueries({ queryKey: ['badge', 'unreadNotifications'] });
+  };
+
+  const markAll = async () => {
+    await notificationService.markAllAsRead().catch(() => undefined);
+    refreshNotifications();
+  };
+
+  const markOne = async (n: Notification) => {
+    await notificationService.markAsRead(n.id).catch(() => undefined);
+    refreshNotifications();
+  };
 
   const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/');
-    } catch (error) {
-      console.error('Logout error:', error);
-      navigate('/');
-    }
+    await logout();
+    navigate('/');
   };
 
-  const handleSearch = async (query: string) => {
-    setSearchQuery(query);
-    if (!query.trim()) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
-    }
-
-    setSearchLoading(true);
-    setShowSearchResults(true);
-
-    try {
-      const [ordersRes, inventoryRes, vehiclesRes, driversRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/orders?search=${query}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }).then(r => r.json()).catch(() => ({ data: [] })),
-        fetch(`${import.meta.env.VITE_API_URL}/inventory?search=${query}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }).then(r => r.json()).catch(() => ({ data: [] })),
-        fetch(`${import.meta.env.VITE_API_URL}/vehicles?search=${query}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }).then(r => r.json()).catch(() => ({ data: [] })),
-        fetch(`${import.meta.env.VITE_API_URL}/drivers?search=${query}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }).then(r => r.json()).catch(() => ({ data: [] }))
-      ]);
-
-      const results = [
-        ...(ordersRes.data || []).slice(0, 3).map((item: any) => ({ ...item, type: 'order' })),
-        ...(inventoryRes.data || []).slice(0, 3).map((item: any) => ({ ...item, type: 'inventory' })),
-        ...(vehiclesRes.data || []).slice(0, 2).map((item: any) => ({ ...item, type: 'vehicle' })),
-        ...(driversRes.data || []).slice(0, 2).map((item: any) => ({ ...item, type: 'driver' }))
-      ];
-
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Search failed:', error);
-      setSearchResults([]);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  const handleResultClick = (result: any) => {
-    setShowSearchResults(false);
-    setSearchQuery('');
-    switch (result.type) {
-      case 'order':
-        navigate(`/orders/${result.id}`);
-        break;
-      case 'inventory':
-        navigate('/inventory');
-        break;
-      case 'vehicle':
-        navigate('/vehicles');
-        break;
-      case 'driver':
-        navigate('/drivers');
-        break;
-    }
-  };
-
-  const getResultIcon = (type: string) => {
-    switch (type) {
-      case 'order': return <ShoppingCart className="w-4 h-4" />;
-      case 'inventory': return <Package className="w-4 h-4" />;
-      case 'vehicle': return <Car className="w-4 h-4" />;
-      case 'driver': return <Truck className="w-4 h-4" />;
-      default: return <Search className="w-4 h-4" />;
-    }
-  };
+  const firstName = (user?.name || '').split(' ')[0];
+  const initials = (user?.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <header className="bg-white border-b border-gray-200 px-3 sm:px-4 md:px-6 py-3 md:py-4">
-      <div className="flex items-center justify-between gap-2 md:gap-4">
-        {/* Search */}
-        <div className="flex-1 max-w-xs sm:max-w-md lg:max-w-lg" ref={searchRef}>
-          <div className="relative">
-            <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search..."
-              className="w-full pl-8 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-            {showSearchResults && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-y-auto">
-                {searchLoading ? (
-                  <div className="p-4 text-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
-                    <p className="text-sm text-gray-500 mt-2">Searching...</p>
-                  </div>
-                ) : searchResults.length > 0 ? (
-                  <div className="py-2">
-                    {searchResults.map((result, index) => (
-                      <button
-                        key={`${result.type}-${result.id}-${index}`}
-                        onClick={() => handleResultClick(result)}
-                        className="w-full px-4 py-3 hover:bg-gray-50 transition-colors text-left flex items-center gap-3"
-                      >
-                        <div className="p-2 bg-primary-50 rounded-lg text-primary-600">
-                          {getResultIcon(result.type)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {result.type === 'order' && `Order ${result.orderNumber || `#${result.id}`}`}
-                            {result.type === 'inventory' && result.name}
-                            {result.type === 'vehicle' && result.plateNumber}
-                            {result.type === 'driver' && result.name}
-                          </p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {result.type === 'order' && result.customerName}
-                            {result.type === 'inventory' && `${result.code} - ${result.category}`}
-                            {result.type === 'vehicle' && `${result.type} - ${result.capacity}kg`}
-                            {result.type === 'driver' && result.licenseNumber}
-                          </p>
-                        </div>
-                        <span className="text-xs text-gray-400 capitalize hidden sm:inline">{result.type}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-6 text-center text-gray-500">
-                    <Search className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">No results found for "{searchQuery}"</p>
-                  </div>
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-gray-100 bg-white/80 px-4 backdrop-blur-xl md:px-6">
+      {/* Mobile: menu + logo */}
+      <button
+        type="button"
+        onClick={onOpenMobileNav}
+        className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 hover:bg-gray-100 md:hidden"
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      <Link to="/dashboard" className="md:hidden">
+        <LogoMark className="h-8 w-8" />
+      </Link>
+
+      {/* Search trigger */}
+      <button
+        type="button"
+        onClick={onOpenSearch}
+        className="hidden h-9 w-full max-w-sm items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 text-sm text-gray-400 transition hover:border-primary-200 hover:text-gray-600 sm:flex"
+      >
+        <Search className="h-4 w-4" />
+        <span className="flex-1 text-left">{t('Search orders, items, drivers…')}</span>
+        <kbd className="rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold">Ctrl K</kbd>
+      </button>
+
+      <div className="ml-auto flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 hover:bg-gray-100 sm:hidden"
+          aria-label="Search"
+        >
+          <Search className="h-[1.1rem] w-[1.1rem]" />
+        </button>
+
+        <LanguageSwitcher />
+
+        <button
+          type="button"
+          onClick={toggle}
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 transition hover:bg-gray-100"
+          title={isDark ? 'Light mode' : 'Dark mode'}
+        >
+          {isDark ? <Sun className="h-[1.1rem] w-[1.1rem] text-accent-400" /> : <Moon className="h-[1.1rem] w-[1.1rem]" />}
+        </button>
+
+        {/* Notifications */}
+        <div className="relative" ref={notifRef}>
+          <button
+            type="button"
+            onClick={() => setShowNotifications((v) => !v)}
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 transition hover:bg-gray-100"
+            aria-label="Notifications"
+          >
+            <Bell className="h-[1.1rem] w-[1.1rem]" />
+            {unread > 0 && (
+              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-500 px-1 text-[9px] font-bold text-white ring-2 ring-white">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
+          </button>
+
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-lift animate-pop-in">
+              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{t('Notifications')}</p>
+                  <p className="text-xs text-gray-500">{unread} {t('unread')}</p>
+                </div>
+                {unread > 0 && (
+                  <button onClick={markAll} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50">
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    {t('Mark all read')}
+                  </button>
                 )}
               </div>
-            )}
-          </div>
+              <div className="max-h-80 overflow-y-auto">
+                {recent.length === 0 ? (
+                  <div className="px-4 py-10 text-center">
+                    <Bell className="mx-auto h-8 w-8 text-gray-300" />
+                    <p className="mt-2 text-sm font-medium text-gray-700">{t("You're all caught up")}</p>
+                    <p className="text-xs text-gray-500">New alerts will appear here.</p>
+                  </div>
+                ) : (
+                  recent.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => markOne(n)}
+                      className="flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left transition last:border-0 hover:bg-gray-50"
+                    >
+                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${severityDot[(n.severity || '').toLowerCase()] || 'bg-gray-400'}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-gray-900">{n.title}</span>
+                        <span className="line-clamp-2 block text-xs text-gray-500">{n.message}</span>
+                        <span className="mt-1 block text-[10px] text-gray-400">{timeAgo(n.createdAt)}</span>
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <Link
+                to="/notifications"
+                onClick={() => setShowNotifications(false)}
+                className="block border-t border-gray-100 bg-gray-50 py-2.5 text-center text-xs font-semibold text-primary-600 hover:text-primary-700"
+              >
+                {t('View all notifications')}
+              </Link>
+            </div>
+          )}
         </div>
 
-        {/* Right Section */}
-        <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-          {/* Notifications */}
-          <div className="relative" ref={notificationRef}>
-            <button
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-1.5 sm:p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-error-500 text-white text-[10px] sm:text-xs rounded-full flex items-center justify-center">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
+        {/* User menu */}
+        <div className="relative" ref={userRef}>
+          <button
+            type="button"
+            onClick={() => setShowUserMenu((v) => !v)}
+            className="flex items-center gap-2 rounded-xl py-1 pl-1 pr-2 transition hover:bg-gray-100"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 text-xs font-bold text-white">
+              {initials}
+            </span>
+            <span className="hidden text-left lg:block">
+              <span className="block text-xs font-semibold leading-tight text-gray-900">{firstName}</span>
+              <span className="block text-[10px] leading-tight text-gray-500">{(user?.role || '').replace(/_/g, ' ').toLowerCase()}</span>
+            </span>
+            <ChevronDown className="hidden h-3.5 w-3.5 text-gray-400 lg:block" />
+          </button>
 
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">Notifications</h3>
-                    {unreadCount > 0 && (
-                      <p className="text-xs text-gray-500">{unreadCount} unread</p>
-                    )}
-                  </div>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={handleMarkAllAsRead}
-                      className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium"
-                    >
-                      <CheckCheck className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Mark all read</span>
-                    </button>
-                  )}
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  {notificationLoading ? (
-                    <div className="p-4 text-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
-                      <p className="text-sm text-gray-500 mt-2">Loading...</p>
-                    </div>
-                  ) : notifications.length > 0 ? (
-                    notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        onClick={() => handleNotificationClick(notification)}
-                        className={`p-3 sm:p-4 border-b border-gray-100 hover:bg-gray-50 transition-all duration-300 cursor-pointer ${
-                          !notification.read ? 'bg-blue-50/50' : ''
-                        } ${
-                          expandedNotification === notification.id 
-                            ? 'scale-110 shadow-lg bg-white z-50 rounded-lg border border-primary-400' 
-                            : ''
-                        }`}
-                        style={{
-                          transformOrigin: 'center',
-                          transition: 'all 0.3s ease-out'
-                        }}
-                      >
-                        <div className="flex items-start gap-2 sm:gap-3">
-                          <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 transition-all ${
-                            !notification.read
-                              ? getNotificationTypeColor(notification.severity)
-                              : 'bg-gray-300'
-                          } ${
-                            expandedNotification === notification.id ? 'w-2.5 h-2.5' : ''
-                          }`}></div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className={`text-sm font-medium ${
-                                !notification.read ? 'text-gray-900' : 'text-gray-600'
-                              }`}>{notification.title}</p>
-                              {!notification.read && (
-                                <div className="w-1.5 h-1.5 bg-primary-500 rounded-full flex-shrink-0 animate-pulse"></div>
-                              )}
-                            </div>
-                            <p className={`text-xs sm:text-sm text-gray-500 mt-0.5 transition-all ${
-                              expandedNotification === notification.id ? 'line-clamp-none' : 'line-clamp-2'
-                            }`}>{notification.message}</p>
-                            <p className="text-xs text-gray-400 mt-1">{getTimeAgo(notification.createdAt)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-6 text-center text-gray-500">
-                      <Bell className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                      <p className="text-sm">No notifications</p>
-                    </div>
-                  )}
-                </div>
-                <div className="p-3 border-t border-gray-200">
-                  <button
-                    onClick={() => {
-                      navigate('/notifications');
-                      setShowNotifications(false);
-                    }}
-                    className="w-full text-center text-sm text-primary-600 hover:text-primary-700 font-medium"
-                  >
-                    View All Notifications
-                  </button>
-                </div>
+          {showUserMenu && (
+            <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1.5 shadow-lift animate-pop-in">
+              <div className="px-3 py-2">
+                <p className="truncate text-sm font-semibold text-gray-900">{user?.name}</p>
+                <p className="truncate text-xs text-gray-500">{user?.email}</p>
               </div>
-            )}
-          </div>
-
-          {/* User Profile */}
-          <div className="relative" ref={userDropdownRef}>
-            <button
-              onClick={() => setShowUserDropdown(!showUserDropdown)}
-              className="flex items-center gap-2 sm:gap-3 sm:pl-3 md:pl-4 sm:border-l border-gray-200 hover:bg-gray-50 rounded-lg p-1 sm:p-2 transition-colors"
-            >
-              <div className="text-right hidden md:block">
-                <p className="text-sm font-medium text-gray-900">{user?.name || 'Guest'}</p>
-                <p className="text-xs text-gray-500 capitalize">{user?.role?.replace('_', ' ') || 'User'}</p>
-              </div>
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
-              </div>
-              <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 hidden sm:block" />
-            </button>
-
-            {showUserDropdown && (
-              <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                <div className="p-3 sm:p-4 border-b border-gray-200">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-medium">
-                      {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{user?.name || 'Guest'}</p>
-                      <p className="text-xs sm:text-sm text-gray-500 truncate">{user?.email || 'guest@example.com'}</p>
-                      <p className="text-xs text-gray-500 capitalize">{user?.role?.replace('_', ' ') || 'User'}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="py-2">
-                  <button
-                    onClick={() => {
-                      navigate('/profile');
-                      setShowUserDropdown(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <User className="w-4 h-4" />
-                    My Profile
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigate('/settings');
-                      setShowUserDropdown(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                    Settings
-                  </button>
-                </div>
-                <div className="border-t border-gray-200 py-2">
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+              <div className="my-1 h-px bg-gray-100" />
+              <Link to="/profile" onClick={() => setShowUserMenu(false)} className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                <UserIcon className="h-4 w-4 text-gray-400" /> {t('Profile')}
+              </Link>
+              <Link to="/settings" onClick={() => setShowUserMenu(false)} className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                <Settings className="h-4 w-4 text-gray-400" /> {t('Settings')}
+              </Link>
+              <button onClick={toggle} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                {isDark ? <Sun className="h-4 w-4 text-gray-400" /> : <Moon className="h-4 w-4 text-gray-400" />}
+                {isDark ? t('Light mode') : t('Dark mode')}
+              </button>
+              <div className="my-1 h-px bg-gray-100" />
+              <button onClick={handleLogout} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-error-600 hover:bg-error-50">
+                <LogOut className="h-4 w-4" /> {t('Log out')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

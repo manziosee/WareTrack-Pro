@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Package, Truck, Shield, Users, Eye, EyeOff } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Package, Truck, Users, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
+import AuthShowcase from '@/components/layout/AuthShowcase';
+import Logo from '@/components/ui/Logo';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -95,69 +97,30 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-accent-50 flex">
-      {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-600 to-primary-800 p-12 flex-col justify-between text-white">
-        <div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="bg-white/20 p-3 rounded-xl">
-              <Package className="w-8 h-8" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">WareTrack-Pro</h1>
-              <p className="text-primary-100">Warehouse Management System</p>
-            </div>
-          </div>
-          
-          <div className="space-y-6">
-            <h2 className="text-4xl font-bold leading-tight">
-              Streamline Your<br />
-              Warehouse Operations
-            </h2>
-            <p className="text-xl text-primary-100 leading-relaxed">
-              Complete delivery and dispatch tracking system for modern warehouses
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-6">
-          <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm">
-            <Truck className="w-8 h-8 mb-3" />
-            <h3 className="font-semibold mb-1">Fleet Management</h3>
-            <p className="text-sm text-primary-100">Track vehicles and optimize routes</p>
-          </div>
-          <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm">
-            <Shield className="w-8 h-8 mb-3" />
-            <h3 className="font-semibold mb-1">Secure & Reliable</h3>
-            <p className="text-sm text-primary-100">Enterprise-grade security</p>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50 flex">
+      <AuthShowcase
+        title="Every delivery, from shelf to doorstep."
+        subtitle="Sign in to manage inventory, dispatch drivers and follow each order across Kigali in real time."
+      />
 
       {/* Right Side - Login Form */}
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
-            <div className="bg-primary-600 p-3 rounded-xl">
-              <Package className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">WareTrack-Pro</h1>
-              <p className="text-gray-600">Warehouse Management</p>
-            </div>
-          </div>
+          <Link to="/" className="mb-8 flex justify-center lg:hidden">
+            <Logo />
+          </Link>
 
           <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
             <div className="text-center mb-8">
               {showOtpStep ? (
                 <>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Verify Your Identity</h2>
+                  <h2 className="text-2xl font-bold tracking-tight text-gray-900 mb-1.5">Verify Your Identity</h2>
                   <p className="text-gray-600">Enter the 6-digit code sent to {otpEmail}</p>
                 </>
               ) : (
                 <>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
+                  <h2 className="text-2xl font-bold tracking-tight text-gray-900 mb-1.5">Welcome Back</h2>
                   <p className="text-gray-600">Sign in to your account to continue</p>
                 </>
               )}
