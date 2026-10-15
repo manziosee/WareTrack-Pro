@@ -19,7 +19,7 @@ import analyticsRoutes from './routes/analytics';
 import featuresRoutes from './routes/features';
 import swaggerUi from 'swagger-ui-express';
 import rateLimit from 'express-rate-limit';
-import { swaggerSpec } from './config/swagger';
+import { swaggerSpec, addUndocumentedRoutes } from './config/swagger';
 import { getAllowedOrigins } from './config/env';
 import { errorHandler } from './middleware/errorHandler';
 import { prisma } from './lib/prisma';
@@ -59,6 +59,28 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   maxAge: 86400,
 }));
+
+// In production, never send internal error details (SQL, stack traces) to clients.
+// Controllers still log the real error; only the response body is sanitized.
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    const originalJson = res.json.bind(res);
+    res.json = (body: any) => {
+      if (res.statusCode >= 500 && body && typeof body === 'object') {
+        console.error(`[${req.method} ${req.originalUrl}] ${res.statusCode}:`, body?.error?.message || body?.message);
+        return originalJson({
+          success: false,
+          error: {
+            code: body?.error?.code || 'INTERNAL_SERVER_ERROR',
+            message: 'Something went wrong. Please try again.'
+          }
+        });
+      }
+      return originalJson(body);
+    };
+    next();
+  });
+}
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
@@ -116,6 +138,24 @@ app.get('/api', (req, res) => {
     ]
   });
 });
+
+// List every mounted route in Swagger, including ones without hand-written docs
+addUndocumentedRoutes(swaggerSpec, [
+  ['/api/auth', 'Authentication', authRoutes],
+  ['/api/password-reset', 'Password Reset', passwordResetRoutes],
+  ['/api/dashboard', 'Dashboard', dashboardRoutes],
+  ['/api/users', 'Users', usersRoutes],
+  ['/api/inventory', 'Inventory', inventoryRoutes],
+  ['/api/orders', 'Orders', ordersRoutes],
+  ['/api/vehicles', 'Vehicles', vehiclesRoutes],
+  ['/api/drivers', 'Drivers', driversRoutes],
+  ['/api/dispatch', 'Dispatch', dispatchRoutes],
+  ['/api/notifications', 'Notifications', notificationRoutes],
+  ['/api/reports', 'Reports', reportsRoutes],
+  ['/api/analytics', 'Analytics', analyticsRoutes],
+  ['/api/settings', 'Settings', settingsRoutes],
+  ['/api/features', 'Advanced Features', featuresRoutes],
+] as any);
 
 app.get('/api-docs.json', (req, res) => {
   res.json(swaggerSpec);

@@ -1,3 +1,4 @@
+import path from 'path';
 import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 
@@ -366,9 +367,68 @@ const options = {
       { name: 'Health Check', description: 'System health monitoring and status endpoints' }
     ]
   },
-  apis: ['./src/routes/*.ts', './src/controllers/*.ts']
+  // Resolve relative to this file so it works from src/ (ts) in development and dist/ (js) in production
+  apis: [
+    path.join(__dirname, '../routes/*.{ts,js}'),
+    path.join(__dirname, '../controllers/*.{ts,js}')
+  ]
 };
 
 export const specs = swaggerJSDoc(options);
 export const swaggerSpec = specs;
 export { swaggerUi };
+type RouterLike = { stack: Array<{ route?: { path: string; methods: Record<string, boolean> } }> };
+
+const PUBLIC_PATHS = new Set([
+  '/api/auth/register', '/api/auth/login', '/api/auth/verify-login-otp', '/api/auth/refresh',
+  '/api/password-reset/request-reset', '/api/password-reset/verify-otp', '/api/password-reset/reset-password',
+  '/api/password-reset/resend-otp', '/api/features/customer/register', '/api/features/customer/login',
+  '/api/features/customer/track/{orderNumber}', '/api/features/proof-of-delivery/verify/{code}'
+]);
+
+/**
+ * Adds a basic entry for every mounted route that has no hand-written JSDoc,
+ * so Swagger always lists the full API. Documented routes are left untouched.
+ */
+export function addUndocumentedRoutes(spec: any, mounts: Array<[string, string, RouterLike]>) {
+  spec.paths = spec.paths || {};
+  spec.tags = spec.tags || [];
+  const knownTags = new Set(spec.tags.map((t: any) => t.name));
+
+  for (const [prefix, tag, router] of mounts) {
+    if (!knownTags.has(tag)) {
+      spec.tags.push({ name: tag });
+      knownTags.add(tag);
+    }
+    for (const layer of router.stack) {
+      if (!layer.route) continue;
+      const sub = layer.route.path === '/' ? '' : layer.route.path;
+      const openApiPath = `${prefix}${sub}`.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+      const params = [...openApiPath.matchAll(/\{([^}]+)\}/g)].map((m) => ({
+        name: m[1], in: 'path', required: true, schema: { type: 'string' }
+      }));
+
+      for (const method of Object.keys(layer.route.methods)) {
+        spec.paths[openApiPath] = spec.paths[openApiPath] || {};
+        if (spec.paths[openApiPath][method]) continue;
+        const entry: any = {
+          tags: [tag],
+          summary: `${method.toUpperCase()} ${openApiPath}`,
+          description: 'See the Postman collection for an example request body.',
+          parameters: params,
+          responses: {
+            200: { description: 'Success' },
+            401: { description: 'Missing or invalid token' },
+            403: { description: 'Not allowed for your role' }
+          }
+        };
+        if (['post', 'put', 'patch'].includes(method)) {
+          entry.requestBody = { content: { 'application/json': { schema: { type: 'object' } } } };
+        }
+        if (!PUBLIC_PATHS.has(openApiPath)) entry.security = [{ bearerAuth: [] }];
+        spec.paths[openApiPath][method] = entry;
+      }
+    }
+  }
+  return spec;
+}

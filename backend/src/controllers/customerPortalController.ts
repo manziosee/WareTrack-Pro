@@ -18,7 +18,7 @@ export class CustomerPortalController {
       
       res.json({ success: true, data: customer });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: { message: error.message } });
+      res.status(500).json({ success: false, error: { message: process.env.NODE_ENV === 'production' ? 'Request failed' : error.message } });
     }
   }
 
@@ -49,7 +49,7 @@ export class CustomerPortalController {
       
       res.json({ success: true, data: { token, customer: { id: customer.id, name: customer.name, email: customer.email } } });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: { message: error.message } });
+      res.status(500).json({ success: false, error: { message: process.env.NODE_ENV === 'production' ? 'Request failed' : error.message } });
     }
   }
 
@@ -60,18 +60,18 @@ export class CustomerPortalController {
         return res.status(403).json({ success: false, error: { message: 'You can only view your own orders' } });
       }
       
-      const orders = await prisma.$queryRaw`
-        SELECT do.*, d.name as driver_name, v.plate_number
-        FROM delivery_orders do
-        LEFT JOIN drivers d ON do.driver_id = d.id
-        LEFT JOIN vehicles v ON do.vehicle_id = v.id
-        WHERE do.customer_id = ${customerId}
-        ORDER BY do.created_at DESC
-      `;
+      const orders = await prisma.deliveryOrder.findMany({
+        where: { customerId: Number(customerId) },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          driver: { select: { name: true } },
+          vehicle: { select: { plateNumber: true } }
+        }
+      });
       
       res.json({ success: true, data: orders });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: { message: error.message } });
+      res.status(500).json({ success: false, error: { message: process.env.NODE_ENV === 'production' ? 'Request failed' : error.message } });
     }
   }
 
@@ -79,17 +79,27 @@ export class CustomerPortalController {
     try {
       const { orderNumber } = req.params;
       
-      const order: any = await prisma.$queryRaw`
-        SELECT do.order_number, do.status, do.priority, do.scheduled_date,
-               do.estimated_delivery, do.updated_at, d.name as driver_name
-        FROM delivery_orders do
-        LEFT JOIN drivers d ON do.driver_id = d.id
-        WHERE do.order_number = ${orderNumber}
-      `;
+      // Public endpoint: return only what a customer needs to follow the delivery
+      const order = await prisma.deliveryOrder.findUnique({
+        where: { orderNumber: String(orderNumber) },
+        select: {
+          orderNumber: true,
+          status: true,
+          priority: true,
+          scheduledDate: true,
+          deliveredAt: true,
+          updatedAt: true,
+          driver: { select: { name: true } }
+        }
+      });
+
+      if (!order) {
+        return res.status(404).json({ success: false, error: { message: 'Order not found' } });
+      }
       
-      res.json({ success: true, data: order[0] || null });
+      res.json({ success: true, data: order });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: { message: error.message } });
+      res.status(500).json({ success: false, error: { message: process.env.NODE_ENV === 'production' ? 'Request failed' : error.message } });
     }
   }
 
@@ -120,7 +130,7 @@ export class CustomerPortalController {
       
       res.json({ success: true, data: ratingRecord });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: { message: error.message } });
+      res.status(500).json({ success: false, error: { message: process.env.NODE_ENV === 'production' ? 'Request failed' : error.message } });
     }
   }
 
@@ -171,7 +181,7 @@ export class CustomerPortalController {
       
       res.json({ success: true, data: newOrder });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: { message: error.message } });
+      res.status(500).json({ success: false, error: { message: process.env.NODE_ENV === 'production' ? 'Request failed' : error.message } });
     }
   }
 }
