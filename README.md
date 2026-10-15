@@ -21,6 +21,7 @@ Manage inventory, orders, vehicles, drivers and deliveries in one place, with a 
 ## 📚 Contents
 
 - [What it does](#-what-it-does)
+- [Screenshots](#-screenshots)
 - [Tech stack](#-tech-stack)
 - [How the system works](#-how-the-system-works)
 - [Roles and permissions](#-roles-and-permissions)
@@ -49,6 +50,54 @@ Manage inventory, orders, vehicles, drivers and deliveries in one place, with a 
 | 📊 **Insights** | Role dashboards, demand forecast, driver scorecards, anomaly alerts, custom report builder |
 | 💬 **Team** | Real-time chat, notification centre, audit log of every change |
 | 👥 **Users** | Admin approval for new accounts, two-factor sign-in, English / Kinyarwanda / French |
+
+---
+
+## 📸 Screenshots
+
+### 💻 Laptop
+
+**Landing and sign-in**
+
+<table>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-landing.png" alt="Landing page"><br><sub><b>Landing page</b></sub></td><td width="50%" align="center"><img src="docs/screenshots/desktop-login.png" alt="Sign in"><br><sub><b>Sign in</b></sub></td></tr>
+</table>
+
+**Role dashboards**
+
+<table>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-admin-dashboard.png" alt="Admin dashboard"><br><sub><b>Admin dashboard</b></sub></td><td width="50%" align="center"><img src="docs/screenshots/desktop-warehouse-dashboard.png" alt="Warehouse staff dashboard"><br><sub><b>Warehouse staff dashboard</b></sub></td></tr>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-dispatch-dashboard.png" alt="Dispatch officer dashboard"><br><sub><b>Dispatch officer dashboard</b></sub></td><td width="50%" align="center"><img src="docs/screenshots/desktop-scorecards.png" alt="Driver scorecards"><br><sub><b>Driver scorecards</b></sub></td></tr>
+</table>
+
+**Orders and delivery**
+
+<table>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-orders.png" alt="Orders table"><br><sub><b>Orders table</b></sub></td><td width="50%" align="center"><img src="docs/screenshots/desktop-order-board.png" alt="Order board (Kanban)"><br><sub><b>Order board (Kanban)</b></sub></td></tr>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-live-map.png" alt="Live map of drivers and deliveries"><br><sub><b>Live map of drivers and deliveries</b></sub></td><td width="50%" align="center"><img src="docs/screenshots/desktop-calendar.png" alt="Delivery calendar"><br><sub><b>Delivery calendar</b></sub></td></tr>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-track-order.png" alt="Public order tracking"><br><sub><b>Public order tracking</b></sub></td></tr>
+</table>
+
+**Stock and purchasing**
+
+<table>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-inventory.png" alt="Inventory"><br><sub><b>Inventory</b></sub></td><td width="50%" align="center"><img src="docs/screenshots/desktop-warehouses.png" alt="Warehouses"><br><sub><b>Warehouses</b></sub></td></tr>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-purchasing.png" alt="Suppliers and purchase orders"><br><sub><b>Suppliers and purchase orders</b></sub></td><td width="50%" align="center"><img src="docs/screenshots/desktop-forecasting.png" alt="Demand forecast"><br><sub><b>Demand forecast</b></sub></td></tr>
+</table>
+
+**Money, reports and control**
+
+<table>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-payments.png" alt="Payments (MoMo, Airtel, cash)"><br><sub><b>Payments (MoMo, Airtel, cash)</b></sub></td><td width="50%" align="center"><img src="docs/screenshots/desktop-report-builder.png" alt="Report builder"><br><sub><b>Report builder</b></sub></td></tr>
+<tr><td width="50%" align="center"><img src="docs/screenshots/desktop-audit-log.png" alt="Audit log"><br><sub><b>Audit log</b></sub></td></tr>
+</table>
+
+### 📱 Phone
+
+<table>
+<tr><td width="25%" align="center"><img src="docs/screenshots/mobile-login.png" alt="Sign in" width="200"><br><sub><b>Sign in</b></sub></td><td width="25%" align="center"><img src="docs/screenshots/mobile-driver-dashboard.png" alt="Driver dashboard" width="200"><br><sub><b>Driver dashboard</b></sub></td><td width="25%" align="center"><img src="docs/screenshots/mobile-my-deliveries.png" alt="Driver app: my deliveries" width="200"><br><sub><b>Driver app: my deliveries</b></sub></td><td width="25%" align="center"><img src="docs/screenshots/mobile-track-order.png" alt="Customer tracking" width="200"><br><sub><b>Customer tracking</b></sub></td></tr>
+<tr><td width="25%" align="center"><img src="docs/screenshots/mobile-dispatch-dashboard.png" alt="Dispatch dashboard" width="200"><br><sub><b>Dispatch dashboard</b></sub></td><td width="25%" align="center"><img src="docs/screenshots/mobile-live-map.png" alt="Live map" width="200"><br><sub><b>Live map</b></sub></td><td width="25%" align="center"><img src="docs/screenshots/mobile-order-board.png" alt="Order board" width="200"><br><sub><b>Order board</b></sub></td><td width="25%" align="center"><img src="docs/screenshots/mobile-inventory.png" alt="Inventory" width="200"><br><sub><b>Inventory</b></sub></td></tr>
+</table>
 
 ---
 
@@ -408,6 +457,7 @@ WareTrack-Pro/
 ├── frontend/public/          PWA manifest, service worker, app icons
 ├── .github/workflows/        CI, keep-alive, nightly backup
 ├── render.yaml               Render Blueprint for the API
+├── docs/screenshots/         README screenshots (laptop and phone)
 ├── docker-compose.yml        Local stack
 └── WareTrack-Pro-API.postman_collection.json
 ```
