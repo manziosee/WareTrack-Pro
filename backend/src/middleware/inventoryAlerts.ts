@@ -97,23 +97,29 @@ export class InventoryAlerts {
   // Run comprehensive inventory checks
   static async runInventoryChecks() {
     console.log('🔍 Running inventory checks...');
-    await Promise.all([
+    // allSettled: one failing check (e.g. a database hiccup) must never crash the server
+    const results = await Promise.allSettled([
       this.checkLowStock(),
       this.checkOutOfStock(),
       this.checkExpiringItems()
     ]);
-    console.log('✅ Inventory checks completed');
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length > 0) {
+      console.error(`⚠️  ${failed.length} inventory check(s) failed:`, failed.map((r) => (r as PromiseRejectedResult).reason?.message));
+    } else {
+      console.log('✅ Inventory checks completed');
+    }
   }
 
   // Run every hour
   static startScheduledCheck() {
-    // Run immediately on startup
-    this.runInventoryChecks();
-    
-    // Then run every 6 hours to reduce duplicate alerts
-    setInterval(() => {
-      this.runInventoryChecks();
-    }, 6 * 60 * 60 * 1000); // 6 hours
+    const run = () => {
+      this.runInventoryChecks().catch((error) => console.error('Inventory checks crashed:', error));
+    };
+
+    // Run shortly after startup, then every 6 hours to reduce duplicate alerts
+    setTimeout(run, 10 * 1000);
+    setInterval(run, 6 * 60 * 60 * 1000);
     
     console.log('📅 Inventory alerts scheduler started (runs every 6 hours)');
   }

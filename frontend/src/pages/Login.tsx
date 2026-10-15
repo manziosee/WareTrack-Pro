@@ -51,12 +51,13 @@ export default function Login() {
       console.error('Login failed:', error);
       let errorMessage = 'Login failed';
       
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (error.response?.data?.error?.message) {
+      // Prefer the server's explanation over Axios's generic status text
+      if (error.response?.data?.error?.message) {
         errorMessage = error.response.data.error.message;
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
       }
       
       toast.error(errorMessage);

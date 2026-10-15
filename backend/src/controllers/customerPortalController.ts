@@ -1,7 +1,8 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { getJwtSecret } from '../config/env';
 
 export class CustomerPortalController {
   static async register(req: Request, res: Response) {
@@ -41,8 +42,8 @@ export class CustomerPortalController {
       }
       
       const token = jwt.sign(
-        { customerId: customer.id, email: customer.email },
-        process.env.JWT_SECRET || 'secret',
+        { customerId: customer.id, email: customer.email, type: 'customer' },
+        getJwtSecret(),
         { expiresIn: '7d' }
       );
       
@@ -55,6 +56,9 @@ export class CustomerPortalController {
   static async getOrders(req: Request, res: Response) {
     try {
       const { customerId } = req.params;
+      if (Number(customerId) !== req.customer?.customerId) {
+        return res.status(403).json({ success: false, error: { message: 'You can only view your own orders' } });
+      }
       
       const orders = await prisma.$queryRaw`
         SELECT do.*, d.name as driver_name, v.plate_number
@@ -76,12 +80,10 @@ export class CustomerPortalController {
       const { orderNumber } = req.params;
       
       const order: any = await prisma.$queryRaw`
-        SELECT do.*, d.name as driver_name, d.phone as driver_phone,
-               v.plate_number, dp.photo_url, dp.signature_data, dp.confirmation_code
+        SELECT do.order_number, do.status, do.priority, do.scheduled_date,
+               do.estimated_delivery, do.updated_at, d.name as driver_name
         FROM delivery_orders do
         LEFT JOIN drivers d ON do.driver_id = d.id
-        LEFT JOIN vehicles v ON do.vehicle_id = v.id
-        LEFT JOIN delivery_proofs dp ON do.id = dp.order_id
         WHERE do.order_number = ${orderNumber}
       `;
       
@@ -93,7 +95,11 @@ export class CustomerPortalController {
 
   static async rateDriver(req: Request, res: Response) {
     try {
-      const { customerId, orderId, driverId, rating, comment } = req.body;
+      const { orderId, driverId, rating, comment } = req.body;
+      const customerId = req.customer!.customerId;
+      if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5) {
+        return res.status(400).json({ success: false, error: { message: 'Rating must be a whole number from 1 to 5' } });
+      }
       
       const ratingRecord = await prisma.$executeRaw`
         INSERT INTO customer_ratings (customer_id, order_id, driver_id, rating, comment)
@@ -121,14 +127,14 @@ export class CustomerPortalController {
   static async reorder(req: Request, res: Response) {
     try {
       const { orderId } = req.params;
-      const customerId = req.body.customerId;
+      const customerId = req.customer!.customerId;
       
       const originalOrder: any = await prisma.deliveryOrder.findUnique({
         where: { id: Number(orderId) },
         include: { items: true }
       });
       
-      if (!originalOrder) {
+      if (!originalOrder || originalOrder.customerId !== customerId) {
         return res.status(404).json({ success: false, error: { message: 'Order not found' } });
       }
       
@@ -166,6 +172,33 @@ export class CustomerPortalController {
       res.json({ success: true, data: newOrder });
     } catch (error: any) {
       res.status(500).json({ success: false, error: { message: error.message } });
+    }
+  }
+}
+
+/** Verifies a customer-portal token and exposes the customer's id on the request. */
+export const authenticateCustomer = (req: Request, res: Response, next: NextFunction) => {
+  const header = req.headers['authorization'];
+  const token = header && header.startsWith('Bearer ') ? header.slice(7) : undefined;
+  if (!token) {
+    return res.status(401).json({ success: false, error: { message: 'Customer token required' } });
+  }
+  try {
+    const payload: any = jwt.verify(token, getJwtSecret());
+    if (payload?.type !== 'customer' || !payload.customerId) {
+      return res.status(403).json({ success: false, error: { message: 'Invalid customer token' } });
+    }
+    req.customer = { customerId: Number(payload.customerId), email: payload.email };
+    next();
+  } catch {
+    return res.status(403).json({ success: false, error: { message: 'Invalid or expired token' } });
+  }
+};
+
+declare global {
+  namespace Express {
+    interface Request {
+      customer?: { customerId: number; email?: string };
     }
   }
 }

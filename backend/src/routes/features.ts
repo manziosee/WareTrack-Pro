@@ -5,10 +5,10 @@ import { GamificationController } from '../controllers/gamificationController';
 import { ForecastingController } from '../controllers/forecastingController';
 import { SmartAlertsController } from '../controllers/smartAlertsController';
 import { BarcodeController } from '../controllers/barcodeController';
-import { CustomerPortalController } from '../controllers/customerPortalController';
+import { CustomerPortalController, authenticateCustomer } from '../controllers/customerPortalController';
 import { PredictiveMaintenanceController } from '../controllers/predictiveMaintenanceController';
 import { UserPreferencesController } from '../controllers/userPreferencesController';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, authorizeRoles, ROLES } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -25,8 +25,8 @@ router.post('/chat/mark-read', authenticateToken, ChatController.markAsRead);
 // Gamification
 router.get('/gamification/leaderboard', authenticateToken, GamificationController.getLeaderboard);
 router.get('/gamification/achievements/:driverId', authenticateToken, GamificationController.getAchievements);
-router.post('/gamification/award', authenticateToken, GamificationController.awardAchievement);
-router.post('/gamification/update-leaderboard', authenticateToken, GamificationController.updateLeaderboard);
+router.post('/gamification/award', authenticateToken, authorizeRoles(...ROLES.fleetManagers), GamificationController.awardAchievement);
+router.post('/gamification/update-leaderboard', authenticateToken, authorizeRoles(...ROLES.fleetManagers), GamificationController.updateLeaderboard);
 
 // Forecasting
 router.get('/forecasting/inventory', authenticateToken, ForecastingController.getInventoryForecast);
@@ -41,17 +41,17 @@ router.post('/smart-alerts/check-deadlines', authenticateToken, SmartAlertsContr
 router.put('/smart-alerts/:alertId/resolve', authenticateToken, SmartAlertsController.resolveAlert);
 
 // Barcode
-router.post('/barcode/generate/:itemId', authenticateToken, BarcodeController.generateForItem);
-router.post('/barcode/batch-generate', authenticateToken, BarcodeController.batchGenerate);
+router.post('/barcode/generate/:itemId', authenticateToken, authorizeRoles(...ROLES.inventoryManagers), BarcodeController.generateForItem);
+router.post('/barcode/batch-generate', authenticateToken, authorizeRoles(...ROLES.inventoryManagers), BarcodeController.batchGenerate);
 router.get('/barcode/lookup/:barcode', authenticateToken, BarcodeController.lookupByBarcode);
 
 // Customer Portal
 router.post('/customer/register', CustomerPortalController.register);
 router.post('/customer/login', CustomerPortalController.login);
-router.get('/customer/:customerId/orders', CustomerPortalController.getOrders);
+router.get('/customer/:customerId/orders', authenticateCustomer, CustomerPortalController.getOrders);
 router.get('/customer/track/:orderNumber', CustomerPortalController.trackOrder);
-router.post('/customer/rate-driver', CustomerPortalController.rateDriver);
-router.post('/customer/reorder/:orderId', CustomerPortalController.reorder);
+router.post('/customer/rate-driver', authenticateCustomer, CustomerPortalController.rateDriver);
+router.post('/customer/reorder/:orderId', authenticateCustomer, CustomerPortalController.reorder);
 
 // Predictive Maintenance
 router.post('/maintenance/vehicle-health', authenticateToken, PredictiveMaintenanceController.recordVehicleHealth);

@@ -29,7 +29,7 @@ export default function Register() {
     try {
       const response = await authService.register(formData);
       if (response.success) {
-        toast.success('Registration successful! You can now login.');
+        toast.success(response.message || 'Account created. An administrator must approve it before you can sign in.', { duration: 6000 });
         navigate('/login');
       } else {
         toast.error('Registration failed. Please try again.');
@@ -179,11 +179,15 @@ export default function Register() {
                   type="password"
                   autoComplete="new-password"
                   required
+                  minLength={8}
+                  pattern="(?=.*[A-Za-z])(?=.*\d).{8,}"
+                  title="At least 8 characters, including letters and numbers"
                   value={formData.password}
                   onChange={handleChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors"
                   placeholder="Create a secure password"
                 />
+                <p className="mt-1.5 text-xs text-gray-500">At least 8 characters, including letters and numbers. An administrator approves new accounts.</p>
               </div>
 
               <button

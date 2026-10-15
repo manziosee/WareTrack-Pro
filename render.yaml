@@ -1,0 +1,36 @@
+# Render Blueprint for the WareTrack-Pro API
+# Secrets are marked sync: false so they are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: waretrack-pro
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5000"
+      - key: FRONTEND_URL
+        value: https://ware-track-pro.vercel.app
+      - key: JWT_EXPIRE
+        value: 7d
+      - key: API_RATE_LIMIT_PER_15_MIN
+        value: "1000"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: EMAILJS_SERVICE_ID
+        sync: false
+      - key: EMAILJS_TEMPLATE_ID
+        sync: false
+      - key: EMAILJS_PUBLIC_KEY
+        sync: false
+      - key: EMAILJS_PRIVATE_KEY
+        sync: false

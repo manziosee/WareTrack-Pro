@@ -1,18 +1,13 @@
 import axios from 'axios';
 import { cache } from '@/utils/cache';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://waretrack-pro-api.fly.dev/api';
-
-console.log('🔧 API Configuration:', {
-  VITE_API_URL: import.meta.env.VITE_API_URL,
-  API_BASE_URL,
-  mode: import.meta.env.MODE
-});
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://waretrack-pro.onrender.com/api';
 
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 second timeout for better reliability
+  // The free Render instance sleeps when idle and can take ~50s to wake up
+  timeout: 75000,
   headers: {
     'Content-Type': 'application/json',
   },

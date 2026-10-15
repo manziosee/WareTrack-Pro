@@ -6,7 +6,7 @@ const options = {
     openapi: '3.0.0',
     info: {
       title: 'WareTrack-Pro API',
-      version: '2.1.0',
+      version: '2.2.0',
       description: 'Comprehensive Warehouse Delivery & Dispatch Tracking System API with Real-time Notifications, Advanced Analytics, and Role-Based Access Control',
       contact: {
         name: 'WareTrack-Pro Support',
@@ -15,16 +15,12 @@ const options = {
     },
     servers: [
       {
-        url: 'https://waretrack-pro-api.fly.dev',
-        description: 'Production server'
+        url: 'https://waretrack-pro.onrender.com',
+        description: 'Production (Render)'
       },
       {
         url: 'http://localhost:5000',
-        description: 'Development server'
-      },
-      {
-        url: 'http://localhost:5000',
-        description: 'Local development server'
+        description: 'Local development'
       }
     ],
     components: {

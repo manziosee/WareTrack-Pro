@@ -1,8 +1,8 @@
 {
   "info": {
     "name": "WareTrack-Pro API",
-    "description": "Complete API collection for WareTrack-Pro Warehouse Management System",
-    "version": "2.1.1",
+    "description": "WareTrack-Pro API v2.2.0, hosted on Render.\n\nSign in:\n1. Set `email` and `password` in the collection variables.\n2. Run **Authentication \u2192 POST auth/login**. A 6-digit code is emailed to you.\n3. Put the code in the `otp` variable and run **POST auth/verify-login-otp**. The access and refresh tokens are saved automatically.\n\nEvery other request uses `{{access_token}}` via collection-level Bearer auth. Each request's description says which roles may call it.\n\nNotes: new self-registered accounts must be approved by an admin before they can sign in. Login is limited to 5 attempts per 15 minutes per IP.",
+    "version": "2.2.0",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -17,13 +17,13 @@
   },
   "variable": [
     {
-      "key": "base_url",
-      "value": "https://waretrack-pro-api.fly.dev/api",
+      "key": "root_url",
+      "value": "https://waretrack-pro.onrender.com",
       "type": "string"
     },
     {
-      "key": "access_token",
-      "value": "",
+      "key": "base_url",
+      "value": "https://waretrack-pro.onrender.com/api",
       "type": "string"
     },
     {
@@ -40,14 +40,102 @@
       "key": "otp",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customer_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customer_id",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
     {
+      "name": "System",
+      "item": [
+        {
+          "name": "API info",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{root_url}}/",
+              "host": [
+                "{{root_url}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Service name, version and useful links."
+          },
+          "response": []
+        },
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{root_url}}/health",
+              "host": [
+                "{{root_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness plus database status. The free Render instance may take ~50s to wake up."
+          },
+          "response": []
+        },
+        {
+          "name": "OpenAPI spec (JSON)",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{root_url}}/api-docs.json",
+              "host": [
+                "{{root_url}}"
+              ],
+              "path": [
+                "api-docs.json"
+              ]
+            },
+            "description": "Raw OpenAPI document behind /api-docs."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Authentication",
       "item": [
         {
-          "name": "Register User",
+          "name": "POST auth/register",
           "request": {
             "method": "POST",
             "header": [
@@ -56,19 +144,34 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"phone\": \"+1234567890\",\n  \"role\": \"WAREHOUSE_STAFF\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/auth/register",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "register"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"password\": \"Passw0rd123\",\n  \"phone\": \"+250788000000\",\n  \"role\": \"WAREHOUSE_STAFF\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
         },
         {
-          "name": "Login (Step 1 - Credentials)",
+          "name": "POST auth/login",
           "request": {
             "method": "POST",
             "header": [
@@ -77,19 +180,34 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "login"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
         },
         {
-          "name": "Login (Step 2 - OTP Verification)",
+          "name": "POST auth/verify-login-otp",
           "request": {
             "method": "POST",
             "header": [
@@ -98,82 +216,241 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/auth/verify-login-otp",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "verify-login-otp"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "verify-login-otp"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public endpoint."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "const tokens = res && res.data && res.data.tokens;",
+                  "if (tokens) {",
+                  "  pm.collectionVariables.set('access_token', tokens.access);",
+                  "  pm.collectionVariables.set('refresh_token', tokens.refresh);",
+                  "  console.log('Saved access and refresh tokens');",
+                  "}"
+                ]
+              }
             }
-          }
+          ]
         },
         {
-          "name": "Get Profile",
+          "name": "POST auth/refresh",
           "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/auth/me",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "me"]
-            }
-          }
-        },
-        {
-          "name": "Update Profile",
-          "request": {
-            "method": "PUT",
+            "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"updated@example.com\",\n  \"phone\": \"+1234567890\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/auth/profile",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "profile"]
-            }
-          }
-        },
-        {
-          "name": "Change Password",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
               }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"oldpassword\",\n  \"newPassword\": \"newpassword123\"\n}"
             },
-            "url": {
-              "raw": "{{base_url}}/auth/change-password",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "change-password"]
+            "description": "Public endpoint."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.data && res.data.access) {",
+                  "  pm.collectionVariables.set('access_token', res.data.access);",
+                  "  pm.collectionVariables.set('refresh_token', res.data.refresh);",
+                  "}"
+                ]
+              }
             }
-          }
+          ]
         },
         {
-          "name": "Logout",
+          "name": "POST auth/logout",
           "request": {
             "method": "POST",
             "header": [],
             "url": {
               "raw": "{{base_url}}/auth/logout",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "logout"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET auth/me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT auth/profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "profile"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"updated@example.com\",\n  \"phone\": \"+1234567890\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET auth/activity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/activity",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "activity"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET auth/dashboard-url",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/dashboard-url",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "dashboard-url"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT auth/change-password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/change-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"OldPassw0rd\",\n  \"newPassword\": \"NewPassw0rd123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         }
       ]
     },
@@ -181,7 +458,7 @@
       "name": "Password Reset",
       "item": [
         {
-          "name": "Request Password Reset",
+          "name": "POST password-reset/request-reset",
           "request": {
             "method": "POST",
             "header": [
@@ -190,19 +467,34 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/password-reset/request-reset",
-              "host": ["{{base_url}}"],
-              "path": ["password-reset", "request-reset"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "password-reset",
+                "request-reset"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
         },
         {
-          "name": "Verify OTP",
+          "name": "POST password-reset/verify-otp",
           "request": {
             "method": "POST",
             "header": [
@@ -211,19 +503,34 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"otp\": \"123456\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/password-reset/verify-otp",
-              "host": ["{{base_url}}"],
-              "path": ["password-reset", "verify-otp"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "password-reset",
+                "verify-otp"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
         },
         {
-          "name": "Reset Password",
+          "name": "POST password-reset/reset-password",
           "request": {
             "method": "POST",
             "header": [
@@ -232,16 +539,67 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"newpassword123\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/password-reset/reset-password",
-              "host": ["{{base_url}}"],
-              "path": ["password-reset", "reset-password"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "password-reset",
+                "reset-password"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\",\n  \"newPassword\": \"NewPassw0rd123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "POST password-reset/resend-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/password-reset/resend-otp",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "password-reset",
+                "resend-otp"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
         }
       ]
     },
@@ -249,70 +607,290 @@
       "name": "Dashboard",
       "item": [
         {
-          "name": "Get Dashboard Stats",
+          "name": "GET dashboard/stats",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{base_url}}/dashboard/stats",
-              "host": ["{{base_url}}"],
-              "path": ["dashboard", "stats"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "stats"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         },
         {
-          "name": "Get Recent Activities",
+          "name": "GET dashboard/summary",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/dashboard/activities",
-              "host": ["{{base_url}}"],
-              "path": ["dashboard", "activities"]
-            }
-          }
+              "raw": "{{base_url}}/dashboard/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "summary"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dashboard/trends",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dashboard/trends",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "trends"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dashboard/activity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dashboard/activity",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "activity"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dashboard/upcoming",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dashboard/upcoming",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "upcoming"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dashboard/alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dashboard/alerts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "alerts"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dashboard/notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dashboard/notifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "notifications"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dashboard/inventory-by-category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dashboard/inventory-by-category",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "inventory-by-category"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dashboard/recent-orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dashboard/recent-orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "recent-orders"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST dashboard/inventory-check",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dashboard/inventory-check",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "inventory-check"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
         }
       ]
     },
     {
-      "name": "Users",
+      "name": "Users (Admin)",
       "item": [
         {
-          "name": "Get All Users",
+          "name": "GET users",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/users?page=1&limit=10",
-              "host": ["{{base_url}}"],
-              "path": ["users"],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "10"
-                }
+              "raw": "{{base_url}}/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
               ]
-            }
-          }
+            },
+            "description": "Admin only."
+          },
+          "response": []
         },
         {
-          "name": "Get User by ID",
+          "name": "GET users/roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "roles"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "GET users/:id",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{base_url}}/users/1",
-              "host": ["{{base_url}}"],
-              "path": ["users", "1"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "1"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
         },
         {
-          "name": "Update User",
+          "name": "POST users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Staff\",\n  \"email\": \"staff@example.com\",\n  \"password\": \"Passw0rd123\",\n  \"phone\": \"+250788000001\",\n  \"role\": \"WAREHOUSE_STAFF\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT users/:id",
           "request": {
             "method": "PUT",
             "header": [
@@ -321,28 +899,87 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated User\",\n  \"email\": \"updated@example.com\",\n  \"role\": \"WAREHOUSE_STAFF\",\n  \"status\": \"ACTIVE\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/users/1",
-              "host": ["{{base_url}}"],
-              "path": ["users", "1"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "1"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"phone\": \"+250788000002\",\n  \"role\": \"DISPATCH_OFFICER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin only."
+          },
+          "response": []
         },
         {
-          "name": "Delete User",
+          "name": "PUT users/:id/activate",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/1/activate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "1",
+                "activate"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT users/:id/deactivate",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/1/deactivate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "1",
+                "deactivate"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE users/:id",
           "request": {
             "method": "DELETE",
             "header": [],
             "url": {
               "raw": "{{base_url}}/users/1",
-              "host": ["{{base_url}}"],
-              "path": ["users", "1"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "1"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
         }
       ]
     },
@@ -350,29 +987,121 @@
       "name": "Inventory",
       "item": [
         {
-          "name": "Get All Items",
+          "name": "GET inventory",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/inventory?page=1&limit=10",
-              "host": ["{{base_url}}"],
-              "path": ["inventory"],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "10"
-                }
+              "raw": "{{base_url}}/inventory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory"
               ]
-            }
-          }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         },
         {
-          "name": "Create Item",
+          "name": "GET inventory/categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/inventory/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "categories"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET inventory/low-stock",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/inventory/low-stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "low-stock"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET inventory/stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/inventory/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "stats"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET inventory/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/inventory/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET inventory/:id/history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/inventory/1/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "1",
+                "history"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST inventory",
           "request": {
             "method": "POST",
             "header": [
@@ -381,31 +1110,63 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Sample Item\",\n  \"code\": \"ITEM001\",\n  \"category\": \"Electronics\",\n  \"quantity\": 100,\n  \"minQuantity\": 10,\n  \"unit\": \"pieces\",\n  \"unitPrice\": 25.99,\n  \"location\": \"A1-B2\",\n  \"supplier\": \"Tech Supplier Inc\",\n  \"description\": \"Sample electronic item\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/inventory",
-              "host": ["{{base_url}}"],
-              "path": ["inventory"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sample Item\",\n  \"code\": \"ITEM001\",\n  \"category\": \"Electronics\",\n  \"quantity\": 100,\n  \"minQuantity\": 10,\n  \"unit\": \"pieces\",\n  \"unitPrice\": 25.99,\n  \"location\": \"A1-B2\",\n  \"supplier\": \"Tech Supplier Inc\",\n  \"description\": \"Sample electronic item\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
         },
         {
-          "name": "Get Item by ID",
+          "name": "POST inventory/import",
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/inventory/1",
-              "host": ["{{base_url}}"],
-              "path": ["inventory", "1"]
-            }
-          }
+              "raw": "{{base_url}}/inventory/import",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "import"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"name\": \"Box (Large)\",\n      \"code\": \"BOX-L\",\n      \"category\": \"Packaging\",\n      \"quantity\": 50,\n      \"minQuantity\": 10,\n      \"unit\": \"pcs\",\n      \"unitPrice\": 1200,\n      \"location\": \"Aisle 1\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
         },
         {
-          "name": "Update Item",
+          "name": "PUT inventory/:id",
           "request": {
             "method": "PUT",
             "header": [
@@ -414,40 +1175,47 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated Item\",\n  \"quantity\": 150,\n  \"unitPrice\": 29.99\n}"
-            },
             "url": {
               "raw": "{{base_url}}/inventory/1",
-              "host": ["{{base_url}}"],
-              "path": ["inventory", "1"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "1"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Item\",\n  \"quantity\": 150,\n  \"unitPrice\": 29.99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
         },
         {
-          "name": "Delete Item",
+          "name": "DELETE inventory/:id",
           "request": {
             "method": "DELETE",
             "header": [],
             "url": {
               "raw": "{{base_url}}/inventory/1",
-              "host": ["{{base_url}}"],
-              "path": ["inventory", "1"]
-            }
-          }
-        },
-        {
-          "name": "Get Low Stock Items",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/inventory/low-stock",
-              "host": ["{{base_url}}"],
-              "path": ["inventory", "low-stock"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "1"
+              ]
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
         }
       ]
     },
@@ -455,29 +1223,44 @@
       "name": "Orders",
       "item": [
         {
-          "name": "Get All Orders",
+          "name": "GET orders",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/orders?page=1&limit=10",
-              "host": ["{{base_url}}"],
-              "path": ["orders"],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "10"
-                }
+              "raw": "{{base_url}}/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
               ]
-            }
-          }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         },
         {
-          "name": "Create Order",
+          "name": "GET orders/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST orders",
           "request": {
             "method": "POST",
             "header": [
@@ -486,61 +1269,99 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"customerName\": \"John Customer\",\n  \"customerEmail\": \"customer@example.com\",\n  \"customerPhone\": \"+1234567890\",\n  \"deliveryAddress\": \"123 Main St, City, State 12345\",\n  \"priority\": \"MEDIUM\",\n  \"items\": [\n    {\n      \"inventoryItemId\": 1,\n      \"quantity\": 2,\n      \"unitPrice\": 25.99\n    }\n  ]\n}"
-            },
             "url": {
               "raw": "{{base_url}}/orders",
-              "host": ["{{base_url}}"],
-              "path": ["orders"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"John Customer\",\n  \"customerEmail\": \"customer@example.com\",\n  \"customerPhone\": \"+1234567890\",\n  \"deliveryAddress\": \"123 Main St, City, State 12345\",\n  \"priority\": \"MEDIUM\",\n  \"items\": [\n    {\n      \"inventoryItemId\": 1,\n      \"quantity\": 2,\n      \"unitPrice\": 25.99\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
         },
         {
-          "name": "Get Order by ID",
+          "name": "POST orders/:id/status",
           "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/orders/1",
-              "host": ["{{base_url}}"],
-              "path": ["orders", "1"]
-            }
-          }
-        },
-        {
-          "name": "Update Order Status",
-          "request": {
-            "method": "PUT",
+            "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"PROCESSING\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/orders/1/status",
-              "host": ["{{base_url}}"],
-              "path": ["orders", "1", "status"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "1",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DISPATCHED\",\n  \"notes\": \"Handed to driver\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         },
         {
-          "name": "Delete Order",
+          "name": "PUT orders/:id",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "1"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE orders/:id",
           "request": {
             "method": "DELETE",
             "header": [],
             "url": {
               "raw": "{{base_url}}/orders/1",
-              "host": ["{{base_url}}"],
-              "path": ["orders", "1"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "1"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
         }
       ]
     },
@@ -548,19 +1369,83 @@
       "name": "Vehicles",
       "item": [
         {
-          "name": "Get All Vehicles",
+          "name": "GET vehicles",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{base_url}}/vehicles",
-              "host": ["{{base_url}}"],
-              "path": ["vehicles"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         },
         {
-          "name": "Create Vehicle",
+          "name": "GET vehicles/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicles/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "status"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET vehicles/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicles/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET vehicles/:id/maintenance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicles/1/maintenance",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "1",
+                "maintenance"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST vehicles",
           "request": {
             "method": "POST",
             "header": [
@@ -569,19 +1454,64 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"plateNumber\": \"ABC-123\",\n  \"model\": \"Ford Transit\",\n  \"capacity\": 1000,\n  \"type\": \"VAN\",\n  \"status\": \"AVAILABLE\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/vehicles",
-              "host": ["{{base_url}}"],
-              "path": ["vehicles"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plateNumber\": \"ABC-123\",\n  \"model\": \"Ford Transit\",\n  \"capacity\": 1000,\n  \"type\": \"VAN\",\n  \"status\": \"AVAILABLE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
         },
         {
-          "name": "Update Vehicle",
+          "name": "POST vehicles/:id/maintenance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles/1/maintenance",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "1",
+                "maintenance"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"ROUTINE\",\n  \"scheduledDate\": \"2026-11-01\",\n  \"description\": \"Oil change\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT vehicles/:id",
           "request": {
             "method": "PUT",
             "header": [
@@ -590,16 +1520,102 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"IN_USE\",\n  \"capacity\": 1200\n}"
-            },
             "url": {
               "raw": "{{base_url}}/vehicles/1",
-              "host": ["{{base_url}}"],
-              "path": ["vehicles", "1"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "1"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_USE\",\n  \"capacity\": 1200\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE vehicles/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicles/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "1"
+              ]
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "POST vehicles/:id/maintenance/complete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles/1/maintenance/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "1",
+                "maintenance",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Completed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET vehicles/:id/tracking",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicles/1/tracking",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "1",
+                "tracking"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         }
       ]
     },
@@ -607,19 +1623,83 @@
       "name": "Drivers",
       "item": [
         {
-          "name": "Get All Drivers",
+          "name": "GET drivers",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{base_url}}/drivers",
-              "host": ["{{base_url}}"],
-              "path": ["drivers"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         },
         {
-          "name": "Create Driver",
+          "name": "GET drivers/available",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/drivers/available",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers",
+                "available"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET drivers/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/drivers/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET drivers/:id/assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/drivers/1/assignments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers",
+                "1",
+                "assignments"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST drivers",
           "request": {
             "method": "POST",
             "header": [
@@ -628,16 +1708,79 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Driver Name\",\n  \"licenseNumber\": \"DL123456\",\n  \"phone\": \"+1234567890\",\n  \"experience\": 5,\n  \"status\": \"AVAILABLE\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/drivers",
-              "host": ["{{base_url}}"],
-              "path": ["drivers"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Driver Name\",\n  \"licenseNumber\": \"DL123456\",\n  \"phone\": \"+1234567890\",\n  \"experience\": 5,\n  \"status\": \"AVAILABLE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT drivers/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/drivers/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers",
+                "1"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+250788000003\",\n  \"status\": \"AVAILABLE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE drivers/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/drivers/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers",
+                "1"
+              ]
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
         }
       ]
     },
@@ -645,19 +1788,178 @@
       "name": "Dispatch",
       "item": [
         {
-          "name": "Get All Dispatches",
+          "name": "GET dispatch",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{base_url}}/dispatch",
-              "host": ["{{base_url}}"],
-              "path": ["dispatch"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         },
         {
-          "name": "Create Dispatch",
+          "name": "GET dispatch/stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dispatch/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "stats"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST dispatch/sync-statuses",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dispatch/sync-statuses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "sync-statuses"
+              ]
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dispatch/active",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dispatch/active",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "active"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dispatch/orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dispatch/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "orders"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dispatch/drivers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dispatch/drivers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "drivers"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dispatch/vehicles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dispatch/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "vehicles"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dispatch/driver/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dispatch/driver/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "driver",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dispatch/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dispatch/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST dispatch",
           "request": {
             "method": "POST",
             "header": [
@@ -666,19 +1968,64 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"orderId\": 1,\n  \"driverId\": 1,\n  \"vehicleId\": 1,\n  \"scheduledDate\": \"2024-01-15T10:00:00Z\"\n}"
-            },
             "url": {
               "raw": "{{base_url}}/dispatch",
-              "host": ["{{base_url}}"],
-              "path": ["dispatch"]
-            }
-          }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"driverId\": 1,\n  \"vehicleId\": 1,\n  \"scheduledDate\": \"2024-01-15T10:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
         },
         {
-          "name": "Update Dispatch Status",
+          "name": "POST dispatch/:id/status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dispatch/1/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "1",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_TRANSIT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT dispatch/:id",
           "request": {
             "method": "PUT",
             "header": [
@@ -687,16 +2034,47 @@
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{base_url}}/dispatch/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "1"
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"IN_TRANSIT\"\n}"
+              "raw": "{\n  \"notes\": \"Updated dispatch notes\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE dispatch/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
             "url": {
-              "raw": "{{base_url}}/dispatch/1/status",
-              "host": ["{{base_url}}"],
-              "path": ["dispatch", "1", "status"]
-            }
-          }
+              "raw": "{{base_url}}/dispatch/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch",
+                "1"
+              ]
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
         }
       ]
     },
@@ -704,118 +2082,25 @@
       "name": "Notifications",
       "item": [
         {
-          "name": "Get Notifications",
+          "name": "GET notifications",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/notifications?page=1&limit=10",
-              "host": ["{{base_url}}"],
-              "path": ["notifications"],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "10"
-                }
+              "raw": "{{base_url}}/notifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications"
               ]
-            }
-          }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         },
         {
-          "name": "Mark as Read",
-          "request": {
-            "method": "PUT",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/notifications/1/read",
-              "host": ["{{base_url}}"],
-              "path": ["notifications", "1", "read"]
-            }
-          }
-        },
-        {
-          "name": "Delete Notification",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/notifications/1",
-              "host": ["{{base_url}}"],
-              "path": ["notifications", "1"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Reports",
-      "item": [
-        {
-          "name": "Get Analytics",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/reports/analytics",
-              "host": ["{{base_url}}"],
-              "path": ["reports", "analytics"]
-            }
-          }
-        },
-        {
-          "name": "Get Sales Report",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/reports/sales",
-              "host": ["{{base_url}}"],
-              "path": ["reports", "sales"]
-            }
-          }
-        },
-        {
-          "name": "Get Inventory Report",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/reports/inventory",
-              "host": ["{{base_url}}"],
-              "path": ["reports", "inventory"]
-            }
-          }
-        },
-        {
-          "name": "Get Vehicles Report",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/reports/vehicles",
-              "host": ["{{base_url}}"],
-              "path": ["reports", "vehicles"]
-            }
-          }
-        },
-        {
-          "name": "Get Drivers Report",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/reports/drivers",
-              "host": ["{{base_url}}"],
-              "path": ["reports", "drivers"]
-            }
-          }
-        },
-        {
-          "name": "Export Report",
+          "name": "POST notifications",
           "request": {
             "method": "POST",
             "header": [
@@ -824,36 +2109,126 @@
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{base_url}}/notifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications"
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"sales\"\n}"
+              "raw": "{\n  \"title\": \"Maintenance window\",\n  \"message\": \"System maintenance tonight at 22:00\",\n  \"type\": \"SYSTEM\",\n  \"severity\": \"INFO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": {
-              "raw": "{{base_url}}/reports/export",
-              "host": ["{{base_url}}"],
-              "path": ["reports", "export"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Settings",
-      "item": [
+            "description": "Admin only."
+          },
+          "response": []
+        },
         {
-          "name": "Get Notification Preferences",
+          "name": "PUT notifications/:id/read",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/notifications/1/read",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "1",
+                "read"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT notifications/mark-all-read",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/notifications/mark-all-read",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "mark-all-read"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE notifications/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/notifications/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET notifications/stats",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/settings/notifications",
-              "host": ["{{base_url}}"],
-              "path": ["settings", "notifications"]
-            }
-          }
+              "raw": "{{base_url}}/notifications/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "stats"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         },
         {
-          "name": "Update Notification Preferences",
+          "name": "GET notifications/preferences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/notifications/preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "preferences"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT notifications/preferences",
           "request": {
             "method": "PUT",
             "header": [
@@ -862,16 +2237,1546 @@
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{base_url}}/notifications/preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "preferences"
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"emailEnabled\": true,\n  \"orderUpdates\": true,\n  \"lowStockAlerts\": true\n}"
+              "raw": "{\n  \"emailNotifications\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET notifications/system-config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/notifications/system-config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "system-config"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT notifications/system-config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/system-config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "system-config"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lowStockThreshold\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "GET notifications/report-settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/notifications/report-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "report-settings"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT notifications/report-settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/report-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "report-settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"frequency\": \"WEEKLY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "GET reports/analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/analytics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "analytics"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET reports/sales",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/sales",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "sales"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET reports/inventory",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/inventory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "inventory"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET reports/vehicles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "vehicles"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET reports/drivers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/drivers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "drivers"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST reports/export",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports/export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "export"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"inventory\",\n  \"format\": \"pdf\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "GET analytics/inventory-trends",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/inventory-trends",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analytics",
+                "inventory-trends"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET analytics/category-distribution",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/category-distribution",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analytics",
+                "category-distribution"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET analytics/driver-performance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/driver-performance",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analytics",
+                "driver-performance"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET analytics/driver-performance/:driverId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/driver-performance/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analytics",
+                "driver-performance",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET analytics/fleet-utilization",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/fleet-utilization",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analytics",
+                "fleet-utilization"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET analytics/dispatch-efficiency",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/dispatch-efficiency",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analytics",
+                "dispatch-efficiency"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET analytics/order-trends",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/order-trends",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analytics",
+                "order-trends"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "item": [
+        {
+          "name": "GET settings/profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/settings/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings",
+                "profile"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT settings/profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/settings/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings",
+                "profile"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"phone\": \"+250788000004\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST settings/profile/password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/settings/profile/password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings",
+                "profile",
+                "password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"OldPassw0rd\",\n  \"newPassword\": \"NewPassw0rd123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET settings/system",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/settings/system",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings",
+                "system"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT settings/system",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/settings/system",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings",
+                "system"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"WareTrack Pro\",\n  \"timezone\": \"Africa/Kigali\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "GET settings/notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
             "url": {
               "raw": "{{base_url}}/settings/notifications",
-              "host": ["{{base_url}}"],
-              "path": ["settings", "notifications"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings",
+                "notifications"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT settings/notifications",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/settings/notifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings",
+                "notifications"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailNotifications\": true,\n  \"lowStockAlerts\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET settings/security",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/settings/security",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings",
+                "security"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT settings/security",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/settings/security",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings",
+                "security"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionTimeout\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Advanced Features",
+      "item": [
+        {
+          "name": "POST features/proof-of-delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/proof-of-delivery",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "proof-of-delivery"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"signatureData\": \"data:image/png;base64,...\",\n  \"recipientName\": \"Recipient\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/proof-of-delivery/:orderId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/proof-of-delivery/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "proof-of-delivery",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/proof-of-delivery/verify/:code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/proof-of-delivery/verify/ABC123",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "proof-of-delivery",
+                "verify",
+                "ABC123"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/chat/send",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/chat/send",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "chat",
+                "send"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverId\": 2,\n  \"message\": \"Hello\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/chat/messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/chat/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "chat",
+                "messages"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/chat/mark-read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/chat/mark-read",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "chat",
+                "mark-read"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"senderId\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/gamification/leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/gamification/leaderboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "gamification",
+                "leaderboard"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/gamification/achievements/:driverId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/gamification/achievements/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "gamification",
+                "achievements",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/gamification/award",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/gamification/award",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "gamification",
+                "award"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driverId\": 1,\n  \"achievementType\": \"ON_TIME_STREAK\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/gamification/update-leaderboard",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/gamification/update-leaderboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "gamification",
+                "update-leaderboard"
+              ]
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/forecasting/inventory",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/forecasting/inventory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "forecasting",
+                "inventory"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/forecasting/generate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/forecasting/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "forecasting",
+                "generate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": 1,\n  \"days\": 30\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/forecasting/reorder-suggestions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/forecasting/reorder-suggestions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "forecasting",
+                "reorder-suggestions"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/smart-alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/smart-alerts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "smart-alerts"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/smart-alerts/check-maintenance",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/smart-alerts/check-maintenance",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "smart-alerts",
+                "check-maintenance"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/smart-alerts/check-license",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/smart-alerts/check-license",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "smart-alerts",
+                "check-license"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/smart-alerts/check-deadlines",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/smart-alerts/check-deadlines",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "smart-alerts",
+                "check-deadlines"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT features/smart-alerts/:alertId/resolve",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/smart-alerts/1/resolve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "smart-alerts",
+                "1",
+                "resolve"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Resolved\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/barcode/generate/:itemId",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/barcode/generate/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "barcode",
+                "generate",
+                "1"
+              ]
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/barcode/batch-generate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/barcode/batch-generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "barcode",
+                "batch-generate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemIds\": [\n    1,\n    2,\n    3\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/barcode/lookup/:barcode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/barcode/lookup/1234567890123",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "barcode",
+                "lookup",
+                "1234567890123"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/customer/register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/customer/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "customer",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Customer Name\",\n  \"email\": \"customer@example.com\",\n  \"password\": \"Passw0rd123\",\n  \"phone\": \"+250788000005\",\n  \"address\": \"KG 11 Ave, Kigali\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/customer/login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/customer/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "customer",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"Passw0rd123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public endpoint."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.data && res.data.token) {",
+                  "  pm.collectionVariables.set('customer_token', res.data.token);",
+                  "  pm.collectionVariables.set('customer_id', res.data.customer.id);",
+                  "}"
+                ]
+              }
             }
-          }
+          ]
+        },
+        {
+          "name": "GET features/customer/:customerId/orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/customer/{{customer_id}}/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "customer",
+                "{{customer_id}}",
+                "orders"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Requires a customer-portal token (Customer Login)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/customer/track/:orderNumber",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/customer/track/ORD-000001",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "customer",
+                "track",
+                "ORD-000001"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/customer/rate-driver",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/customer/rate-driver",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "customer",
+                "rate-driver"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"driverId\": 1,\n  \"rating\": 5,\n  \"comment\": \"Great service\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Requires a customer-portal token (Customer Login)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/customer/reorder/:orderId",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/customer/reorder/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "customer",
+                "reorder",
+                "1"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Requires a customer-portal token (Customer Login)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST features/maintenance/vehicle-health",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/maintenance/vehicle-health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "maintenance",
+                "vehicle-health"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": 1,\n  \"mileage\": 42000,\n  \"engineHealth\": 90\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/maintenance/vehicle-health/:vehicleId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/maintenance/vehicle-health/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "maintenance",
+                "vehicle-health",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/maintenance/schedule",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/maintenance/schedule",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "maintenance",
+                "schedule"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/maintenance/cost-optimization",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/maintenance/cost-optimization",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "maintenance",
+                "cost-optimization"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET features/preferences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features/preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "preferences"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT features/preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/features/preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "features",
+                "preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"theme\": \"light\",\n  \"language\": \"en\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
         }
       ]
     }

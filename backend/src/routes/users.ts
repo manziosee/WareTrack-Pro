@@ -1,17 +1,17 @@
 import { Router } from 'express';
 import { UsersController } from '../controllers/usersController';
-import { auth } from '../middleware/auth';
+import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { adminAuth } from '../middleware/adminAuth';
 
 const router = Router();
 
-router.get('/', auth, UsersController.getUsers);
-router.get('/roles', auth, UsersController.getRoles);
-router.get('/:id', auth, UsersController.getUserById);
-router.post('/', auth, UsersController.createUser);
-router.put('/:id', auth, UsersController.updateUser);
+router.get('/', auth, authorizeRoles(...ROLES.admin), UsersController.getUsers);
+router.get('/roles', auth, authorizeRoles(...ROLES.admin), UsersController.getRoles);
+router.get('/:id', auth, authorizeRoles(...ROLES.admin), UsersController.getUserById);
+router.post('/', auth, authorizeRoles(...ROLES.admin), UsersController.createUser);
+router.put('/:id', auth, authorizeRoles(...ROLES.admin), UsersController.updateUser);
 router.put('/:id/activate', auth, adminAuth, UsersController.activateUser);
 router.put('/:id/deactivate', auth, adminAuth, UsersController.deactivateUser);
-router.delete('/:id', auth, UsersController.deleteUser);
+router.delete('/:id', auth, authorizeRoles(...ROLES.admin), UsersController.deleteUser);
 
 export default router;

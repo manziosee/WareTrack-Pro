@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { getJwtSecret } from '../config/env';
 import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
 import { QueueService } from '../services/queueService';
@@ -59,19 +60,20 @@ export class AuthController {
         });
       }
 
-      // Validate password length
-      if (password.length < 6) {
+      // Validate password strength
+      if (typeof password !== 'string' || password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
         return res.status(400).json({ 
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: 'Password must be at least 6 characters long'
+            message: 'Password must be at least 8 characters and include letters and numbers'
           }
         });
       }
 
+      const normalizedEmail = String(email).trim().toLowerCase();
       const existingUser = await prisma.user.findUnique({
-        where: { email }
+        where: { email: normalizedEmail }
       });
       if (existingUser) {
         return res.status(400).json({ 
@@ -106,11 +108,13 @@ export class AuthController {
             firstName,
             lastName,
             name,
-            email,
+            email: normalizedEmail,
             password: hashedPassword,
             phone: phone || '',
             role: userRole as any,
-            status: 'ACTIVE'
+            // Self-registered accounts wait for an admin to approve them;
+            // only the very first user (the initial admin) is active straight away
+            status: isFirstUser ? 'ACTIVE' : 'INACTIVE'
           }
         });
 
@@ -134,22 +138,15 @@ export class AuthController {
 
       const user = result;
 
-      const accessToken = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' });
-      const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, process.env.JWT_SECRET!, { expiresIn: '30d' });
-      
-      try {
-        await cache.setSession(accessToken, user.id);
-      } catch (cacheError) {
-        console.warn('Cache session failed:', cacheError);
-      }
-      
       // Send welcome email
       try {
         await QueueService.addEmailJob({
           email: user.email,
           title: 'Welcome to WareTrack-Pro',
           name: user.name,
-          message: `Welcome to WareTrack-Pro, ${user.name}! Your account has been successfully created.`,
+          message: isFirstUser
+            ? `Welcome to WareTrack-Pro, ${user.name}! Your administrator account is ready.`
+            : `Welcome to WareTrack-Pro, ${user.name}! Your account has been created and is waiting for an administrator to approve it. You will be able to sign in once it is activated.`,
           template: 'welcome'
         });
       } catch (emailError) {
@@ -157,14 +154,15 @@ export class AuthController {
       }
       
       const { password: _, ...userWithoutPassword } = user;
+      // No tokens here: every sign-in goes through password + emailed OTP
       res.status(201).json({ 
         success: true,
+        message: isFirstUser
+          ? 'Administrator account created. You can now sign in.'
+          : 'Account created. An administrator must approve it before you can sign in.',
         data: {
           user: userWithoutPassword,
-          tokens: {
-            access: accessToken,
-            refresh: refreshToken
-          }
+          requiresApproval: !isFirstUser
         }
       });
     } catch (error: any) {
@@ -390,8 +388,8 @@ export class AuthController {
         });
       }
 
-      const accessToken = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' });
-      const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, process.env.JWT_SECRET!, { expiresIn: '30d' });
+      const accessToken = jwt.sign({ userId: user.id, role: user.role }, getJwtSecret(), { expiresIn: '7d' });
+      const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, getJwtSecret(), { expiresIn: '30d' });
       
       await cache.setSession(accessToken, user.id);
       
@@ -429,7 +427,7 @@ export class AuthController {
   static async refresh(req: Request, res: Response) {
     try {
       const { refreshToken } = req.body;
-      const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET!) as any;
+      const decoded = jwt.verify(refreshToken, getJwtSecret()) as any;
       
       if (decoded.type !== 'refresh') {
         return res.status(401).json({ 
@@ -444,18 +442,18 @@ export class AuthController {
       const user = await prisma.user.findUnique({
         where: { id: decoded.userId }
       });
-      if (!user) {
+      if (!user || user.status !== 'ACTIVE') {
         return res.status(401).json({ 
           success: false,
           error: {
             code: 'USER_NOT_FOUND',
-            message: 'User not found'
+            message: 'User not found or inactive'
           }
         });
       }
 
-      const newAccessToken = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' });
-      const newRefreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, process.env.JWT_SECRET!, { expiresIn: '30d' });
+      const newAccessToken = jwt.sign({ userId: user.id, role: user.role }, getJwtSecret(), { expiresIn: '7d' });
+      const newRefreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, getJwtSecret(), { expiresIn: '30d' });
       await cache.setSession(newAccessToken, user.id);
       
       res.json({ 

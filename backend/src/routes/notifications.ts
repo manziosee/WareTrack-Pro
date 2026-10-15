@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { NotificationController } from '../controllers/notificationController';
-import { auth } from '../middleware/auth';
+import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { adminAuth } from '../middleware/adminAuth';
 
 const router = Router();
@@ -17,8 +17,8 @@ router.get('/stats', auth, NotificationController.getNotificationStats);
 router.get('/preferences', auth, NotificationController.getPreferences);
 router.put('/preferences', auth, NotificationController.updatePreferences);
 router.get('/system-config', auth, NotificationController.getSystemConfig);
-router.put('/system-config', auth, NotificationController.updateSystemConfig);
+router.put('/system-config', auth, authorizeRoles(...ROLES.admin), NotificationController.updateSystemConfig);
 router.get('/report-settings', auth, NotificationController.getReportSettings);
-router.put('/report-settings', auth, NotificationController.updateReportSettings);
+router.put('/report-settings', auth, authorizeRoles(...ROLES.admin), NotificationController.updateReportSettings);
 
 export default router;

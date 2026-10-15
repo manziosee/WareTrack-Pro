@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { SettingsController } from '../controllers/settingsController';
-import { auth } from '../middleware/auth';
+import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 
 const router = Router();
 
@@ -11,7 +11,7 @@ router.post('/profile/password', auth, SettingsController.changePassword);
 
 // System Settings
 router.get('/system', auth, SettingsController.getSystemSettings);
-router.put('/system', auth, SettingsController.updateSystemSettings);
+router.put('/system', auth, authorizeRoles(...ROLES.admin), SettingsController.updateSystemSettings);
 
 // Notification Settings
 router.get('/notifications', auth, SettingsController.getNotificationSettings);
@@ -19,6 +19,6 @@ router.put('/notifications', auth, SettingsController.updateNotificationSettings
 
 // Security Settings
 router.get('/security', auth, SettingsController.getSecuritySettings);
-router.put('/security', auth, SettingsController.updateSecuritySettings);
+router.put('/security', auth, authorizeRoles(...ROLES.admin), SettingsController.updateSecuritySettings);
 
 export default router;
