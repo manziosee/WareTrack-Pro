@@ -21,6 +21,11 @@ import insightsRoutes from './routes/insights';
 import auditRoutes from './routes/audit';
 import savedFilterRoutes from './routes/savedFilters';
 import { auditTrail } from './middleware/audit';
+import warehousingRoutes from './routes/warehousing';
+import operationsRoutes from './routes/operations';
+import commerceRoutes from './routes/commerce';
+import intelligenceRoutes from './routes/intelligence';
+import platformRoutes from './routes/platform';
 import swaggerUi from 'swagger-ui-express';
 import rateLimit from 'express-rate-limit';
 import { swaggerSpec, addUndocumentedRoutes } from './config/swagger';
@@ -38,6 +43,12 @@ app.disable('x-powered-by');
 const server = http.createServer(app);
 
 const allowedOrigins = getAllowedOrigins();
+
+// Versioned alias: /api/v1/... behaves exactly like /api/...
+app.use((req, _res, next) => {
+  if (req.url === '/api/v1' || req.url.startsWith('/api/v1/')) req.url = req.url.replace(/^\/api\/v1/, '/api');
+  next();
+});
 
 app.use(helmet({
   // Swagger UI needs inline scripts and styles
@@ -86,6 +97,8 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// Proof-of-delivery uploads (signature + photo) need a little more room
+app.use('/api/my-deliveries', express.json({ limit: '3mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
@@ -138,7 +151,11 @@ app.get('/api', (req, res) => {
     endpoints: [
       '/api/auth', '/api/dashboard', '/api/inventory', '/api/orders', '/api/vehicles',
       '/api/drivers', '/api/dispatch', '/api/users', '/api/notifications', '/api/reports',
-      '/api/settings', '/api/password-reset', '/api/analytics', '/api/features', '/api/insights', '/api/audit', '/api/saved-filters'
+      '/api/settings', '/api/password-reset', '/api/analytics', '/api/features', '/api/insights', '/api/audit', '/api/saved-filters', '/api/intelligence',
+      '/api/warehouses', '/api/transfers', '/api/suppliers', '/api/purchase-orders', '/api/batches', '/api/returns',
+      '/api/routes', '/api/dispatch-suggestions', '/api/auto-dispatch', '/api/my-deliveries', '/api/live-map',
+      '/api/payments', '/api/invoices', '/api/webhooks', '/api/report-builder', '/api/saved-reports', '/api/auth/2fa',
+      '/api/public/track/:orderNumber'
     ]
   });
 });
@@ -162,6 +179,11 @@ addUndocumentedRoutes(swaggerSpec, [
   ['/api/insights', 'Insights', insightsRoutes],
   ['/api/audit', 'Audit Log', auditRoutes],
   ['/api/saved-filters', 'Saved Filters', savedFilterRoutes],
+  ['/api/intelligence', 'Intelligence', intelligenceRoutes],
+  ['/api', 'Warehousing & Purchasing', warehousingRoutes],
+  ['/api', 'Operations', operationsRoutes],
+  ['/api', 'Payments & Invoices', commerceRoutes],
+  ['/api', 'Platform', platformRoutes],
 ] as any);
 
 app.get('/api-docs.json', (req, res) => {
@@ -195,6 +217,11 @@ app.use('/api/features', featuresRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/saved-filters', savedFilterRoutes);
+app.use('/api/intelligence', intelligenceRoutes);
+app.use('/api', warehousingRoutes);
+app.use('/api', operationsRoutes);
+app.use('/api', commerceRoutes);
+app.use('/api', platformRoutes);
 
 // Unknown routes return JSON instead of Express's HTML page
 app.use((req, res) => {

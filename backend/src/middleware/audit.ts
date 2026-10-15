@@ -23,6 +23,8 @@ const ENTITY: Record<string, string> = {
   webhooks: 'Webhook',
   settings: 'Settings',
   'saved-reports': 'SavedReport',
+  'my-deliveries': 'Order',
+  'auto-dispatch': 'Order',
 };
 
 const LABEL: Record<string, string> = {
@@ -64,7 +66,7 @@ export function auditTrail(req: Request, res: Response, next: NextFunction) {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return next();
 
   const path = req.originalUrl.split('?')[0];
-  const parts = path.replace(/^\/api\//, '').split('/').filter(Boolean);
+  const parts = path.replace(/^\/api\/(v1\/)?/, '').split('/').filter(Boolean);
   const resource = parts[0];
   const entityType = ENTITY[resource];
   if (!entityType) return next();

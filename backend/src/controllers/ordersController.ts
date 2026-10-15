@@ -1,3 +1,5 @@
+import { emitEvent } from '../services/events';
+import { ORDER_STATUSES, onOrderStatusChanged } from '../services/orderLifecycle';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { QueueService } from '../services/queueService';
@@ -174,6 +176,7 @@ export class OrdersController {
         return newOrder;
       });
 
+      emitEvent('order.created', { id: order.id, orderNumber: order.orderNumber, customerName: order.customerName, totalAmount: Number(order.totalAmount) });
       res.status(201).json({ success: true, data: order });
     } catch (error: any) {
       console.error('Create order error:', error);
@@ -310,9 +313,18 @@ export class OrdersController {
       const { id } = req.params;
       const { status } = req.body;
 
+      if (!ORDER_STATUSES.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_STATUS', message: `Status must be one of: ${ORDER_STATUSES.join(', ')}` }
+        });
+      }
+
+      const previous = await prisma.deliveryOrder.findUnique({ where: { id: Number(id) }, select: { status: true } });
       const updateData: any = { status };
       if (status === 'DELIVERED') {
         updateData.deliveredAt = new Date();
+        updateData.deliveryAttempts = { increment: 1 };
       }
 
       const order = await prisma.deliveryOrder.update({
@@ -325,6 +337,7 @@ export class OrdersController {
         }
       });
 
+      onOrderStatusChanged(order.id, previous?.status);
       res.json({ success: true, data: order });
     } catch (error: any) {
       if (error.code === 'P2025') {

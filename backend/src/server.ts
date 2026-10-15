@@ -1,21 +1,30 @@
 import { validateEnv } from './config/env';
+import { initMonitoring, captureError } from './config/monitoring';
 import { server } from './app';
 import { InventoryAlerts } from './middleware/inventoryAlerts';
 import { prisma } from './lib/prisma';
+import { initRealtime } from './services/realtime';
+import { startJobs } from './services/jobs';
 
 // Fail fast on missing secrets instead of running with insecure defaults
 validateEnv();
+initMonitoring();
 
 // Log stray async errors instead of letting one bad promise take the whole API down
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled promise rejection:', reason);
+  captureError(reason);
 });
 
 const PORT = Number(process.env.PORT) || 8080;
 
-// Start inventory alerts scheduler only in production
-if (process.env.NODE_ENV === 'production') {
+// Live updates (notifications, chat, driver locations)
+initRealtime(server);
+
+// Scheduled work: inventory alerts, SLA risk, anomalies, restock, reports
+if (process.env.NODE_ENV === 'production' || process.env.RUN_JOBS === 'true') {
   InventoryAlerts.startScheduledCheck();
+  startJobs();
 }
 
 function start() {

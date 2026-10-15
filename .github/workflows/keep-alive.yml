@@ -1,0 +1,18 @@
+name: Keep API awake
+
+# The free Render plan sleeps after 15 minutes without traffic. A light ping
+# during working hours (Kigali, UTC+2) keeps the first request fast.
+on:
+  schedule:
+    - cron: '*/10 4-19 * * 1-6'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health check
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 https://waretrack-pro.onrender.com/health)
+          echo "Health check returned $status"
+          test "$status" = "200"

@@ -1,3 +1,6 @@
+import { NotificationService } from '../services/notificationService';
+import { onOrderStatusChanged } from '../services/orderLifecycle';
+import { emitEvent } from '../services/events';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { QueueService } from '../services/queueService';
@@ -238,15 +241,20 @@ export class DispatchController {
         return newDispatch;
       });
 
-      // Send notification
-      console.log('✅ New Delivery Assignment 🚛 - Sent successfully');
-      await QueueService.addEmailJob({
-        email: 'driver@example.com',
-        title: 'New Delivery Assignment 🚛',
-        name: dispatch.driver.name,
-        message: `You have been assigned a new delivery: Order ${dispatch.order.orderNumber} to ${dispatch.order.customerName}. Scheduled for ${new Date(scheduledDate).toLocaleString()}`,
-        template: 'delivery_assignment'
-      });
+      // Tell the driver (in the app, and by email only if they have a real address)
+      const assignment = `You have a new delivery: ${dispatch.order.orderNumber} to ${dispatch.order.customerName}, scheduled for ${new Date(scheduledDate).toLocaleString('en-GB', { timeZone: 'Africa/Kigali' })}.`;
+      if (dispatch.driver.userId) {
+        NotificationService.createNotification({
+          userId: dispatch.driver.userId, type: 'ORDER_UPDATE', severity: 'INFO', title: 'New delivery assigned 🚛', message: assignment,
+        }).catch(() => undefined);
+      }
+      if (dispatch.driver.email && !/@(example\.|drivers\.waretrack\.rw$)/.test(dispatch.driver.email)) {
+        QueueService.addEmailJob({
+          email: dispatch.driver.email, title: 'New Delivery Assignment 🚛', name: dispatch.driver.name, message: assignment, template: 'delivery_assignment',
+        }).catch(() => undefined);
+      }
+      emitEvent('dispatch.created', { id: dispatch.id, orderId: dispatch.orderId, orderNumber: dispatch.order.orderNumber, driver: dispatch.driver.name });
+      onOrderStatusChanged(dispatch.orderId, 'PENDING');
 
       res.status(201).json({ 
         success: true,
@@ -383,6 +391,7 @@ export class DispatchController {
             ...(status === 'DELIVERED' && { deliveredAt: new Date() })
           }
         });
+        onOrderStatusChanged(dispatch.orderId, dispatch.order.status);
       }
 
       // Sync vehicle and driver status

@@ -3,7 +3,7 @@ import { EmailService } from './emailService';
 
 export interface NotificationData {
   userId?: number;
-  type: 'SYSTEM' | 'LOW_STOCK' | 'ORDER_UPDATE' | 'DELIVERY_COMPLETE' | 'WELCOME';
+  type: 'SYSTEM' | 'LOW_STOCK' | 'ORDER_UPDATE' | 'DELIVERY_COMPLETE' | 'WELCOME' | 'SLA_RISK' | 'ANOMALY' | 'MESSAGE' | 'PURCHASE_ORDER';
   severity: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
   title: string;
   message: string;

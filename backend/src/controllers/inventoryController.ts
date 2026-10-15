@@ -1,3 +1,4 @@
+import { emitEvent } from '../services/events';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
@@ -281,15 +282,8 @@ export class InventoryController {
       }
 
       // Check for low stock and send alert
-      if (quantity <= minQuantity) {
-        console.log('✅ Inventory Alert - Low Stock ⚠️ - Sent successfully');
-        await QueueService.addEmailJob({
-          email: 'warehouse@example.com',
-          title: 'Inventory Alert - Low Stock ⚠️',
-          name: 'Warehouse Manager',
-          message: `Item "${name}" (${code}) is running low. Current stock: ${quantity}, Minimum required: ${minQuantity}`,
-          template: 'low_stock_alert'
-        });
+      if (quantity !== undefined && minQuantity !== undefined && Number(quantity) <= Number(minQuantity)) {
+        emitEvent('stock.low', { id: item.id, name: item.name, code: item.code, quantity: item.quantity, minQuantity: item.minQuantity });
       }
 
       await cache.invalidateInventoryCache();

@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/env';
 import { recordAudit } from '../middleware/audit';
+import { generateCode, saveOtp, checkOtp } from '../services/otpStore';
+import { verifyTotp } from '../services/totp';
 import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
 import { QueueService } from '../services/queueService';
@@ -11,8 +13,6 @@ import { EmailService } from '../services/emailService';
 const cache = CacheService.getInstance();
 
 // In-memory OTP storage for login (in production, use Redis)
-const loginOtpStore = new Map<string, { otp: string; expires: Date; userId: number; email: string; attempts: number }>();
-const MAX_LOGIN_OTP_ATTEMPTS = 5;
 
 export class AuthController {
   // Generate 6-digit OTP for login
@@ -250,18 +250,19 @@ export class AuthController {
         });
       }
 
-      // Generate and send OTP for login verification
-      const otp = AuthController.generateLoginOTP();
-      const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-      
-      // Store OTP
-      loginOtpStore.set(email.toLowerCase(), {
-        otp,
-        expires,
-        userId: user.id,
-        email: email.toLowerCase(),
-        attempts: 0
-      });
+      // Accounts with an authenticator app use its 6-digit code instead of email
+      if (user.twoFactorEnabled && user.totpSecret) {
+        return res.json({
+          success: true,
+          requiresOTP: true,
+          message: 'Enter the 6-digit code from your authenticator app',
+          data: { email: email.toLowerCase(), otpRequired: true, method: 'totp' }
+        });
+      }
+
+      // Generate and send OTP for login verification (valid 5 minutes, stored hashed)
+      const otp = generateCode();
+      await saveOtp(email, 'LOGIN', otp, user.id, 5 * 60 * 1000);
 
       // Send OTP via email
       const emailSent = await EmailService.sendLoginOTP(email, user.name, otp);
@@ -285,7 +286,8 @@ export class AuthController {
         message: 'Login OTP sent to your email',
         data: {
           email: email.toLowerCase(),
-          otpRequired: true
+          otpRequired: true,
+          method: 'email'
         }
       });
     } catch (error: any) {
@@ -327,57 +329,39 @@ export class AuthController {
         });
       }
 
-      const storedData = loginOtpStore.get(email.toLowerCase());
-      
-      if (!storedData) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_OTP',
-            message: 'Invalid or expired OTP'
-          }
-        });
-      }
+      const account = await prisma.user.findUnique({ where: { email: String(email).toLowerCase() } })
+        || await prisma.user.findUnique({ where: { email: String(email) } });
 
-      // Check if OTP is expired
-      if (new Date() > storedData.expires) {
-        loginOtpStore.delete(email.toLowerCase());
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'OTP_EXPIRED',
-            message: 'OTP has expired. Please login again'
-          }
-        });
-      }
-
-      // Verify OTP
-      if (storedData.otp !== otp) {
-        storedData.attempts += 1;
-        if (storedData.attempts >= MAX_LOGIN_OTP_ATTEMPTS) {
-          loginOtpStore.delete(email.toLowerCase());
+      let verifiedUserId: number | null = null;
+      if (account?.twoFactorEnabled && account.totpSecret) {
+        if (!verifyTotp(account.totpSecret, String(otp))) {
+          return res.status(400).json({ success: false, error: { code: 'INVALID_OTP', message: 'That authenticator code is not valid' } });
         }
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_OTP',
-            message: 'Invalid OTP'
-          }
-        });
+        verifiedUserId = account.id;
+      } else {
+        const check = await checkOtp(email, 'LOGIN', String(otp));
+        if (!check.ok) {
+          const messages: Record<string, [string, string]> = {
+            missing: ['INVALID_OTP', 'Invalid or expired code. Please sign in again.'],
+            expired: ['OTP_EXPIRED', 'This code has expired. Please sign in again.'],
+            invalid: ['INVALID_OTP', 'That code is not correct.'],
+            locked: ['OTP_LOCKED', 'Too many wrong codes. Please sign in again to get a new one.'],
+          };
+          const [code, message] = messages[(check as { reason: string }).reason];
+          return res.status(400).json({ success: false, error: { code, message } });
+        }
+        verifiedUserId = (check as { userId: number | null }).userId;
       }
 
       // Get user and complete login
-      const user = await prisma.user.findUnique({
-        where: { id: storedData.userId }
-      });
+      const user = verifiedUserId ? await prisma.user.findUnique({ where: { id: verifiedUserId } }) : null;
 
-      if (!user) {
-        loginOtpStore.delete(email.toLowerCase());
+      if (!user || user.status !== 'ACTIVE') {
         return res.status(404).json({
           success: false,
           error: {
             code: 'USER_NOT_FOUND',
-            message: 'User not found'
+            message: 'User not found or not active'
           }
         });
       }
@@ -407,9 +391,6 @@ export class AuthController {
       const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, getJwtSecret(), { expiresIn: '30d' });
       
       await cache.setSession(accessToken, user.id);
-      
-      // Remove OTP from store after successful login
-      loginOtpStore.delete(email.toLowerCase());
       
       const { password: _, ...userWithoutPassword } = user;
       

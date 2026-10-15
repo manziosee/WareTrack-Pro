@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { captureError } from '../config/monitoring';
 
 export const errorHandler = (
   error: any,
@@ -8,6 +9,7 @@ export const errorHandler = (
 ) => {
   const status = error.statusCode || error.status || 500;
   console.error(`[${req.method} ${req.originalUrl}]`, error.stack || error);
+  if (status >= 500) captureError(error, { method: req.method, path: req.originalUrl });
 
   // Malformed JSON body
   if (error.type === 'entity.parse.failed') {
