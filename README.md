@@ -11,7 +11,7 @@ Manage inventory, orders, vehicles, drivers and deliveries in one place, with a 
 [![API Docs](https://img.shields.io/badge/Swagger-API_Docs-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://waretrack-pro.onrender.com/api-docs)
 [![Postman](https://img.shields.io/badge/Postman-Collection-FF6C37?style=for-the-badge&logo=postman&logoColor=white)](./WareTrack-Pro-API.postman_collection.json)
 
-![Version](https://img.shields.io/badge/version-2.2.0-FF8C42?style=flat-square)
+![Version](https://img.shields.io/badge/version-2.3.0-FF8C42?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
 
 </div>
@@ -30,7 +30,7 @@ Manage inventory, orders, vehicles, drivers and deliveries in one place, with a 
 - [API documentation](#-api-documentation)
 - [Security](#-security)
 - [Project structure](#-project-structure)
-- [What's new in 2.2.0](#-whats-new-in-220)
+- [What's new in 2.3.0](#-whats-new-in-230)
 
 ---
 
@@ -38,14 +38,17 @@ Manage inventory, orders, vehicles, drivers and deliveries in one place, with a 
 
 | Area | Highlights |
 |---|---|
-| 📦 **Inventory** | Stock levels, categories, low-stock and out-of-stock alerts, bulk import, barcodes |
-| 🧾 **Orders** | Create orders from live inventory, track each stage from pending to delivered |
-| 🚚 **Dispatch** | Assign drivers and vehicles, schedule deliveries, update status on the road |
-| 🛻 **Fleet** | Vehicles, maintenance schedules, driver profiles and performance |
-| 📍 **Tracking** | Follow every delivery, with a public tracking lookup for customers |
-| 📊 **Reports** | Delivery trends, status breakdowns, inventory by category, KPIs; export to PDF, CSV or JSON |
-| 🔔 **Notifications** | In-app alerts and email notifications |
-| 👥 **Users** | Role-based dashboards, admin approval for new accounts |
+| 📦 **Inventory** | Stock levels, categories, low-stock alerts, bulk import, barcode labels and phone scanning |
+| 🏬 **Warehouses** | Several warehouses, stock per site, transfers, batches with expiry dates |
+| 🛒 **Purchasing** | Suppliers, purchase orders, receiving, automatic restock of low items |
+| 🧾 **Orders** | Table and Kanban board, delivery calendar, SLA deadlines, returns and failed deliveries |
+| 🚚 **Dispatch** | Auto-dispatch to the best driver, optimised route order, live map of drivers |
+| 📱 **Driver app** | Installable phone app: today's stops, navigation, signature and photo proof of delivery |
+| 📍 **Tracking** | Public tracking page with live driver position and ETA; SMS and WhatsApp updates |
+| 💳 **Payments** | MTN MoMo and Airtel Money requests, cash records, printable invoices |
+| 📊 **Insights** | Role dashboards, demand forecast, driver scorecards, anomaly alerts, custom report builder |
+| 💬 **Team** | Real-time chat, notification centre, audit log of every change |
+| 👥 **Users** | Admin approval for new accounts, two-factor sign-in, English / Kinyarwanda / French |
 
 ---
 
@@ -90,8 +93,13 @@ Manage inventory, orders, vehicles, drivers and deliveries in one place, with a 
 | API | Node.js 18, Express 4 | REST API with 100+ endpoints |
 | Data access | Prisma ORM | Type-safe queries and migrations |
 | Database | PostgreSQL on Prisma Postgres | Persistent storage |
-| Auth | bcrypt, JWT, email OTP | Password + one-time code sign-in |
-| Email | EmailJS | Login codes, password resets, alerts |
+| Auth | bcrypt, JWT, email OTP, TOTP | Password + emailed code or authenticator app |
+| Real time | Socket.IO | Live map, chat, notifications |
+| Maps | Leaflet + OpenStreetMap | Live map, route view, customer tracking |
+| Email | Resend, Brevo or EmailJS (first one configured) | Login codes, password resets, alerts |
+| SMS / WhatsApp | Africa's Talking, WhatsApp Cloud API | Customer delivery updates |
+| Payments | MTN MoMo, Airtel Money | Mobile money collections |
+| Monitoring | Sentry | Error reporting (optional) |
 | Docs | Swagger UI / OpenAPI 3 | Interactive API reference |
 | Hosting | Vercel (frontend), Render (API, Docker) | Production deployment |
 
@@ -236,11 +244,28 @@ Backend (`backend/.env`; never commit this file):
 | `JWT_EXPIRE` | | Access-token lifetime, e.g. `7d` |
 | `FRONTEND_URL` | ✅ | Frontend address allowed by CORS, e.g. `https://ware-track-pro.vercel.app` |
 | `CORS_ORIGINS` | | Extra allowed origins, comma-separated |
-| `EMAILJS_SERVICE_ID` | ✅ | EmailJS service |
-| `EMAILJS_TEMPLATE_ID` | ✅ | EmailJS template (subject `WareTrack-Pro: {{title}}`, recipient `{{email}}`) |
-| `EMAILJS_PUBLIC_KEY` | ✅ | EmailJS public key |
-| `EMAILJS_PRIVATE_KEY` | ✅ | EmailJS private key |
 | `API_RATE_LIMIT_PER_15_MIN` | | General per-IP request limit (default `1000`) |
+
+**Email** (at least one provider is needed for login codes; the first one configured is used):
+
+| Variable | Description |
+|---|---|
+| `RESEND_API_KEY` | [Resend](https://resend.com) key (preferred) |
+| `BREVO_API_KEY` | [Brevo](https://brevo.com) key |
+| `EMAIL_FROM` | Sender for Resend/Brevo, e.g. `WareTrack Pro <no-reply@yourdomain.rw>` (domain must be verified) |
+| `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, `EMAILJS_PRIVATE_KEY` | EmailJS fallback (template subject `WareTrack-Pro: {{title}}`, recipient `{{email}}`) |
+
+**Optional integrations** (each feature switches off quietly when its keys are missing; Settings → Integrations shows which are active):
+
+| Variable | Description |
+|---|---|
+| `AT_USERNAME`, `AT_API_KEY`, `AT_SENDER_ID` | Africa's Talking SMS (use username `sandbox` for testing) |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp Cloud API |
+| `MOMO_SUBSCRIPTION_KEY`, `MOMO_API_USER`, `MOMO_API_KEY`, `MOMO_TARGET_ENV`, `MOMO_BASE_URL`, `MOMO_CURRENCY` | MTN MoMo Collections |
+| `AIRTEL_CLIENT_ID`, `AIRTEL_CLIENT_SECRET`, `AIRTEL_BASE_URL`, `AIRTEL_COUNTRY`, `AIRTEL_CURRENCY` | Airtel Money |
+| `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE` | Sentry error reporting for the API |
+| `AUTO_RESTOCK` | `true` lets the daily job create purchase orders for low stock automatically |
+| `RUN_JOBS` | `true` runs the background jobs outside production (SLA checks, anomalies, scheduled reports) |
 
 The server **refuses to start in production** if `DATABASE_URL` or `JWT_SECRET` is missing, or if `JWT_SECRET` is shorter than 32 characters.
 
@@ -249,6 +274,7 @@ Frontend (Vercel environment variable):
 | Variable | Description |
 |---|---|
 | `VITE_API_URL` | API base URL, e.g. `https://waretrack-pro.onrender.com/api` |
+| `VITE_SENTRY_DSN` | Optional Sentry DSN for frontend errors |
 
 ---
 
@@ -278,6 +304,14 @@ Alternatively, create it from the [`render.yaml`](render.yaml) Blueprint. Secret
 2. Set `VITE_API_URL` to `https://waretrack-pro.onrender.com/api`.
 3. Deploy.
 
+### GitHub Actions
+
+| Workflow | What it does | Setup |
+|---|---|---|
+| `ci.yml` | Type-checks, tests and builds backend and frontend on every push and pull request | None |
+| `keep-alive.yml` | Pings `/health` every 10 minutes during working hours (06:00–21:00 Kigali, Monday–Saturday) so the free Render service stays awake | None |
+| `db-backup.yml` | Nightly `pg_dump` of the database, kept as a workflow artifact for 14 days | Add the repository secret `DATABASE_URL` |
+
 ---
 
 ## 📖 API documentation
@@ -290,14 +324,14 @@ Alternatively, create it from the [`render.yaml`](render.yaml) Blueprint. Secret
 | OpenAPI JSON | [/api-docs.json](https://waretrack-pro.onrender.com/api-docs.json) |
 | Postman | [`WareTrack-Pro-API.postman_collection.json`](./WareTrack-Pro-API.postman_collection.json) |
 
-### Using the Postman collection (v2.2.0)
+### Using the Postman collection (v2.3.0)
 
 1. Import the collection into Postman.
 2. In the collection variables, set `email` and `password`.
 3. Run **Authentication → POST auth/login**. A code is emailed to you.
 4. Put the code in `otp` and run **POST auth/verify-login-otp**. The tokens are saved for every other request.
 
-Each request's description says which roles may call it.
+Each request's description says which roles may call it. Every path also works under `/api/v1/...`.
 
 ### Main endpoint groups
 
@@ -316,13 +350,24 @@ Each request's description says which roles may call it.
 | Reports | `/api/reports` |
 | Analytics | `/api/analytics` |
 | Settings | `/api/settings` |
-| Advanced features (customer portal, proof of delivery, forecasting, barcodes, chat) | `/api/features` |
+| Advanced features (customer portal, proof of delivery, barcodes) | `/api/features` |
+| Dashboard insights | `/api/insights` |
+| Warehouses, transfers, suppliers, purchase orders, batches | `/api/warehouses`, `/api/transfers`, `/api/suppliers`, `/api/purchase-orders`, `/api/batches` |
+| Routes, auto-dispatch, driver app, calendar, live map, returns | `/api/routes`, `/api/auto-dispatch`, `/api/my-deliveries`, `/api/calendar`, `/api/live-map`, `/api/returns` |
+| Public order tracking (no sign-in) | `/api/public/track/:orderNumber` |
+| Payments and invoices | `/api/payments`, `/api/invoices` |
+| Forecast, scorecards, anomalies | `/api/intelligence` |
+| Chat | `/api/chat` |
+| Two-factor, webhooks, report builder | `/api/auth/2fa`, `/api/webhooks`, `/api/report-builder`, `/api/saved-reports` |
+| Audit log, saved filters | `/api/audit`, `/api/saved-filters` |
 
 ---
 
 ## 🛡 Security
 
-- **Two-step sign-in:** password plus a 6-digit email code that expires in 5 minutes and is cancelled after 5 wrong tries.
+- **Two-step sign-in:** password plus a 6-digit email code (stored hashed in the database, expires in 5 minutes, cancelled after 5 wrong tries), or an authenticator-app code for users who turn on two-factor.
+- **Audit log** of every create, update and delete, with who did it and from where.
+- **Signed webhooks:** each delivery carries an HMAC-SHA256 signature in `X-WareTrack-Signature`.
 - **Rate limits:** 5 login attempts per 15 minutes and 10 code checks per 5 minutes per IP, plus a general API limit.
 - **Role checks on the server** for every create, update and delete.
 - **Live account checks:** deactivating a user or changing their role takes effect within 30 seconds, even for tokens already issued.
@@ -350,15 +395,18 @@ WareTrack-Pro/
 │   │   ├── controllers/      Request handlers
 │   │   ├── middleware/       Auth, roles, errors, inventory alerts
 │   │   ├── routes/           Endpoint definitions (+ Swagger docs)
-│   │   ├── services/         Email, notifications, queues
+│   │   ├── services/         Email, SMS, payments, routing, forecasting, jobs, real time
 │   │   └── server.ts         Entry point
 │   └── Dockerfile
 ├── frontend/                 React app
 │   └── src/
 │       ├── components/       UI kit, charts, forms, layout
+│       ├── i18n/             English, Kinyarwanda and French text
 │       ├── pages/            Screens and role dashboards
 │       ├── services/         API clients
 │       └── utils/            Formatting and PDF/CSV/JSON export
+├── frontend/public/          PWA manifest, service worker, app icons
+├── .github/workflows/        CI, keep-alive, nightly backup
 ├── render.yaml               Render Blueprint for the API
 ├── docker-compose.yml        Local stack
 └── WareTrack-Pro-API.postman_collection.json
@@ -366,7 +414,34 @@ WareTrack-Pro/
 
 ---
 
-## 🆕 What's new in 2.2.0
+## 🆕 What's new in 2.3.0
+
+**Operations**
+- Live map of drivers and deliveries, Kanban order board, delivery calendar.
+- Route optimisation and auto-dispatch to the best available driver and vehicle.
+- Delivery deadlines (SLA) with at-risk alerts; returns and failed deliveries with rescheduling.
+- Driver phone app (installable PWA): today's stops, navigation, signature and photo proof of delivery, location sharing.
+- Barcode and QR scanning with the phone camera; printable item labels.
+- Public tracking page with live driver position and ETA; SMS and WhatsApp updates to customers.
+
+**Stock and money**
+- Multiple warehouses, stock transfers, batches with expiry dates.
+- Suppliers and purchase orders, receiving, optional automatic restock.
+- MTN MoMo and Airtel Money payment requests, cash records, printable invoices.
+
+**Insights**
+- More charts on every role's dashboard, sparklines, customisable cards and a greeting with Kigali weather.
+- Demand forecast, driver scorecards, anomaly alerts and a custom report builder with scheduled emails.
+
+**Team and platform**
+- Real-time chat and notification centre; English, Kinyarwanda and French.
+- Command palette (Ctrl+K), collapsible sidebar, breadcrumbs, phone tab bar, undo for deletes.
+- Tables with sorting, column choice, density, bulk actions and saved filters; slide-in detail panels with history.
+- Two-factor sign-in with an authenticator app, audit log, signed webhooks, `/api/v1` paths.
+- Resend and Brevo email support, Sentry, CI, keep-alive and nightly backups.
+- Smaller text throughout; light theme only.
+
+## What was new in 2.2.0
 
 **Hosting**
 - API moved from Fly.io to **Render**; frontend points to `https://waretrack-pro.onrender.com/api`.

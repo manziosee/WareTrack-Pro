@@ -37,8 +37,9 @@ export class ChatController {
       
       let messages;
       if (roomId) {
+        // Room messages are only returned if the user takes part in that room
         messages = await prisma.chatMessage.findMany({
-          where: { roomId: roomId as string },
+          where: { roomId: roomId as string, OR: [{ senderId: Number(currentUserId) }, { receiverId: Number(currentUserId) }] },
           include: { sender: { select: { name: true } } },
           orderBy: { createdAt: 'desc' },
           take: 100
@@ -66,8 +67,9 @@ export class ChatController {
   static async markAsRead(req: Request, res: Response) {
     try {
       const { messageIds } = req.body;
+      // Only messages addressed to the current user can be marked as read
       await prisma.chatMessage.updateMany({
-        where: { id: { in: messageIds } },
+        where: { id: { in: (Array.isArray(messageIds) ? messageIds : []).map(Number) }, receiverId: Number(req.user?.userId) },
         data: { read: true }
       });
       res.json({ success: true });

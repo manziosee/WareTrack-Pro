@@ -26,6 +26,7 @@ import operationsRoutes from './routes/operations';
 import commerceRoutes from './routes/commerce';
 import intelligenceRoutes from './routes/intelligence';
 import platformRoutes from './routes/platform';
+import chatRoutes from './routes/chat';
 import swaggerUi from 'swagger-ui-express';
 import rateLimit from 'express-rate-limit';
 import { swaggerSpec, addUndocumentedRoutes } from './config/swagger';
@@ -33,7 +34,7 @@ import { getAllowedOrigins } from './config/env';
 import { errorHandler } from './middleware/errorHandler';
 import { prisma } from './lib/prisma';
 
-const API_VERSION = '2.2.0';
+const API_VERSION = '2.3.0';
 
 const app = express();
 
@@ -180,6 +181,7 @@ addUndocumentedRoutes(swaggerSpec, [
   ['/api/audit', 'Audit Log', auditRoutes],
   ['/api/saved-filters', 'Saved Filters', savedFilterRoutes],
   ['/api/intelligence', 'Intelligence', intelligenceRoutes],
+  ['/api/chat', 'Chat', chatRoutes],
   ['/api', 'Warehousing & Purchasing', warehousingRoutes],
   ['/api', 'Operations', operationsRoutes],
   ['/api', 'Payments & Invoices', commerceRoutes],
@@ -218,6 +220,7 @@ app.use('/api/insights', insightsRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/saved-filters', savedFilterRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
+app.use('/api/chat', chatRoutes);
 app.use('/api', warehousingRoutes);
 app.use('/api', operationsRoutes);
 app.use('/api', commerceRoutes);

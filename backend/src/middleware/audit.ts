@@ -9,6 +9,7 @@ import { prisma } from '../lib/prisma';
 const ENTITY: Record<string, string> = {
   orders: 'Order',
   inventory: 'InventoryItem',
+  'inventory-lookup': 'InventoryItem',
   vehicles: 'Vehicle',
   drivers: 'Driver',
   dispatch: 'Dispatch',

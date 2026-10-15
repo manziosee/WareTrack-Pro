@@ -34,7 +34,7 @@ export function undoableAction({ message, apply, revert, commit, delayMs = 5000 
   toast.custom(
     (t) => (
       <div
-        className={`flex items-center gap-3 rounded-xl bg-gray-900 py-2.5 pl-4 pr-2 text-sm text-white shadow-lift ring-1 ring-black/10 dark:bg-gray-100 dark:text-gray-900 ${
+        className={`flex items-center gap-3 rounded-xl bg-gray-900 py-2.5 pl-4 pr-2 text-sm text-white shadow-lift ring-1 ring-black/10 ${
           t.visible ? 'animate-pop-in' : 'opacity-0'
         }`}
       >
@@ -48,7 +48,7 @@ export function undoableAction({ message, apply, revert, commit, delayMs = 5000 
             toast.dismiss(t.id);
             toast.success('Restored');
           }}
-          className="ml-2 inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1 font-semibold text-accent-300 transition hover:bg-white/20 dark:bg-black/5 dark:text-accent-600"
+          className="ml-2 inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1 font-semibold text-accent-300 transition hover:bg-white/20"
         >
           <Undo2 className="h-3.5 w-3.5" />
           Undo

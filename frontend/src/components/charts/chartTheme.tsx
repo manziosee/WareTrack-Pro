@@ -152,7 +152,7 @@ interface DonutLegendItem {
 }
 
 /** List legend for donut charts: colour key, name, value and share. */
-export function DonutLegend({ items }: { items: DonutLegendItem[] }) {
+export function DonutLegend({ items, format }: { items: DonutLegendItem[]; format?: (v: number) => string }) {
   const total = items.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
   return (
     <ul className="space-y-2">
@@ -165,7 +165,7 @@ export function DonutLegend({ items }: { items: DonutLegendItem[] }) {
               <span className="truncate capitalize">{item.name}</span>
             </span>
             <span className="flex shrink-0 items-center gap-2">
-              <span className="font-semibold tabular-nums text-gray-900">{Number(item.value).toLocaleString()}</span>
+              <span className="font-semibold tabular-nums text-gray-900">{format ? format(Number(item.value)) : Number(item.value).toLocaleString()}</span>
               <span className="w-10 rounded-md bg-gray-50 px-1.5 py-0.5 text-right text-xs tabular-nums text-gray-500">{share}%</span>
             </span>
           </li>

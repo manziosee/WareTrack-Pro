@@ -21,6 +21,7 @@ export default function MobileTabBar({ onMore }: { onMore: () => void }) {
             <NavLink
               key={item.href}
               to={item.href}
+              end
               className={({ isActive }) =>
                 `relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition ${
                   isActive ? 'text-accent-600' : 'text-gray-500'

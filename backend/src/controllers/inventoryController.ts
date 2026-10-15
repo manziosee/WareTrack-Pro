@@ -157,13 +157,13 @@ export class InventoryController {
           name,
           code,
           category,
-          quantity: Number(quantity),
-          minQuantity: Number(minQuantity),
+          quantity: quantity !== undefined ? Number(quantity) : undefined,
+          minQuantity: minQuantity !== undefined ? Number(minQuantity) : undefined,
           unit,
           unitCategory,
           location,
           barcode,
-          unitPrice: Number(unitPrice),
+          unitPrice: unitPrice !== undefined ? Number(unitPrice) : undefined,
           supplier,
           description,
           status: 'ACTIVE'
@@ -266,7 +266,7 @@ export class InventoryController {
       });
 
       // Create inventory history if quantity changed
-      if (currentItem.quantity !== Number(quantity)) {
+      if (quantity !== undefined && currentItem.quantity !== Number(quantity)) {
         const action = Number(quantity) > currentItem.quantity ? 'stock_in' : 'stock_out';
         await prisma.inventoryHistory.create({
           data: {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Plus, Eye, Edit, Trash2, Receipt, ShoppingCart, Clock, CheckCircle2, Wallet, KanbanSquare as Board, RefreshCw } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Receipt, ShoppingCart, Clock, CheckCircle2, Wallet, KanbanSquare as Board, RefreshCw, Zap, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -23,6 +23,8 @@ import { undoableAction } from '@/utils/undoableAction';
 import { formatDate } from '@/utils/formatters';
 import { statusLabel } from '@/utils/status';
 import { useAuth } from '@/context/AuthContext';
+import api from '@/services/api';
+import { printInvoice } from '@/utils/invoice';
 
 const STATUSES = ['PENDING', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED', 'CANCELLED'];
 const PRIORITIES = ['HIGH', 'MEDIUM', 'LOW'];
@@ -105,6 +107,16 @@ export default function Orders() {
     if (failed) toast.error(`${failed} order${failed === 1 ? '' : 's'} could not be updated`);
     else toast.success(`${targets.length} order${targets.length === 1 ? '' : 's'} marked ${statusLabel(next).toLowerCase()}`);
     refresh();
+  };
+
+  const autoDispatch = async (o: any) => {
+    const res = await api.post(`/auto-dispatch/${o.id}`, {});
+    if (res.data?.success) {
+      toast.success(`${o.orderNumber} assigned to ${res.data.data.driver?.name} (${res.data.data.vehicle?.plateNumber})`);
+      refresh();
+    } else {
+      toast.error(res.data?.error?.message || 'Could not auto-dispatch this order');
+    }
   };
 
   const saveOrder = async (data: any) => {
@@ -277,6 +289,10 @@ export default function Orders() {
         footer={
           viewing && canEdit ? (
             <>
+              <Button variant="secondary" size="sm" onClick={() => printInvoice(viewing.id)}><Printer className="mr-1.5 h-4 w-4" /> Invoice</Button>
+              {viewing.status === 'PENDING' && user?.role !== 'WAREHOUSE_STAFF' && (
+                <Button size="sm" onClick={() => autoDispatch(viewing)}><Zap className="mr-1.5 h-4 w-4" /> Auto-dispatch</Button>
+              )}
               <select
                 value=""
                 onChange={(e) => e.target.value && changeStatus([viewing], e.target.value)}

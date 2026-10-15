@@ -183,7 +183,7 @@ export function DonutChart({ data, centerLabel, statusColors, height = 210, form
         </ResponsiveContainer>
         <DonutCenter total={format ? format(total) : total.toLocaleString()} label={centerLabel} />
       </div>
-      <DonutLegend items={slices} />
+      <DonutLegend items={slices} format={format} />
     </div>
   );
 }

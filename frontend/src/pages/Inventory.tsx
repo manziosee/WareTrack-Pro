@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Eye, Edit, Trash2, Package, Boxes, PackageX, AlertTriangle, Wallet, RefreshCw } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Package, Boxes, PackageX, AlertTriangle, Wallet, RefreshCw, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -21,6 +21,7 @@ import { inventoryService } from '@/services/inventoryService';
 import { useList } from '@/hooks/useList';
 import { undoableAction } from '@/utils/undoableAction';
 import { useAuth } from '@/context/AuthContext';
+import { printItemLabels } from '@/utils/labels';
 
 const stockLevel = (i: any) => (i.quantity === 0 ? 'OUT_OF_STOCK' : i.quantity <= i.minQuantity ? 'LOW_STOCK' : 'IN_STOCK');
 const rwf = (v: number) => `RWF ${Math.round(v).toLocaleString()}`;
@@ -228,6 +229,7 @@ export default function Inventory() {
         footer={
           viewing && canEdit ? (
             <>
+              <Button variant="secondary" size="sm" onClick={() => printItemLabels(viewing)}><Printer className="mr-1.5 h-4 w-4" /> Labels</Button>
               <Button variant="secondary" size="sm" onClick={() => setEditing(viewing)}><Edit className="mr-1.5 h-4 w-4" /> Edit</Button>
               <Button variant="error" size="sm" onClick={() => removeItems([viewing])}><Trash2 className="mr-1.5 h-4 w-4" /> Delete</Button>
             </>

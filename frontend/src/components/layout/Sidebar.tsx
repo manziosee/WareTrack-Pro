@@ -14,7 +14,7 @@ interface SidebarProps {
 
 function Tooltip({ label }: { label: string }) {
   return (
-    <span className="pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-gray-700">
+    <span className="pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
       {label}
     </span>
   );
@@ -84,6 +84,7 @@ export default function Sidebar({ collapsed, onToggle, onOpenSearch }: SidebarPr
                   <NavLink
                     key={item.href}
                     to={item.href}
+                    end
                     className={({ isActive }) =>
                       `group relative flex items-center rounded-xl text-sm font-medium transition-all ${
                         collapsed ? 'h-10 justify-center' : 'gap-3 px-3 py-2'

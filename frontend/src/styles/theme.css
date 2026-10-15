@@ -1,5 +1,4 @@
-/* Generated colour scales: light values match the original palette; dark values keep
-   tints dark and text shades light so every existing page works in dark mode. */
+/* Colour scales as CSS variables (used by Tailwind's colour utilities). */
 
 :root {
   --c-primary-50: 224 234 243;
@@ -74,78 +73,6 @@
   --c-gray-900: 17 24 39;
 }
 
-.dark {
-  --c-primary-50: 23 38 59;
-  --c-primary-100: 28 47 70;
-  --c-primary-200: 34 59 87;
-  --c-primary-300: 130 172 206;
-  --c-primary-400: 99 151 194;
-  --c-primary-500: 70 130 180;
-  --c-primary-600: 99 151 194;
-  --c-primary-700: 130 172 206;
-  --c-primary-800: 161 193 219;
-  --c-primary-900: 193 214 231;
-  --c-accent-50: 46 40 46;
-  --c-accent-100: 65 49 48;
-  --c-accent-200: 93 62 50;
-  --c-accent-300: 255 209 102;
-  --c-accent-400: 255 197 51;
-  --c-accent-500: 255 140 66;
-  --c-accent-600: 255 197 51;
-  --c-accent-700: 255 209 102;
-  --c-accent-800: 255 221 153;
-  --c-accent-900: 255 233 204;
-  --c-success-50: 17 45 53;
-  --c-success-100: 17 58 60;
-  --c-success-200: 17 77 71;
-  --c-success-300: 110 231 183;
-  --c-success-400: 52 211 153;
-  --c-success-500: 16 185 129;
-  --c-success-600: 52 211 153;
-  --c-success-700: 110 231 183;
-  --c-success-800: 167 243 208;
-  --c-success-900: 209 250 229;
-  --c-warning-50: 44 42 39;
-  --c-warning-100: 63 52 37;
-  --c-warning-200: 90 68 33;
-  --c-warning-300: 252 211 77;
-  --c-warning-400: 251 191 36;
-  --c-warning-500: 245 158 11;
-  --c-warning-600: 251 191 36;
-  --c-warning-700: 252 211 77;
-  --c-warning-800: 253 230 138;
-  --c-warning-900: 254 243 199;
-  --c-error-50: 44 31 46;
-  --c-error-100: 61 34 48;
-  --c-error-200: 88 39 51;
-  --c-error-300: 252 165 165;
-  --c-error-400: 248 113 113;
-  --c-error-500: 239 68 68;
-  --c-error-600: 248 113 113;
-  --c-error-700: 252 165 165;
-  --c-error-800: 254 202 202;
-  --c-error-900: 254 226 226;
-  --c-info-50: 22 38 67;
-  --c-info-100: 25 47 84;
-  --c-info-200: 30 59 108;
-  --c-info-300: 147 197 253;
-  --c-info-400: 96 165 250;
-  --c-info-500: 59 130 246;
-  --c-info-600: 96 165 250;
-  --c-info-700: 147 197 253;
-  --c-info-800: 191 219 254;
-  --c-info-900: 219 234 254;
-  --c-gray-50: 15 23 38;
-  --c-gray-100: 23 33 51;
-  --c-gray-200: 34 48 74;
-  --c-gray-300: 51 66 96;
-  --c-gray-400: 100 116 139;
-  --c-gray-500: 148 163 184;
-  --c-gray-600: 174 185 202;
-  --c-gray-700: 203 213 225;
-  --c-gray-800: 226 232 240;
-  --c-gray-900: 241 245 249;
-}
 
 :root {
   --surface: 255 255 255;
@@ -153,42 +80,10 @@
   color-scheme: light;
 }
 
-.dark {
-  --surface: 17 26 43;
-  --page: 9 15 27;
-  color-scheme: dark;
-}
 
-/* White surfaces become the dark card colour; text-white stays white on coloured buttons */
-.dark .bg-white { background-color: rgb(var(--surface)); }
-.dark .bg-white\/95 { background-color: rgb(var(--surface) / 0.95); }
-.dark .bg-white\/90 { background-color: rgb(var(--surface) / 0.9); }
-.dark .bg-white\/80 { background-color: rgb(var(--surface) / 0.8); }
-.dark .bg-white\/70 { background-color: rgb(var(--surface) / 0.7); }
-.dark .bg-white\/60 { background-color: rgb(var(--surface) / 0.6); }
-.dark .from-white { --tw-gradient-from: rgb(var(--surface)) var(--tw-gradient-from-position); --tw-gradient-to: rgb(var(--surface) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
-.dark .via-white { --tw-gradient-to: rgb(var(--surface) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), rgb(var(--surface)) var(--tw-gradient-via-position), var(--tw-gradient-to); }
-.dark .to-white { --tw-gradient-to: rgb(var(--surface)) var(--tw-gradient-to-position); }
-.dark .ring-black\/5 { --tw-ring-color: rgb(255 255 255 / 0.06); }
-.dark .shadow-soft { box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.25); }
-.dark .shadow-lift { box-shadow: 0 4px 8px rgb(0 0 0 / 0.35), 0 16px 40px rgb(0 0 0 / 0.45); }
 
-/* Form controls */
-.dark input:not([type='checkbox']):not([type='radio']):not([type='range']),
-.dark select,
-.dark textarea {
-  background-color: rgb(var(--c-gray-50));
-  color: rgb(var(--c-gray-900));
-  border-color: rgb(var(--c-gray-200));
-}
-.dark input::placeholder,
-.dark textarea::placeholder { color: rgb(var(--c-gray-400)); }
-.dark input[type='date']::-webkit-calendar-picker-indicator { filter: invert(0.8); }
 
 /* Charts (Recharts sets colours as SVG attributes, which CSS overrides) */
 .recharts-cartesian-grid line { stroke: rgb(var(--c-gray-100)); }
 .recharts-cartesian-axis-tick-value { fill: rgb(var(--c-gray-500)); }
 .recharts-cartesian-axis-line { stroke: rgb(var(--c-gray-200)); }
-.dark .recharts-pie-sector path,
-.dark .recharts-sector { stroke: rgb(var(--surface)); }
-.dark .recharts-tooltip-cursor { fill: rgb(255 255 255 / 0.04); }

@@ -312,6 +312,34 @@ router.post('/drivers/me/location', auth, authorizeRoles('DRIVER'), async (req, 
 });
 
 // ---------------------------------------------------------------------------
+// Calendar data
+// ---------------------------------------------------------------------------
+
+/** Deliveries and vehicle maintenance between two dates, for the calendar. */
+router.get('/calendar', ...fleet, async (req, res, next) => {
+  try {
+    const from = new Date(String(req.query.from || new Date(Date.now() - 7 * 86400000).toISOString()));
+    const to = new Date(String(req.query.to || new Date(Date.now() + 35 * 86400000).toISOString()));
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to.getTime() - from.getTime() > 120 * 86400000) return bad(res, 'Choose a valid range (up to 120 days)');
+    const [orders, maintenance] = await Promise.all([
+      prisma.deliveryOrder.findMany({
+        where: { OR: [{ timeSlotStart: { gte: from, lte: to } }, { timeSlotStart: null, scheduledDate: { gte: from, lte: to } }], status: { not: 'CANCELLED' } },
+        select: { id: true, orderNumber: true, customerName: true, status: true, priority: true, timeSlotStart: true, timeSlotEnd: true, scheduledDate: true, driver: { select: { name: true } } },
+        take: 1000,
+      }),
+      prisma.maintenanceRecord.findMany({
+        where: { scheduledDate: { gte: from, lte: to } },
+        select: { id: true, type: true, description: true, scheduledDate: true, completedDate: true, cost: true, vehicle: { select: { id: true, plateNumber: true } } },
+        take: 500,
+      }),
+    ]);
+    res.json({ success: true, data: { orders, maintenance } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Live map data
 // ---------------------------------------------------------------------------
 

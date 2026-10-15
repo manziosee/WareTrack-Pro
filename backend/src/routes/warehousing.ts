@@ -365,6 +365,63 @@ router.post('/purchase-orders/auto-restock', ...manage, async (req, res, next) =
 });
 
 // ---------------------------------------------------------------------------
+// Scanner support: lookup and quick stock adjustments
+// ---------------------------------------------------------------------------
+
+/** Find an item by scanned barcode or item code. */
+router.get('/inventory-lookup/:code', auth, async (req, res, next) => {
+  try {
+    const code = String(req.params.code).trim();
+    const item = await prisma.inventoryItem.findFirst({
+      where: { OR: [{ barcode: code }, { code: { equals: code, mode: 'insensitive' } }] },
+      include: { warehouseStock: { include: { warehouse: { select: { id: true, name: true, code: true } } } } },
+    });
+    if (!item) return bad(res, `No item found for “${code}”`, 404);
+    res.json({ success: true, data: item });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Add or remove stock (e.g. after scanning), optionally at one warehouse. */
+router.post('/inventory/:id/adjust', ...manage, async (req, res, next) => {
+  try {
+    const delta = Math.trunc(Number(req.body?.delta));
+    const reason = String(req.body?.reason || '').slice(0, 120);
+    const warehouseId = req.body?.warehouseId ? Number(req.body.warehouseId) : null;
+    if (!delta) return bad(res, 'delta must be a non-zero whole number');
+    const item = await prisma.inventoryItem.findUnique({ where: { id: Number(req.params.id) } });
+    if (!item) return bad(res, 'Item not found', 404);
+    if (item.quantity + delta < 0) return bad(res, `Only ${item.quantity} ${item.unit} in stock`);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const next = await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: { increment: delta }, lastUpdated: new Date() } });
+      if (warehouseId) {
+        await tx.warehouseStock.upsert({
+          where: { warehouseId_itemId: { warehouseId, itemId: item.id } },
+          update: { quantity: { increment: delta } },
+          create: { warehouseId, itemId: item.id, quantity: Math.max(0, delta) },
+        });
+      }
+      await tx.inventoryHistory.create({
+        data: {
+          itemId: item.id, action: delta > 0 ? 'stock_in' : 'stock_out', quantity: Math.abs(delta),
+          previousQuantity: item.quantity, newQuantity: next.quantity, notes: reason || (delta > 0 ? 'Scanned in' : 'Scanned out'),
+          performedBy: Number(req.user!.userId),
+        },
+      });
+      return next;
+    });
+    if (updated.quantity <= updated.minQuantity) {
+      emitEvent('stock.low', { id: updated.id, name: updated.name, code: updated.code, quantity: updated.quantity, minQuantity: updated.minQuantity });
+    }
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Batches and expiry
 // ---------------------------------------------------------------------------
 

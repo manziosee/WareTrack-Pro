@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ShoppingCart, Package, Car, UserCheck, CornerDownLeft, Moon, Sun, LogOut, Plus, Loader2 } from 'lucide-react';
+import { Search, ShoppingCart, Package, Car, UserCheck, CornerDownLeft, LogOut, Plus, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
 import { NAV_SECTIONS } from '@/config/navigation';
 
 interface CommandItem {
@@ -32,7 +31,6 @@ const asList = (res: any): any[] => {
 export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { isDark, toggle } = useTheme();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [records, setRecords] = useState<CommandItem[]>([]);
@@ -68,12 +66,11 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       actions.push({ id: 'new-item', group: 'Actions', label: 'Add inventory item', hint: 'new stock product', icon: Plus, run: go('/inventory?new=1') });
     }
     actions.push(
-      { id: 'theme', group: 'Actions', label: isDark ? 'Switch to light mode' : 'Switch to dark mode', hint: 'theme dark light', icon: isDark ? Sun : Moon, run: () => { toggle(); onClose(); } },
       { id: 'logout', group: 'Actions', label: 'Log out', hint: 'sign out exit', icon: LogOut, run: async () => { onClose(); await logout(); navigate('/'); } },
     );
     return [...pages, ...actions];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, isDark]);
+  }, [role]);
 
   // Search records as the user types (debounced)
   useEffect(() => {
@@ -175,7 +172,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Search pages, actions, orders, items, drivers…"
-            className="h-12 flex-1 border-0 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:ring-0 dark:bg-transparent"
+            className="h-12 flex-1 border-0 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:ring-0"
             style={{ background: 'transparent', border: 0 }}
           />
           <kbd className="rounded-md border border-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">Esc</kbd>

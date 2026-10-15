@@ -1,6 +1,6 @@
 {
   "name": "waretrack-pro-backend",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "WareTrack-Pro Backend API",
   "main": "dist/server.js",
   "scripts": {

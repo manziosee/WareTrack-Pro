@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Search, Settings, LogOut, CheckCheck, Moon, Sun, Menu, User as UserIcon, ChevronDown } from 'lucide-react';
+import { Bell, Search, Settings, LogOut, CheckCheck, Menu, User as UserIcon, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
 import { notificationService, type Notification } from '@/services/notificationService';
 import { LogoMark } from '../ui/Logo';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -43,7 +42,6 @@ function useClickOutside(ref: React.RefObject<HTMLElement>, onOutside: () => voi
 
 export default function Header({ onOpenSearch, onOpenMobileNav }: HeaderProps) {
   const { user, logout } = useAuth();
-  const { isDark, toggle } = useTheme();
   const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -130,14 +128,6 @@ export default function Header({ onOpenSearch, onOpenMobileNav }: HeaderProps) {
 
         <LanguageSwitcher />
 
-        <button
-          type="button"
-          onClick={toggle}
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 transition hover:bg-gray-100"
-          title={isDark ? 'Light mode' : 'Dark mode'}
-        >
-          {isDark ? <Sun className="h-[1.1rem] w-[1.1rem] text-accent-400" /> : <Moon className="h-[1.1rem] w-[1.1rem]" />}
-        </button>
 
         {/* Notifications */}
         <div className="relative" ref={notifRef}>
@@ -234,10 +224,6 @@ export default function Header({ onOpenSearch, onOpenMobileNav }: HeaderProps) {
               <Link to="/settings" onClick={() => setShowUserMenu(false)} className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                 <Settings className="h-4 w-4 text-gray-400" /> {t('Settings')}
               </Link>
-              <button onClick={toggle} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                {isDark ? <Sun className="h-4 w-4 text-gray-400" /> : <Moon className="h-4 w-4 text-gray-400" />}
-                {isDark ? t('Light mode') : t('Dark mode')}
-              </button>
               <div className="my-1 h-px bg-gray-100" />
               <button onClick={handleLogout} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-error-600 hover:bg-error-50">
                 <LogOut className="h-4 w-4" /> {t('Log out')}

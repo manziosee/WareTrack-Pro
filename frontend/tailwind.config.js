@@ -4,15 +4,13 @@ const scale = (name) =>
 
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
-      // Every scale reads from CSS variables (see src/styles/theme.css) so dark mode
-      // can swap shades globally without touching each component
+      // Every scale reads from CSS variables (see src/styles/theme.css)
       colors: {
         primary: scale('primary'),
         accent: scale('accent'),

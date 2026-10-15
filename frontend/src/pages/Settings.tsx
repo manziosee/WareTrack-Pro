@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { User, Bell, Shield, Database, Download, Calendar } from 'lucide-react';
+import { User, Bell, Shield, Database, Download, Languages, KeyRound, Webhook, Plug, Check, Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useI18n } from '@/i18n/I18nContext';
+import { LANGUAGES } from '@/i18n/translations';
+import PageHeader from '@/components/ui/PageHeader';
 import Modal from '@/components/ui/Modal';
 import ExportReportForm from '@/components/forms/ExportReportForm';
 import UserProfile from '@/components/profile/UserProfile';
@@ -8,126 +11,94 @@ import NotificationPreferencesComponent from '@/components/NotificationPreferenc
 import SecuritySettings from '@/components/SecuritySettings';
 import SystemConfigurationComponent from '@/components/SystemConfiguration';
 import ReportSettingsComponent from '@/components/ReportSettings';
+import TwoFactorSettings from '@/components/settings/TwoFactorSettings';
+import WebhookSettings from '@/components/settings/WebhookSettings';
+import IntegrationSettings from '@/components/settings/IntegrationSettings';
 
-const Settings = () => {
+type Tab = { id: string; label: string; icon: typeof User; roles?: string[] };
+
+const TABS: Tab[] = [
+  { id: 'profile', label: 'Profile', icon: User },
+  { id: 'signin', label: 'Sign-in security', icon: KeyRound },
+  { id: 'language', label: 'Language', icon: Languages },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'reports', label: 'Reports', icon: Download, roles: ['ADMIN', 'DISPATCH_OFFICER'] },
+  { id: 'security', label: 'Security policy', icon: Shield, roles: ['ADMIN'] },
+  { id: 'system', label: 'System', icon: Database, roles: ['ADMIN'] },
+  { id: 'integrations', label: 'Integrations', icon: Plug, roles: ['ADMIN'] },
+  { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['ADMIN'] },
+];
+
+const TITLES: Record<string, [string, string]> = {
+  profile: ['Profile', 'Your name, contact details and password'],
+  signin: ['Sign-in security', 'How you prove it is you when signing in'],
+  language: ['Language', 'Choose the language for menus and labels'],
+  notifications: ['Notifications', 'What you hear about, and how'],
+  reports: ['Report settings', 'Automatic report preferences'],
+  security: ['Security policy', 'Organisation-wide security options'],
+  system: ['System', 'Time zone, currency and formats'],
+  integrations: ['Integrations', 'Email, SMS, WhatsApp, Mobile Money and monitoring'],
+  webhooks: ['Webhooks', 'Send events to other systems'],
+};
+
+export default function Settings() {
   const { user } = useAuth();
+  const { language, setLanguage } = useI18n();
   const [activeTab, setActiveTab] = useState('profile');
   const [showExportModal, setShowExportModal] = useState(false);
-
-  // Role-based tabs configuration
-  const getTabsForRole = (role: string) => {
-    const baseTabs = [
-      { id: 'profile', label: 'Profile', icon: User },
-      { id: 'notifications', label: 'Notifications', icon: Bell },
-    ];
-
-    switch (role) {
-      case 'ADMIN':
-        return [
-          ...baseTabs,
-          { id: 'security', label: 'Security', icon: Shield },
-          { id: 'system', label: 'System', icon: Database },
-          { id: 'reports', label: 'Reports', icon: Download },
-        ];
-      case 'DISPATCH_OFFICER':
-        return [
-          ...baseTabs,
-          { id: 'reports', label: 'Reports', icon: Download },
-        ];
-      case 'WAREHOUSE_STAFF':
-        return [
-          ...baseTabs,
-        ];
-      case 'DRIVER':
-        return [
-          ...baseTabs,
-        ];
-      default:
-        return baseTabs;
-    }
-  };
-
-  const tabs = getTabsForRole(user?.role || 'WAREHOUSE_STAFF');
+  const tabs = TABS.filter((t) => !t.roles || t.roles.includes(user?.role || ''));
+  const [title, subtitle] = TITLES[activeTab];
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        {(user?.role === 'ADMIN' || user?.role === 'DISPATCH_OFFICER') && (
-          <button 
-            onClick={() => setShowExportModal(true)} 
-            className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium"
-          >
-            <Calendar className="w-4 h-4" />
-            Export Report
-          </button>
-        )}
-      </div>
+    <div>
+      <PageHeader title="Settings" subtitle="Your account and, for admins, the whole system" icon={<SettingsIcon className="h-5 w-5" />} />
 
-      <div className="flex gap-6">
-        {/* Sidebar */}
-        <div className="w-64 space-y-2">
+      <div className="flex flex-col gap-5 lg:flex-row">
+        <nav className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-primary-50 text-primary-700 border-r-2 border-primary-700'
-                  : 'text-gray-700 hover:bg-gray-100'
+              className={`flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                activeTab === tab.id ? 'bg-accent-50 text-accent-700 shadow-[inset_3px_0_0_0] shadow-accent-500' : 'text-gray-600 hover:bg-white hover:text-gray-900'
               }`}
             >
-              <tab.icon className="w-5 h-5" />
+              <tab.icon className="h-4 w-4" />
               {tab.label}
             </button>
           ))}
-        </div>
+        </nav>
 
-        {/* Content */}
-        <div className="flex-1">
-          {activeTab === 'profile' && (
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-              <UserProfile />
+        <section className="min-w-0 flex-1 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            <p className="text-sm text-gray-500">{subtitle}</p>
+          </div>
+
+          {activeTab === 'profile' && <UserProfile />}
+          {activeTab === 'signin' && <TwoFactorSettings />}
+          {activeTab === 'language' && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {LANGUAGES.map((l) => (
+                <button key={l.code} onClick={() => setLanguage(l.code)} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${language === l.code ? 'border-primary-300 bg-primary-50 ring-2 ring-primary-100' : 'border-gray-200 hover:border-primary-200'}`}>
+                  <span><span className="block text-xs font-bold text-gray-400">{l.short}</span><span className="font-semibold text-gray-900">{l.label}</span></span>
+                  {language === l.code && <Check className="h-5 w-5 text-primary-500" />}
+                </button>
+              ))}
             </div>
           )}
-
-          {activeTab === 'notifications' && (
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold mb-6">Notification Preferences</h2>
-              <NotificationPreferencesComponent />
-            </div>
-          )}
-
-          {activeTab === 'security' && user?.role === 'ADMIN' && (
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold mb-6">Security Settings</h2>
-              <SecuritySettings />
-            </div>
-          )}
-
-          {activeTab === 'system' && user?.role === 'ADMIN' && (
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold mb-6">System Configuration</h2>
-              <SystemConfigurationComponent />
-            </div>
-          )}
-
-          {activeTab === 'reports' && (user?.role === 'ADMIN' || user?.role === 'DISPATCH_OFFICER') && (
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold mb-6">Report Settings</h2>
-              <ReportSettingsComponent onExportClick={() => setShowExportModal(true)} />
-            </div>
-          )}
-        </div>
+          {activeTab === 'notifications' && <NotificationPreferencesComponent />}
+          {activeTab === 'reports' && <ReportSettingsComponent onExportClick={() => setShowExportModal(true)} />}
+          {activeTab === 'security' && <SecuritySettings />}
+          {activeTab === 'system' && <SystemConfigurationComponent />}
+          {activeTab === 'integrations' && <IntegrationSettings />}
+          {activeTab === 'webhooks' && <WebhookSettings />}
+        </section>
       </div>
 
-      {(user?.role === 'ADMIN' || user?.role === 'DISPATCH_OFFICER') && (
-        <Modal isOpen={showExportModal} onClose={() => setShowExportModal(false)} title="Export Report">
-          <ExportReportForm onClose={() => setShowExportModal(false)} />
-        </Modal>
-      )}
+      <Modal isOpen={showExportModal} onClose={() => setShowExportModal(false)} title="Export Report">
+        <ExportReportForm onClose={() => setShowExportModal(false)} />
+      </Modal>
     </div>
   );
-};
-
-export default Settings;
+}

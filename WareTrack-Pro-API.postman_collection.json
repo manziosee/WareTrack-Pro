@@ -1,8 +1,8 @@
 {
   "info": {
     "name": "WareTrack-Pro API",
-    "description": "WareTrack-Pro API v2.2.0, hosted on Render.\n\nSign in:\n1. Set `email` and `password` in the collection variables.\n2. Run **Authentication \u2192 POST auth/login**. A 6-digit code is emailed to you.\n3. Put the code in the `otp` variable and run **POST auth/verify-login-otp**. The access and refresh tokens are saved automatically.\n\nEvery other request uses `{{access_token}}` via collection-level Bearer auth. Each request's description says which roles may call it.\n\nNotes: new self-registered accounts must be approved by an admin before they can sign in. Login is limited to 5 attempts per 15 minutes per IP.",
-    "version": "2.2.0",
+    "description": "WareTrack-Pro API v2.3.0, hosted on Render. Every path also works under /api/v1.\n\nSign in:\n1. Set `email` and `password` in the collection variables.\n2. Run **Authentication \u2192 POST auth/login**. A 6-digit code is emailed to you.\n3. Put the code in the `otp` variable and run **POST auth/verify-login-otp**. The access and refresh tokens are saved automatically.\n\nEvery other request uses `{{access_token}}` via collection-level Bearer auth. Each request's description says which roles may call it.\n\nNotes: new self-registered accounts must be approved by an admin before they can sign in. Login is limited to 5 attempts per 15 minutes per IP. Accounts with an authenticator app enter the app's code as `otp` instead of an emailed code.",
+    "version": "2.3.0",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -3773,6 +3773,1759 @@
                   "language": "json"
                 }
               }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard Insights",
+      "item": [
+        {
+          "name": "GET insights/dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/insights/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "insights",
+                "dashboard"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET insights/dashboard/layout",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/insights/dashboard/layout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "insights",
+                "dashboard",
+                "layout"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT insights/dashboard/layout",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/insights/dashboard/layout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "insights",
+                "dashboard",
+                "layout"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order\": [\n    \"stats\",\n    \"revenueTrend\",\n    \"statusMix\"\n  ],\n  \"hidden\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Warehouses, Stock & Purchasing",
+      "item": [
+        {
+          "name": "GET warehouses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/warehouses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "warehouses"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET warehouses/:id/stock",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/warehouses/1/stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "warehouses",
+                "1",
+                "stock"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST warehouses",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/warehouses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "warehouses"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rubavu Depot\",\n  \"code\": \"RBV-01\",\n  \"city\": \"Rubavu\",\n  \"address\": \"Gisenyi\",\n  \"capacity\": 3000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT warehouses/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/warehouses/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "warehouses",
+                "1"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"capacity\": 3500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "GET transfers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/transfers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfers"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST transfers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/transfers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromWarehouseId\": 1,\n  \"toWarehouseId\": 3,\n  \"itemId\": 1,\n  \"quantity\": 10,\n  \"notes\": \"Rebalance\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "POST transfers/:id/complete",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/transfers/1/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfers",
+                "1",
+                "complete"
+              ]
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "POST transfers/:id/cancel",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/transfers/1/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfers",
+                "1",
+                "cancel"
+              ]
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "GET suppliers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/suppliers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "suppliers"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST suppliers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/suppliers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "suppliers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nyabarongo Supplies\",\n  \"contactName\": \"Aline\",\n  \"email\": \"orders@supplier.rw\",\n  \"phone\": \"+250788000010\",\n  \"leadTimeDays\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT suppliers/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/suppliers/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "suppliers",
+                "1"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadTimeDays\": 6\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE suppliers/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/suppliers/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "suppliers",
+                "1"
+              ]
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "GET purchase-orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/purchase-orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "purchase-orders"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST purchase-orders",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/purchase-orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "purchase-orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": 1,\n  \"warehouseId\": 1,\n  \"items\": [\n    {\n      \"itemId\": 1,\n      \"quantity\": 50,\n      \"unitCost\": 25000\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "POST purchase-orders/:id/send",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/purchase-orders/1/send",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "1",
+                "send"
+              ]
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "POST purchase-orders/:id/cancel",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/purchase-orders/1/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "1",
+                "cancel"
+              ]
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "POST purchase-orders/:id/receive",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/purchase-orders/1/receive",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "1",
+                "receive"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    {\n      \"itemId\": 1,\n      \"receivedQuantity\": 50,\n      \"expiryDate\": \"2027-01-31\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "POST purchase-orders/auto-restock",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/purchase-orders/auto-restock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "auto-restock"
+              ]
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "GET inventory-lookup/:code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/inventory-lookup/ABC123",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory-lookup",
+                "ABC123"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST inventory/:id/adjust",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/inventory/1/adjust",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "1",
+                "adjust"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delta\": -2,\n  \"reason\": \"Scanned out\",\n  \"warehouseId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "GET batches",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/batches",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "batches"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Operations: Routes, Dispatch, Driver App, Returns",
+      "item": [
+        {
+          "name": "GET routes/driver/:driverId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/routes/driver/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "routes",
+                "driver",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET dispatch-suggestions/:orderId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dispatch-suggestions/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dispatch-suggestions",
+                "1"
+              ]
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "POST auto-dispatch/:orderId",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auto-dispatch/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auto-dispatch",
+                "1"
+              ]
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET my-deliveries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/my-deliveries",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "my-deliveries"
+              ]
+            },
+            "description": "Drivers only (their own deliveries)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST my-deliveries/:orderId/start",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/my-deliveries/1/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "my-deliveries",
+                "1",
+                "start"
+              ]
+            },
+            "description": "Drivers only (their own deliveries)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST my-deliveries/:orderId/complete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/my-deliveries/1/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "my-deliveries",
+                "1",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Recipient\",\n  \"signatureData\": \"data:image/png;base64,...\",\n  \"latitude\": -1.95,\n  \"longitude\": 30.09\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Drivers only (their own deliveries)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST orders/:orderId/fail",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders/1/fail",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "1",
+                "fail"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Customer not available\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST drivers/me/location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/location",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers",
+                "me",
+                "location"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": -1.9536,\n  \"lng\": 30.0937\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Drivers only (their own deliveries)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET calendar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/calendar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "calendar"
+              ]
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET live-map",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/live-map",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "live-map"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET returns",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/returns",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "returns"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "POST returns",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/returns",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "returns"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"reason\": \"Damaged packaging\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "POST returns/:id/status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/returns/1/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "returns",
+                "1",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"RESCHEDULED\",\n  \"rescheduledDate\": \"2026-10-20T10:00:00.000Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET public/track/:orderNumber",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/public/track/ORD-000001",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "public",
+                "track",
+                "ORD-000001"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public endpoint."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payments & Invoices",
+      "item": [
+        {
+          "name": "GET payments/providers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/providers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payments",
+                "providers"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "POST payments/request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments/request",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payments",
+                "request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"provider\": \"MTN_MOMO\",\n  \"phoneNumber\": \"0788000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET payments/:id/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/1/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payments",
+                "1",
+                "status"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "POST payments/manual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments/manual",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payments",
+                "manual"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"provider\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET invoices",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/invoices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "invoices"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET invoices/order/:orderId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/invoices/order/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "invoices",
+                "order",
+                "1"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Intelligence",
+      "item": [
+        {
+          "name": "GET intelligence/forecast",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/intelligence/forecast",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "intelligence",
+                "forecast"
+              ]
+            },
+            "description": "Admin or Warehouse Staff."
+          },
+          "response": []
+        },
+        {
+          "name": "GET intelligence/scorecards",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/intelligence/scorecards",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "intelligence",
+                "scorecards"
+              ]
+            },
+            "description": "Admin or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET intelligence/anomalies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/intelligence/anomalies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "intelligence",
+                "anomalies"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "GET chat/conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/chat/conversations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "conversations"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET chat/with/:userId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/chat/with/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "with",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST chat/send",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/send",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "send"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": 2,\n  \"message\": \"On my way to the next stop\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Two-factor, Webhooks, Report Builder",
+      "item": [
+        {
+          "name": "GET auth/2fa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/2fa",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "2fa"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST auth/2fa/setup",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/2fa/setup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "setup"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST auth/2fa/enable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/2fa/enable",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "enable"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST auth/2fa/disable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/2fa/disable",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "disable"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "GET webhooks/events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/webhooks/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "events"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "GET webhooks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/webhooks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "POST webhooks",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/webhooks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://your-server.rw/webhooks/waretrack\",\n  \"events\": [\n    \"order.created\",\n    \"delivery.completed\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT webhooks/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/webhooks/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "1"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE webhooks/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/webhooks/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "1"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "POST webhooks/:id/test",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/webhooks/1/test",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "1",
+                "test"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "GET report-builder/options",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/report-builder/options",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "report-builder",
+                "options"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "POST report-builder/run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/report-builder/run",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "report-builder",
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"metrics\": [\n    \"orders\",\n    \"revenue\",\n    \"onTimeRate\"\n  ],\n  \"groupBy\": \"week\",\n  \"from\": \"2026-09-01\",\n  \"to\": \"2026-10-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET saved-reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/saved-reports",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "saved-reports"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "POST saved-reports",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/saved-reports",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "saved-reports"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Weekly revenue\",\n  \"config\": {\n    \"metrics\": [\n      \"revenue\"\n    ],\n    \"groupBy\": \"day\",\n    \"from\": \"2026-10-08\",\n    \"to\": \"2026-10-15\"\n  },\n  \"schedule\": \"WEEKLY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE saved-reports/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/saved-reports/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "saved-reports",
+                "1"
+              ]
+            },
+            "description": "Admin, Warehouse Staff or Dispatch Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "GET integrations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/integrations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Audit Log",
+      "item": [
+        {
+          "name": "GET audit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/audit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "audit"
+              ]
+            },
+            "description": "Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "GET audit/entity/:entityType/:entityId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/audit/entity/Order/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "audit",
+                "entity",
+                "Order",
+                "1"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Saved Filters",
+      "item": [
+        {
+          "name": "GET saved-filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/saved-filters",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "saved-filters"
+              ]
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "POST saved-filters",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/saved-filters",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "saved-filters"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": \"orders\",\n  \"name\": \"High-priority pending\",\n  \"filters\": {\n    \"status\": \"PENDING\",\n    \"priority\": \"HIGH\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Any signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE saved-filters/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/saved-filters/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "saved-filters",
+                "1"
+              ]
             },
             "description": "Any signed-in user."
           },
