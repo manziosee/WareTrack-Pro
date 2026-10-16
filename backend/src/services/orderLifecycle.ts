@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { emitEvent } from './events';
 import { notifyCustomer, orderStatusMessage } from './messaging';
+import { syncFleetForOrder } from './fleetStatus';
 
 export const ORDER_STATUSES = ['PENDING', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED', 'FAILED', 'RETURNED'] as const;
 
@@ -8,10 +9,20 @@ export const ORDER_STATUSES = ['PENDING', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED
 const NOTIFY = new Set(['DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'FAILED']);
 
 /**
- * Side effects of an order status change: live update, webhooks and a
- * customer message. Never throws, so it can't break the request that caused it.
+ * Side effects of an order status change: dispatch, driver and vehicle status
+ * (awaited, so the next screen refresh is already correct), then live update,
+ * webhooks and a customer message in the background. Never throws.
  */
 export async function onOrderStatusChanged(orderId: number, previousStatus?: string | null) {
+  try {
+    await syncFleetForOrder(orderId);
+  } catch (error: any) {
+    console.error('Fleet status sync failed:', error?.message);
+  }
+  void notifyOrderChange(orderId, previousStatus);
+}
+
+async function notifyOrderChange(orderId: number, previousStatus?: string | null) {
   try {
     const order = await prisma.deliveryOrder.findUnique({
       where: { id: orderId },

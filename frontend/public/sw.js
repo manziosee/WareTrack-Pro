@@ -1,5 +1,5 @@
 /* WareTrack Pro service worker: the app shell works offline; API data always comes from the network. */
-const VERSION = 'waretrack-v3';
+const VERSION = 'waretrack-v4';
 const SHELL = ['/', '/manifest.webmanifest', '/logo.svg', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -23,7 +23,7 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(
         caches.open(VERSION).then(async (cache) => {
           const hit = await cache.match(request);
-          const fetching = fetch(request).then((res) => { if (res.ok) cache.put(request, res.clone()); return res; }).catch(() => hit);
+          const fetching = fetch(request).then((res) => { if (res.ok) cache.put(request, res.clone()).catch(() => undefined); return res; }).catch(() => hit);
           return hit || fetching;
         })
       );
@@ -36,7 +36,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request).then((res) => {
         const copy = res.clone();
-        caches.open(VERSION).then((cache) => cache.put('/', copy));
+        if (res.ok) caches.open(VERSION).then((cache) => cache.put('/', copy)).catch(() => undefined);
         return res;
       }).catch(() => caches.match('/'))
     );
@@ -47,7 +47,11 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/assets/') || SHELL.includes(url.pathname)) {
     event.respondWith(
       caches.match(request).then((hit) => hit || fetch(request).then((res) => {
-        if (res.ok) caches.open(VERSION).then((cache) => cache.put(request, res.clone()));
+        // Copy before handing the response to the page: its body can only be read once
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(VERSION).then((cache) => cache.put(request, copy)).catch(() => undefined);
+        }
         return res;
       }))
     );

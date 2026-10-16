@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Eye, Edit, Trash2, UserCheck, Users, Navigation, Star, Phone, Award, Car, RefreshCw, CreditCard as IdCard } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, UserCheck, Users, Navigation, Star, Phone, Award, RefreshCw, CreditCard as IdCard } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Drawer from '@/components/ui/Drawer';
@@ -15,6 +15,7 @@ import FilterChip from '@/components/table/FilterChip';
 import ExportMenu from '@/components/table/ExportMenu';
 import AddDriverForm from '@/components/forms/AddDriverForm';
 import EditDriverForm from '@/components/forms/EditDriverForm';
+import { DriverDeliveries } from '@/components/fleet/FleetHistory';
 import { driversService } from '@/services/driversService';
 import { useList } from '@/hooks/useList';
 import { undoableAction } from '@/utils/undoableAction';
@@ -42,7 +43,8 @@ export default function Drivers() {
     }
   }, [params, setParams]);
 
-  const plate = (d: any) => d.currentVehicle?.plateNumber || vehicles.find((v) => v.id === d.currentVehicleId)?.plateNumber || '';
+  const plate = (d: any) =>
+    d.activeOrders?.find((o: any) => o.vehicle)?.vehicle?.plateNumber || d.currentVehicle?.plateNumber || vehicles.find((v) => v.id === d.currentVehicleId)?.plateNumber || '';
   const filtered = useMemo(() => rows.filter((d) => !status || d.status === status), [rows, status]);
   const viewing = rows.find((d) => d.id === viewId) || null;
   const licenseSoon = (d: any) => d.licenseExpiry && new Date(d.licenseExpiry).getTime() < Date.now() + 30 * 86400000;
@@ -90,6 +92,10 @@ export default function Drivers() {
       ),
     },
     { id: 'status', header: 'Status', accessor: (d) => d.status, cell: (d) => <StatusBadge status={d.status} /> },
+    {
+      id: 'jobs', header: 'Open deliveries', align: 'right', accessor: (d) => d.activeJobs || 0,
+      cell: (d) => d.activeJobs ? <span className="font-semibold text-info-700">{d.activeJobs}</span> : <span className="text-gray-400">0</span>,
+    },
     { id: 'vehicle', header: 'Vehicle', accessor: plate, cell: (d) => <span className="text-gray-700">{plate(d) || '—'}</span> },
     { id: 'rating', header: 'Rating', align: 'right', accessor: (d) => Number(d.rating || 0), cell: (d) => <span className="font-semibold text-gray-900">{d.rating ? `${Number(d.rating).toFixed(1)}★` : '—'}</span> },
     { id: 'experience', header: 'Experience', align: 'right', accessor: (d) => d.experience || 0, cell: (d) => `${d.experience || 0} yrs` },
@@ -173,11 +179,11 @@ export default function Drivers() {
               <DetailGrid>
                 <DetailField label="License">{viewing.licenseNumber}</DetailField>
                 <DetailField label="License expiry">{viewing.licenseExpiry ? formatDate(viewing.licenseExpiry) : '—'}</DetailField>
-                <DetailField label="Vehicle"><span className="inline-flex items-center gap-1.5"><Car className="h-3.5 w-3.5 text-gray-400" />{plate(viewing) || 'None assigned'}</span></DetailField>
                 <DetailField label="Hired">{viewing.hireDate ? formatDate(viewing.hireDate) : '—'}</DetailField>
                 <DetailField label="Address" className="sm:col-span-2">{viewing.address || '—'}</DetailField>
               </DetailGrid>
             </DetailSection>
+            <DriverDeliveries driverId={viewing.id} />
             <ActivityTimeline entityType="Driver" entityId={viewing.id} />
           </div>
         )}

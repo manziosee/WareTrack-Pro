@@ -14,7 +14,7 @@ router.get('/vehicles', auth, DispatchController.getAvailableVehicles);
 router.get('/driver/:id', auth, DispatchController.getDriverDispatch);
 router.get('/:id', auth, DispatchController.getDispatchById);
 router.post('/', auth, authorizeRoles(...ROLES.fleetManagers), DispatchController.createDispatch);
-router.post('/:id/status', auth, DispatchController.updateDispatchStatus);
+router.post('/:id/status', auth, authorizeRoles(...ROLES.orderManagers), DispatchController.updateDispatchStatus);
 router.put('/:id', auth, authorizeRoles(...ROLES.fleetManagers), DispatchController.updateDispatch);
 router.delete('/:id', auth, authorizeRoles(...ROLES.fleetManagers), DispatchController.deleteDispatch);
 

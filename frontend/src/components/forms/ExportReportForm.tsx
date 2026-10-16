@@ -30,11 +30,13 @@ function buildRows(type: ReportType, analytics: any): any[] {
   switch (type) {
     case 'delivery':
       return (analytics?.trends || []).map((row: any) => ({
-        Date: row.date,
-        'Total Orders': row.orders ?? 0,
+        Period: row.label || row.date,
+        'Orders Placed': row.orders ?? 0,
         Delivered: row.delivered ?? 0,
         'In Transit': row.inTransit ?? 0,
         Pending: row.pending ?? 0,
+        'Failed / Returned': row.failed ?? 0,
+        'Revenue (RWF)': Math.round(row.revenue ?? 0),
       }));
     case 'status':
       return (analytics?.statusDistribution || []).map((row: any) => ({
@@ -46,15 +48,20 @@ function buildRows(type: ReportType, analytics: any): any[] {
         Category: row.category,
         Items: row.count ?? 0,
         'Total Units': row.totalQuantity ?? 0,
+        'Stock Value (RWF)': Math.round(row.value ?? 0),
+        'Low Stock Items': row.lowStock ?? 0,
       }));
     case 'kpi': {
       const s = analytics?.summary || {};
       const k = analytics?.kpis || {};
       return [
-        { Metric: 'Total Orders', Value: s.totalOrders ?? 0 },
+        { Metric: 'Orders Placed', Value: s.totalOrders ?? 0 },
+        { Metric: 'Delivered', Value: s.deliveredInPeriod ?? 0 },
+        { Metric: 'Revenue Delivered (RWF)', Value: Math.round(s.revenue ?? 0) },
         { Metric: 'Delivery Rate (%)', Value: s.deliveryRate ?? 0 },
-        { Metric: 'Avg. Delivery Time (days)', Value: s.avgDeliveryTime ?? 0 },
-        { Metric: 'Active Drivers', Value: s.activeDrivers ?? 0 },
+        { Metric: 'Avg. Delivery Time (hours)', Value: s.avgDeliveryHours ?? 0 },
+        { Metric: 'Failed or Returned', Value: s.failed ?? 0 },
+        { Metric: 'Drivers Who Delivered', Value: s.activeDrivers ?? 0 },
         { Metric: 'On-Time Delivery Rate (%)', Value: k.onTimeDeliveryRate ?? 0 },
         { Metric: 'Customer Satisfaction (/5)', Value: k.customerSatisfaction ?? 0 },
         { Metric: 'Fleet Utilization (%)', Value: k.fleetUtilization ?? 0 },

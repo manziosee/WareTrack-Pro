@@ -6,6 +6,9 @@ const router = Router();
 
 router.get('/', auth, InventoryController.getInventory);
 router.get('/categories', auth, InventoryController.getCategories);
+router.post('/categories', auth, authorizeRoles(...ROLES.inventoryManagers), InventoryController.createCategory);
+router.put('/categories', auth, authorizeRoles(...ROLES.inventoryManagers), InventoryController.renameCategory);
+router.delete('/categories', auth, authorizeRoles(...ROLES.inventoryManagers), InventoryController.deleteCategory);
 router.get('/low-stock', auth, InventoryController.getLowStock);
 router.get('/stats', auth, InventoryController.getStats);
 router.get('/:id', auth, InventoryController.getInventoryById);

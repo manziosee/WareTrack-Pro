@@ -1,355 +1,213 @@
-import { useState, useEffect } from 'react';
-import { Download, Calendar, TrendingUp, PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
-import Card from '@/components/ui/Card';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  BarChart3, Download, ChevronLeft, ChevronRight, Package, CheckCircle2, Wallet, Clock, Users, AlertTriangle,
+  TrendingUp, PieChart as PieIcon, Boxes, Truck, Star, Gauge, RefreshCw,
+} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
+import PageHeader from '@/components/ui/PageHeader';
+import StatCard from '@/components/ui/StatCard';
+import { Skeleton } from '@/components/ui/Skeleton';
 import ExportReportForm from '@/components/forms/ExportReportForm';
+import { ChartCard } from '@/components/charts/chartTheme';
+import { TrendChart, BarsChart, DonutChart, BarList, Meter, formatRWF } from '@/components/charts/Widgets';
 import { reportsService } from '@/services/reportsService';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { SERIES, STATUS, chartMargin, gridProps, xAxisProps, yAxisProps, lineProps, barProps, tooltipCursor, barCursor, legendProps } from '@/components/charts/chartConfig';
-import { ChartTooltip, ChartCard, ChartEmpty, DonutCenter, DonutLegend } from '@/components/charts/chartTheme';
+
+type View = 'day' | 'week' | 'month' | 'custom';
+
+const DAY = 86400000;
+const iso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+/** First and last day (inclusive) of the period containing `anchor`. */
+function periodFor(view: View, anchor: Date) {
+  const d = startOfDay(anchor);
+  if (view === 'week') {
+    const monday = new Date(d.getTime() - ((d.getDay() + 6) % 7) * DAY);
+    return { start: monday, end: new Date(monday.getTime() + 6 * DAY) };
+  }
+  if (view === 'month') return { start: new Date(d.getFullYear(), d.getMonth(), 1), end: new Date(d.getFullYear(), d.getMonth() + 1, 0) };
+  return { start: d, end: d };
+}
+
+function shift(view: View, anchor: Date, step: number) {
+  if (view === 'month') return new Date(anchor.getFullYear(), anchor.getMonth() + step, 1);
+  return new Date(anchor.getTime() + step * (view === 'week' ? 7 : 1) * DAY);
+}
+
+function titleFor(view: View, start: Date, end: Date) {
+  const today = startOfDay(new Date()).getTime();
+  if (view === 'day') {
+    if (start.getTime() === today) return 'Today';
+    if (start.getTime() === today - DAY) return 'Yesterday';
+    return start.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  if (view === 'month') return start.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const f = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return `${f(start)} – ${f(end)} ${end.getFullYear()}`;
+}
+
+const PREVIOUS: Record<View, string> = { day: 'vs previous day', week: 'vs previous week', month: 'vs previous month', custom: 'vs previous period' };
+
+async function fetchReport(params: { startDate: string; endDate: string; groupBy?: string }) {
+  const res = await reportsService.getAnalytics(params as any);
+  if (res?.success === false) throw new Error(res?.error?.message || 'Could not load the report');
+  return res.data;
+}
 
 export default function Reports() {
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [showDateRangeModal, setShowDateRangeModal] = useState(false);
-  const [analytics, setAnalytics] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+  const [view, setView] = useState<View>('week');
+  const [anchor, setAnchor] = useState(() => new Date());
+  const [custom, setCustom] = useState({ startDate: iso(new Date(Date.now() - 29 * DAY)), endDate: iso(new Date()) });
+  const [showExport, setShowExport] = useState(false);
+
+  const range = useMemo(() => {
+    if (view === 'custom') return custom;
+    const { start, end } = periodFor(view, anchor);
+    return { startDate: iso(start), endDate: iso(end) };
+  }, [view, anchor, custom]);
+
+  const { data, isLoading, isFetching, refetch, error } = useQuery({
+    queryKey: ['reports', range.startDate, range.endDate],
+    queryFn: () => fetchReport({ ...range, groupBy: view === 'custom' ? undefined : 'day' }),
+    keepPreviousData: true,
   });
 
-  const fetchAnalytics = async () => {
-    try {
-      setLoading(true);
-      const analyticsData = await reportsService.getAnalytics(dateRange);
-      setAnalytics(analyticsData.data);
-    } catch (error) {
-      console.error('Failed to fetch analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // A single day has no trend of its own, so the day view shows the 14 days leading up to it
+  const context = useQuery({
+    queryKey: ['reports-context', range.endDate],
+    queryFn: () => fetchReport({ startDate: iso(new Date(new Date(range.endDate).getTime() - 13 * DAY)), endDate: range.endDate, groupBy: 'day' }),
+    enabled: view === 'day',
+    keepPreviousData: true,
+  });
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, []);
-
-  const handleDateRangeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setShowDateRangeModal(false);
-    fetchAnalytics();
-  };
-  
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  if (!analytics) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-gray-500">Failed to load analytics data</p>
-      </div>
-    );
-  }
-
-  const deliveryStatusData = analytics.statusDistribution?.map((item: any) => ({
-    name: item.status.replace('_', ' '),
-    value: item.count,
-    color: item.status === 'DELIVERED' ? STATUS.good :
-           item.status === 'IN_TRANSIT' ? STATUS.info :
-           item.status === 'DISPATCHED' ? STATUS.warning :
-           item.status === 'CANCELLED' ? STATUS.critical : STATUS.neutral
-  })) || [];
-
-  const totalDeliveries = deliveryStatusData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0);
-  const inventoryByCategory = analytics.inventoryByCategory || [];
-  const deliveryTrends = analytics.trends || [];
+  const { start, end } = view === 'custom'
+    ? { start: new Date(custom.startDate), end: new Date(custom.endDate) }
+    : periodFor(view, anchor);
+  const isCurrent = view !== 'custom' && end.getTime() >= startOfDay(new Date()).getTime();
+  const todayIso = iso(new Date());
+  // Don't draw days that haven't happened yet (e.g. the rest of the current week)
+  const trends = ((view === 'day' ? context.data?.trends : data?.trends) || []).filter((t: any) => t.date <= todayIso);
+  const s = data?.summary || {};
+  const k = data?.kpis || {};
+  const vs = PREVIOUS[view];
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-          <p className="text-gray-600 mt-1">Comprehensive insights and data analysis</p>
+    <div>
+      <PageHeader
+        title="Reports"
+        subtitle="Daily, weekly and monthly results for orders, deliveries, revenue and stock"
+        breadcrumbs={[{ label: 'Insights' }]}
+        icon={<BarChart3 className="h-5 w-5" />}
+        actions={
+          <>
+            <button onClick={() => refetch()} className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50" title="Refresh">
+              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+            </button>
+            <Button size="sm" onClick={() => setShowExport(true)} disabled={!data}><Download className="mr-1.5 h-4 w-4" /> Export</Button>
+          </>
+        }
+      />
+
+      {/* Period picker */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-soft">
+        <div className="flex rounded-xl bg-gray-100 p-1 text-sm font-medium">
+          {([['day', 'Daily'], ['week', 'Weekly'], ['month', 'Monthly'], ['custom', 'Custom']] as [View, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => { setView(key); if (key !== 'custom') setAnchor(new Date()); }}
+              className={`rounded-lg px-3.5 py-1.5 transition ${view === key ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => setShowDateRangeModal(true)}>
-            <Calendar className="w-5 h-5 mr-2" />
-            Date Range
-          </Button>
-          <Button variant="primary" onClick={() => setShowExportModal(true)}>
-            <Download className="w-5 h-5 mr-2" />
-            Export Report
-          </Button>
+
+        {view === 'custom' ? (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <input type="date" value={custom.startDate} max={custom.endDate} onChange={(e) => setCustom({ ...custom, startDate: e.target.value })} className="h-9 rounded-lg border border-gray-200 px-2.5" />
+            <span className="text-gray-400">to</span>
+            <input type="date" value={custom.endDate} min={custom.startDate} max={iso(new Date())} onChange={(e) => setCustom({ ...custom, endDate: e.target.value })} className="h-9 rounded-lg border border-gray-200 px-2.5" />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button onClick={() => setAnchor(shift(view, anchor, -1))} className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50" title="Previous"><ChevronLeft className="h-4 w-4" /></button>
+            <p className="min-w-[11rem] text-center text-sm font-semibold text-gray-900">{titleFor(view, start, end)}</p>
+            <button onClick={() => setAnchor(shift(view, anchor, 1))} disabled={isCurrent} className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40" title="Next"><ChevronRight className="h-4 w-4" /></button>
+            {!isCurrent && <button onClick={() => setAnchor(new Date())} className="text-xs font-semibold text-primary-600 hover:underline">{view === 'day' ? 'Today' : view === 'week' ? 'This week' : 'This month'}</button>}
+          </div>
+        )}
+      </div>
+
+      {error && !data ? (
+        <div className="rounded-2xl border border-error-100 bg-error-50 p-6 text-sm text-error-700">{(error as Error).message}</div>
+      ) : isLoading || !data ? (
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}</div>
+      ) : (
+        <div className={`space-y-5 transition-opacity ${isFetching ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            <StatCard label="Orders placed" value={s.totalOrders || 0} icon={<Package className="h-5 w-5" />} change={s.ordersChange} changeLabel={vs} trend={trends.map((t: any) => t.orders)} />
+            <StatCard label="Delivered" value={s.deliveredInPeriod || 0} icon={<CheckCircle2 className="h-5 w-5" />} tone="success" trend={trends.map((t: any) => t.delivered)} />
+            <StatCard label="Revenue delivered" value={s.revenue || 0} prefix="RWF " compact icon={<Wallet className="h-5 w-5" />} tone="accent" change={s.revenueChange} changeLabel={vs} trend={trends.map((t: any) => t.revenue)} />
+            <StatCard label="Delivery rate" value={s.deliveryRate || 0} suffix="%" decimals={1} icon={<TrendingUp className="h-5 w-5" />} tone="info" change={s.deliveryRateChange} changeLabel={`points ${vs}`} />
+            <StatCard label="Avg. delivery time" value={s.avgDeliveryHours || 0} suffix=" h" decimals={1} icon={<Clock className="h-5 w-5" />} tone="primary" change={s.avgDeliveryHoursChange ? Math.round((s.avgDeliveryHoursChange / Math.max(s.avgDeliveryHours - s.avgDeliveryHoursChange, 0.1)) * 100) : null} changeLabel={vs} invertChange />
+            <StatCard label="Failed or returned" value={s.failed || 0} icon={<AlertTriangle className="h-5 w-5" />} tone="error" trend={trends.map((t: any) => t.failed)} />
+            <StatCard label="Drivers who delivered" value={s.activeDrivers || 0} suffix={` / ${s.totalDrivers || 0}`} icon={<Users className="h-5 w-5" />} tone="info" />
+            <StatCard label="Still pending" value={s.pending || 0} icon={<Truck className="h-5 w-5" />} tone="warning" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+            <ChartCard
+              className="xl:col-span-2"
+              title={view === 'day' ? 'Last 14 days' : 'Orders and deliveries'}
+              subtitle={view === 'day' ? 'Orders placed and delivered each day up to the selected day' : `Each ${data.period?.groupBy === 'month' ? 'month' : data.period?.groupBy === 'week' ? 'week' : 'day'} in the period`}
+              icon={<TrendingUp className="h-4 w-4" />}
+            >
+              <TrendChart
+                data={trends}
+                series={[{ key: 'orders', name: 'Orders placed' }, { key: 'delivered', name: 'Delivered', color: '#10B981' }]}
+                height={260}
+              />
+            </ChartCard>
+            <ChartCard title="Order status" subtitle="Orders placed in this period, by current status" icon={<PieIcon className="h-4 w-4" />}>
+              <DonutChart data={(data.statusDistribution || []).map((r: any) => ({ name: r.status, value: r.count }))} centerLabel="orders" statusColors />
+            </ChartCard>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+            <ChartCard className="xl:col-span-2" title="Revenue" subtitle="Value of orders delivered" icon={<Wallet className="h-4 w-4" />}>
+              <BarsChart data={trends} series={[{ key: 'revenue', name: 'Revenue', color: '#4682B4' }]} valueFormatter={(v) => formatRWF(Number(v))} highlightMax height={240} />
+            </ChartCard>
+            <ChartCard title="Performance" subtitle="Service quality in this period" icon={<Gauge className="h-4 w-4" />}>
+              <div className="space-y-5">
+                <Meter label="On-time deliveries" value={k.onTimeDeliveryRate || 0} hint={k.onTimeSample ? `${k.onTimeSample} deliveries with a deadline` : 'No deliveries with a deadline yet'} />
+                <Meter label="Fleet used" value={k.fleetUtilization || 0} hint={`${k.vehiclesUsed || 0} of ${k.fleetSize || 0} vehicles`} />
+                <Meter label="Delivery rate" value={s.deliveryRate || 0} hint="Orders placed that are delivered" />
+                <div className="flex items-center justify-between rounded-xl bg-warning-50 p-3">
+                  <span className="flex items-center gap-2 text-sm font-medium text-warning-800"><Star className="h-4 w-4 fill-current" /> Customer rating</span>
+                  <span className="text-lg font-bold text-warning-800">{k.customerSatisfaction ? `${k.customerSatisfaction}/5` : '—'}</span>
+                </div>
+              </div>
+            </ChartCard>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
+            <ChartCard title="Top drivers" subtitle="Deliveries completed" icon={<Users className="h-4 w-4" />}>
+              <BarList data={(data.topDrivers || []).map((d: any) => ({ name: d.name, value: d.delivered, secondary: formatRWF(d.revenue) }))} emptyMessage="No deliveries in this period" />
+            </ChartCard>
+            <ChartCard title="Top customers" subtitle="Value delivered" icon={<Wallet className="h-4 w-4" />}>
+              <BarList data={(data.topCustomers || []).map((c: any) => ({ name: c.name, value: c.revenue, secondary: `${c.orders} orders` }))} format={formatRWF} emptyMessage="No deliveries in this period" />
+            </ChartCard>
+            <ChartCard title="Stock by category" subtitle="Current stock value" icon={<Boxes className="h-4 w-4" />}>
+              <BarList data={(data.inventoryByCategory || []).map((c: any) => ({ name: c.category, value: c.value, secondary: `${c.count} items${c.lowStock ? ` · ${c.lowStock} low` : ''}` }))} format={formatRWF} color="#10B981" />
+            </ChartCard>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <p className="text-sm text-gray-600">Total Orders</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{analytics.summary?.totalOrders || 0}</p>
-          <p className={`text-xs mt-2 ${
-            analytics.summary?.ordersChange >= 0 ? 'text-success-600' : 'text-error-600'
-          }`}>
-            {analytics.summary?.ordersChange >= 0 ? '+' : ''}{analytics.summary?.ordersChange || 0}% from last month
-          </p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">Delivery Rate</p>
-          <p className="text-3xl font-bold text-success-600 mt-1">{analytics.summary?.deliveryRate || 0}%</p>
-          <p className={`text-xs mt-2 ${
-            analytics.summary?.deliveryRateChange >= 0 ? 'text-success-600' : 'text-error-600'
-          }`}>
-            {analytics.summary?.deliveryRateChange >= 0 ? '+' : ''}{analytics.summary?.deliveryRateChange || 0}% from last month
-          </p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">Avg. Delivery Time</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{analytics.summary?.avgDeliveryTime || 0}d</p>
-          <p className={`text-xs mt-2 ${
-            analytics.summary?.deliveryTimeChange <= 0 ? 'text-success-600' : 'text-error-600'
-          }`}>
-            {analytics.summary?.deliveryTimeChange >= 0 ? '+' : ''}{analytics.summary?.deliveryTimeChange || 0}d from last month
-          </p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-600">Active Drivers</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{analytics.summary?.activeDrivers || 0}</p>
-          <p className="text-xs text-gray-600 mt-2">Available drivers</p>
-        </Card>
-      </div>
-
-      {/* Charts Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard
-          title="Delivery Trends"
-          subtitle="Orders by delivery stage over the selected period"
-          icon={<TrendingUp className="w-5 h-5" />}
-        >
-          {deliveryTrends.length === 0 ? <ChartEmpty /> : (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={deliveryTrends} margin={chartMargin}>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="date" {...xAxisProps} />
-                <YAxis {...yAxisProps} />
-                <Tooltip content={<ChartTooltip />} cursor={tooltipCursor} />
-                <Legend {...legendProps} />
-                <Line {...lineProps} dataKey="orders" stroke={SERIES[0]} name="Total Orders" />
-                <Line {...lineProps} dataKey="delivered" stroke={STATUS.good} name="Delivered" />
-                <Line {...lineProps} dataKey="inTransit" stroke={SERIES[1]} name="In Transit" />
-                <Line {...lineProps} dataKey="pending" stroke={STATUS.warning} name="Pending" strokeDasharray="5 4" />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        <ChartCard
-          title="Delivery Status Distribution"
-          subtitle="Share of orders in each status"
-          icon={<PieChartIcon className="w-5 h-5" />}
-        >
-          {totalDeliveries === 0 ? <ChartEmpty /> : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-6">
-              <div className="relative h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={deliveryStatusData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius="62%"
-                      outerRadius="92%"
-                      paddingAngle={2}
-                      cornerRadius={6}
-                      stroke="#fff"
-                      strokeWidth={2}
-                    >
-                      {deliveryStatusData.map((entry: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<ChartTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <DonutCenter total={totalDeliveries.toLocaleString()} label="Orders" />
-              </div>
-              <DonutLegend items={deliveryStatusData} />
-            </div>
-          )}
-        </ChartCard>
-      </div>
-
-      {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard
-          title="Inventory by Category"
-          subtitle="Number of items and units held per category"
-          icon={<BarChart3 className="w-5 h-5" />}
-        >
-          {inventoryByCategory.length === 0 ? <ChartEmpty /> : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={inventoryByCategory} margin={chartMargin} barGap={2}>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="category" {...xAxisProps} />
-                <YAxis {...yAxisProps} />
-                <Tooltip content={<ChartTooltip />} cursor={barCursor} />
-                <Legend {...legendProps} />
-                <Bar {...barProps} dataKey="count" fill={SERIES[0]} name="Items" />
-                <Bar {...barProps} dataKey="totalQuantity" fill={SERIES[1]} name="Total Units" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        {/* Performance Metrics */}
-        <Card>
-          <h3 className="font-heading text-lg font-semibold text-gray-900 mb-4">Key Performance Indicators</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="text-sm text-gray-600">On-Time Delivery Rate</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{analytics.kpis?.onTimeDeliveryRate || 0}%</p>
-              </div>
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                (analytics.kpis?.onTimeDeliveryRate || 0) >= 90 ? 'bg-success-100' : 
-                (analytics.kpis?.onTimeDeliveryRate || 0) >= 80 ? 'bg-warning-100' : 'bg-error-100'
-              }`}>
-                <span className={`text-2xl font-bold ${
-                  (analytics.kpis?.onTimeDeliveryRate || 0) >= 90 ? 'text-success-600' : 
-                  (analytics.kpis?.onTimeDeliveryRate || 0) >= 80 ? 'text-warning-600' : 'text-error-600'
-                }`}>
-                  {(analytics.kpis?.onTimeDeliveryRate || 0) >= 90 ? 'A' : 
-                   (analytics.kpis?.onTimeDeliveryRate || 0) >= 80 ? 'B' : 'C'}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="text-sm text-gray-600">Customer Satisfaction</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{analytics.kpis?.customerSatisfaction || 0}/5</p>
-              </div>
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                (analytics.kpis?.customerSatisfaction || 0) >= 4.5 ? 'bg-success-100' : 
-                (analytics.kpis?.customerSatisfaction || 0) >= 4.0 ? 'bg-warning-100' : 'bg-error-100'
-              }`}>
-                <span className={`text-2xl font-bold ${
-                  (analytics.kpis?.customerSatisfaction || 0) >= 4.5 ? 'text-success-600' : 
-                  (analytics.kpis?.customerSatisfaction || 0) >= 4.0 ? 'text-warning-600' : 'text-error-600'
-                }`}>
-                  {(analytics.kpis?.customerSatisfaction || 0) >= 4.5 ? 'A' : 
-                   (analytics.kpis?.customerSatisfaction || 0) >= 4.0 ? 'B' : 'C'}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="text-sm text-gray-600">Fleet Utilization</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{analytics.kpis?.fleetUtilization || 0}%</p>
-              </div>
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                (analytics.kpis?.fleetUtilization || 0) >= 80 ? 'bg-success-100' : 
-                (analytics.kpis?.fleetUtilization || 0) >= 60 ? 'bg-warning-100' : 'bg-error-100'
-              }`}>
-                <span className={`text-2xl font-bold ${
-                  (analytics.kpis?.fleetUtilization || 0) >= 80 ? 'text-success-600' : 
-                  (analytics.kpis?.fleetUtilization || 0) >= 60 ? 'text-warning-600' : 'text-error-600'
-                }`}>
-                  {(analytics.kpis?.fleetUtilization || 0) >= 80 ? 'A' : 
-                   (analytics.kpis?.fleetUtilization || 0) >= 60 ? 'B' : 'C'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <Modal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        title="Export Report"
-        subtitle="Download the current analytics"
-        icon={<Download className="w-5 h-5" />}
-      >
-        <ExportReportForm onClose={() => setShowExportModal(false)} analytics={analytics} dateRange={dateRange} />
-      </Modal>
-
-      <Modal isOpen={showDateRangeModal} onClose={() => setShowDateRangeModal(false)} title="Select Date Range">
-        <form onSubmit={handleDateRangeSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-              <input
-                type="date"
-                value={dateRange.startDate}
-                onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-              <input
-                type="date"
-                value={dateRange.endDate}
-                onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
-              />
-            </div>
-          </div>
-          
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm text-gray-600 mb-2">Quick Select:</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setDateRange({
-                  startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                  endDate: new Date().toISOString().split('T')[0]
-                })}
-                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Last 7 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDateRange({
-                  startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                  endDate: new Date().toISOString().split('T')[0]
-                })}
-                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Last 30 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDateRange({
-                  startDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                  endDate: new Date().toISOString().split('T')[0]
-                })}
-                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Last 3 Months
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex justify-end gap-3">
-            <Button variant="secondary" type="button" onClick={() => setShowDateRangeModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit">
-              Apply Date Range
-            </Button>
-          </div>
-        </form>
+      <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Export report" subtitle={titleFor(view, start, end)} icon={<Download className="h-5 w-5" />}>
+        <ExportReportForm onClose={() => setShowExport(false)} analytics={data} dateRange={range} />
       </Modal>
     </div>
   );

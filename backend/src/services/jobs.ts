@@ -1,3 +1,4 @@
+import { reconcileFleet } from './fleetStatus';
 import { prisma } from '../lib/prisma';
 import { NotificationService } from './notificationService';
 import { detectAnomalies } from './intelligence';
@@ -109,6 +110,7 @@ export function startJobs() {
     await safe('sla', checkSlaRisk)();
     await safe('anomalies', checkAnomalies)();
     await safe('otp-purge', purgeExpiredOtps)();
+    await safe('fleet-status', reconcileFleet)();
   };
 
   // Daily jobs run once per day around 06:00 Kigali time (UTC+2)
@@ -122,9 +124,13 @@ export function startJobs() {
   };
 
   setTimeout(safe('dedupe-notifications', dedupeNotifications), 20 * 1000);
+  setTimeout(safe('fleet-status', async () => {
+    const { closedDispatches } = await reconcileFleet();
+    if (closedDispatches) console.log(`🚚 Fleet status repaired: ${closedDispatches} stale dispatches closed`);
+  }), 10 * 1000);
   setTimeout(frequent, 60 * 1000);
   setInterval(frequent, 15 * MINUTE);
   setInterval(daily, 15 * MINUTE);
   setInterval(safe('scheduled-reports', runScheduledReports), 60 * MINUTE);
-  console.log('⏱️  Background jobs scheduled (SLA risk, anomalies, restock, reports)');
+  console.log('⏱️  Background jobs scheduled (SLA risk, anomalies, fleet status, restock, reports)');
 }

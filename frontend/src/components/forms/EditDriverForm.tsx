@@ -36,14 +36,15 @@ const EditDriverForm = ({ driver, onClose, onSave }: EditDriverFormProps) => {
     setLoading(true);
     
     try {
-      await driversService.updateDriver(Number(driver.id), formData);
+      const res = await driversService.updateDriver(Number(driver.id), formData);
+      if (res?.success === false) throw new Error(res?.error?.message || 'Failed to update driver');
       
       toast.success(`Driver ${formData.name} updated successfully!`);
       onClose();
       if (onSave) onSave();
     } catch (error: any) {
       console.error('Failed to update driver:', error);
-      toast.error(error.response?.data?.error?.message || 'Failed to update driver');
+      toast.error(error.response?.data?.error?.message || error.message || 'Failed to update driver', { duration: 6000 });
     } finally {
       setLoading(false);
     }
@@ -92,10 +93,11 @@ const EditDriverForm = ({ driver, onClose, onSave }: EditDriverFormProps) => {
             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
+            {driver.status === 'ON_DUTY' && <option value="ON_DUTY">On Duty (has open deliveries)</option>}
             <option value="AVAILABLE">Available</option>
-            <option value="ON_DUTY">On Duty</option>
-            <option value="UNAVAILABLE">Unavailable</option>
+            <option value="OFF_DUTY">Off Duty</option>
           </select>
+          <p className="mt-1 text-xs text-gray-500">On Duty is automatic while the driver has open deliveries.</p>
         </div>
       </div>
       

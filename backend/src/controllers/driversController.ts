@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { ACTIVE_ORDER_STATUSES, activeOrdersForDriver } from '../services/fleetStatus';
 
 export class DriversController {
   static async getDrivers(req: Request, res: Response) {
@@ -21,41 +22,21 @@ export class DriversController {
             ]
           })
         },
+        orderBy: { name: 'asc' },
         include: {
           currentVehicle: true,
-          dispatches: {
-            where: {
-              status: {
-                in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT']
-              }
-            },
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 1
-          }
+          // Open deliveries: the status is kept in sync with these (see services/fleetStatus)
+          orders: {
+            where: { status: { in: [...ACTIVE_ORDER_STATUSES] } },
+            select: { id: true, orderNumber: true, status: true, vehicle: { select: { id: true, plateNumber: true } } },
+          },
         }
       });
 
-      // Update driver status based on current dispatch
-      const updatedDrivers = await Promise.all(drivers.map(async (driver) => {
-        const activeDispatch = driver.dispatches[0];
-        let correctStatus = 'AVAILABLE';
-        
-        if (activeDispatch) {
-          correctStatus = 'ON_DUTY';
-        }
-        
-        // Update driver status if it doesn't match
-        if (driver.status !== correctStatus) {
-          await prisma.driver.update({
-            where: { id: driver.id },
-            data: { status: correctStatus as any }
-          });
-          driver.status = correctStatus as any;
-        }
-        
-        return driver;
+      const updatedDrivers = drivers.map(({ orders, ...driver }) => ({
+        ...driver,
+        activeOrders: orders,
+        activeJobs: orders.length,
       }));
 
       const total = await prisma.driver.count();
@@ -120,42 +101,56 @@ export class DriversController {
     }
   }
 
+  /** Every delivery the driver has had: open ones first, then finished, with the vehicle used. */
   static async getDriverAssignments(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-      const { status, startDate, endDate } = req.query;
-      
-      // Mock assignments - implement with actual orders/dispatch table
-      const assignments = [
-        {
-          id: '1',
-          orderId: '1',
-          orderNumber: 'ORD-001',
-          status: 'in_progress',
-          pickupLocation: 'Warehouse A',
-          deliveryAddress: '123 Main St, City',
-          scheduledPickup: new Date().toISOString(),
-          scheduledDelivery: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-          vehicle: {
-            id: '1',
-            registrationNumber: 'ABC123'
-          },
-          items: [
-            {
-              id: '1',
-              name: 'Product 1',
-              quantity: 2
-            }
-          ]
-        }
-      ];
-      
-      res.json({ success: true, data: assignments });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
+      const id = Number(req.params.id);
+      const driver = await prisma.driver.findUnique({
+        where: { id },
+        select: { id: true, name: true, status: true, currentVehicle: { select: { id: true, plateNumber: true, type: true, vehicleModel: true } } },
       });
+      if (!driver) {
+        return res.status(404).json({ success: false, error: { code: 'DRIVER_NOT_FOUND', message: 'Driver not found' } });
+      }
+      const orders = await prisma.deliveryOrder.findMany({
+        where: { driverId: id },
+        orderBy: [{ updatedAt: 'desc' }],
+        take: 300,
+        select: {
+          id: true, orderNumber: true, customerName: true, deliveryAddress: true, status: true, priority: true,
+          totalAmount: true, scheduledDate: true, timeSlotStart: true, deliveredAt: true, createdAt: true, updatedAt: true,
+          failureReason: true, vehicle: { select: { id: true, plateNumber: true, type: true } },
+        },
+      });
+      const active = orders.filter((o) => (ACTIVE_ORDER_STATUSES as readonly string[]).includes(o.status));
+      const finished = orders.filter((o) => !(ACTIVE_ORDER_STATUSES as readonly string[]).includes(o.status));
+      const vehicles = new Map<number, { id: number; plateNumber: string; type: string; trips: number }>();
+      for (const o of orders) {
+        if (!o.vehicle) continue;
+        const v = vehicles.get(o.vehicle.id) || { ...o.vehicle, trips: 0 };
+        v.trips += 1;
+        vehicles.set(o.vehicle.id, v);
+      }
+      const delivered = finished.filter((o) => o.status === 'DELIVERED');
+      res.json({
+        success: true,
+        data: {
+          driver,
+          active,
+          finished,
+          vehiclesUsed: [...vehicles.values()].sort((a, b) => b.trips - a.trips),
+          summary: {
+            total: orders.length,
+            active: active.length,
+            delivered: delivered.length,
+            failed: finished.filter((o) => o.status === 'FAILED').length,
+            deliveredValue: delivered.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0),
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Driver assignments error:', error);
+      res.status(500).json({ success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' } });
     }
   }
 
@@ -215,17 +210,53 @@ export class DriversController {
   static async updateDriver(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { licenseNumber, phone, status, experience, rating } = req.body;
+      const {
+        name, email, licenseNumber, phone, status, experience, rating, address,
+        licenseExpiry, emergencyContact, emergencyContactName, dateOfBirth, hireDate,
+      } = req.body;
+
+      // On Duty is automatic: it follows the driver's open deliveries
+      if (status !== undefined) {
+        if (!['AVAILABLE', 'OFF_DUTY', 'ON_DUTY'].includes(status)) {
+          return res.status(400).json({ success: false, error: { code: 'INVALID_STATUS', message: 'Status must be AVAILABLE or OFF_DUTY' } });
+        }
+        const active = await activeOrdersForDriver(Number(id));
+        if (status !== 'ON_DUTY' && active.length) {
+          const list = active.slice(0, 5).map((o) => o.orderNumber).join(', ');
+          return res.status(409).json({
+            success: false,
+            error: {
+              code: 'DRIVER_BUSY',
+              message: `This driver still has ${active.length} open ${active.length === 1 ? 'delivery' : 'deliveries'} (${list}). They become available automatically when ${active.length === 1 ? 'it is' : 'they are'} finished, or reassign ${active.length === 1 ? 'it' : 'them'} first.`,
+            },
+          });
+        }
+        if (status === 'ON_DUTY' && !active.length) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'NO_ACTIVE_DELIVERY', message: 'On Duty is set automatically when the driver is given a delivery.' },
+          });
+        }
+      }
 
       const driver = await prisma.driver.update({
         where: { id: Number(id) },
         data: {
-          licenseNumber,
-          phone,
+          name: name || undefined,
+          email: email === undefined ? undefined : email || null,
+          licenseNumber: licenseNumber || undefined,
+          phone: phone || undefined,
           status: status as any,
-          experience: experience ? Number(experience) : undefined,
-          rating: rating ? Number(rating) : undefined
-        }
+          address: address === undefined ? undefined : address || null,
+          emergencyContact: emergencyContact === undefined ? undefined : emergencyContact || null,
+          emergencyContactName: emergencyContactName === undefined ? undefined : emergencyContactName || null,
+          licenseExpiry: licenseExpiry ? new Date(licenseExpiry) : undefined,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+          hireDate: hireDate ? new Date(hireDate) : undefined,
+          experience: experience !== undefined && experience !== '' ? Number(experience) : undefined,
+          rating: rating !== undefined && rating !== '' ? Number(rating) : undefined
+        },
+        include: { currentVehicle: true }
       });
 
       res.json({ success: true, data: driver });

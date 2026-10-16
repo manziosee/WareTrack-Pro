@@ -1,5 +1,6 @@
 import { NotificationService } from '../services/notificationService';
 import { onOrderStatusChanged } from '../services/orderLifecycle';
+import { reconcileFleet, syncDriverStatus, syncFleetForOrder, syncVehicleStatus } from '../services/fleetStatus';
 import { emitEvent } from '../services/events';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
@@ -170,6 +171,14 @@ export class DispatchController {
         });
       }
 
+      const openDispatch = await prisma.dispatch.findFirst({ where: { orderId: order.id, status: { in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT'] } } });
+      if (order.driverId || openDispatch) {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'ALREADY_ASSIGNED', message: 'This order already has a driver. Edit its dispatch to change the driver or vehicle.' }
+        });
+      }
+
       // Check if driver exists and is available
       const driver = await prisma.driver.findUnique({
         where: { id: Number(driverId) }
@@ -226,17 +235,9 @@ export class DispatchController {
           }
         });
 
-        // Update driver status
-        await tx.driver.update({
-          where: { id: Number(driverId) },
-          data: { status: 'ON_DUTY' }
-        });
-
-        // Update vehicle status
-        await tx.vehicle.update({
-          where: { id: Number(vehicleId) },
-          data: { status: 'IN_USE' }
-        });
+        // The driver is on duty and the vehicle in use until this delivery ends
+        await syncDriverStatus(Number(driverId), tx);
+        await syncVehicleStatus(Number(vehicleId), tx);
 
         return newDispatch;
       });
@@ -254,7 +255,7 @@ export class DispatchController {
         }).catch(() => undefined);
       }
       emitEvent('dispatch.created', { id: dispatch.id, orderId: dispatch.orderId, orderNumber: dispatch.order.orderNumber, driver: dispatch.driver.name });
-      onOrderStatusChanged(dispatch.orderId, 'PENDING');
+      await onOrderStatusChanged(dispatch.orderId, 'PENDING');
 
       res.status(201).json({ 
         success: true,
@@ -289,31 +290,14 @@ export class DispatchController {
 
       // Update dispatch and related records in transaction
       const dispatch = await prisma.$transaction(async (tx) => {
-        // If driver changed, update statuses
-        if (driverId && Number(driverId) !== existingDispatch.driverId) {
-          // Set old driver to available
-          await tx.driver.update({
-            where: { id: existingDispatch.driverId },
-            data: { status: 'AVAILABLE' }
-          });
-          // Set new driver to on duty
-          await tx.driver.update({
-            where: { id: Number(driverId) },
-            data: { status: 'ON_DUTY' }
-          });
-        }
-
-        // If vehicle changed, update statuses
-        if (vehicleId && Number(vehicleId) !== existingDispatch.vehicleId) {
-          // Set old vehicle to available
-          await tx.vehicle.update({
-            where: { id: existingDispatch.vehicleId },
-            data: { status: 'AVAILABLE' }
-          });
-          // Set new vehicle to in use
-          await tx.vehicle.update({
-            where: { id: Number(vehicleId) },
-            data: { status: 'IN_USE' }
+        // Keep the order's driver and vehicle in step with its dispatch
+        if ((driverId && Number(driverId) !== existingDispatch.driverId) || (vehicleId && Number(vehicleId) !== existingDispatch.vehicleId)) {
+          await tx.deliveryOrder.update({
+            where: { id: existingDispatch.orderId },
+            data: {
+              ...(driverId && { driverId: Number(driverId) }),
+              ...(vehicleId && { vehicleId: Number(vehicleId) }),
+            },
           });
         }
 
@@ -338,6 +322,12 @@ export class DispatchController {
         });
       });
 
+      // Old and new driver/vehicle: busy only if they still have open deliveries
+      await syncFleetForOrder(dispatch.orderId, {
+        driverIds: [existingDispatch.driverId],
+        vehicleIds: [existingDispatch.vehicleId],
+      });
+
       res.json({ success: true, data: dispatch });
     } catch (error: any) {
       console.error('Update dispatch error:', error);
@@ -358,8 +348,11 @@ export class DispatchController {
     try {
       const { id } = req.params;
       const { status, notes } = req.body;
+      if (!['PENDING', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'].includes(status)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_STATUS', message: 'Status must be PENDING, DISPATCHED, IN_TRANSIT, DELIVERED or CANCELLED' } });
+      }
 
-      const updateData: any = { status, notes };
+      const updateData: any = { status, ...(notes !== undefined && { notes }) };
       
       if (status === 'DELIVERED') {
         updateData.actualDelivery = new Date();
@@ -377,34 +370,25 @@ export class DispatchController {
         }
       });
 
-      // Sync order status
-      let orderStatus = dispatch.order.status;
-      if (status === 'DISPATCHED') orderStatus = 'DISPATCHED';
-      else if (status === 'IN_TRANSIT') orderStatus = 'IN_TRANSIT';
-      else if (status === 'DELIVERED') orderStatus = 'DELIVERED';
-
-      if (orderStatus !== dispatch.order.status) {
+      // The order always follows its dispatch. Cancelling a dispatch cancels the
+      // assignment: the order goes back to Pending, without a driver, ready to re-dispatch.
+      const cancelled = status === 'CANCELLED';
+      const orderStatus = cancelled ? 'PENDING' : status;
+      if (orderStatus !== dispatch.order.status || cancelled) {
         await prisma.deliveryOrder.update({
           where: { id: dispatch.orderId },
           data: { 
             status: orderStatus,
-            ...(status === 'DELIVERED' && { deliveredAt: new Date() })
+            ...(status === 'DELIVERED' && { deliveredAt: new Date(), deliveryAttempts: { increment: 1 } }),
+            ...(cancelled && { driverId: null, vehicleId: null }),
           }
         });
-        onOrderStatusChanged(dispatch.orderId, dispatch.order.status);
+        await onOrderStatusChanged(dispatch.orderId, dispatch.order.status);
       }
 
-      // Sync vehicle and driver status
-      if (status === 'DELIVERED') {
-        await prisma.vehicle.update({
-          where: { id: dispatch.vehicleId },
-          data: { status: 'AVAILABLE' }
-        });
-        await prisma.driver.update({
-          where: { id: dispatch.driverId },
-          data: { status: 'AVAILABLE' }
-        });
-      }
+      // Driver and vehicle become available once they have no open deliveries left
+      await syncDriverStatus(dispatch.driverId);
+      await syncVehicleStatus(dispatch.vehicleId);
 
       res.json({ success: true, data: dispatch });
     } catch (error: any) {
@@ -450,22 +434,14 @@ export class DispatchController {
           }
         });
 
-        // Restore driver status
-        await tx.driver.update({
-          where: { id: dispatch.driverId },
-          data: { status: 'AVAILABLE' }
-        });
-
-        // Restore vehicle status
-        await tx.vehicle.update({
-          where: { id: dispatch.vehicleId },
-          data: { status: 'AVAILABLE' }
-        });
-
         // Delete dispatch
         await tx.dispatch.delete({
           where: { id: Number(id) }
         });
+
+        // Free the driver and vehicle unless they have other open deliveries
+        await syncDriverStatus(dispatch.driverId, tx);
+        await syncVehicleStatus(dispatch.vehicleId, tx);
       });
 
       res.json({ 
@@ -490,7 +466,7 @@ export class DispatchController {
   static async getAvailableOrders(req: Request, res: Response) {
     try {
       const orders = await prisma.deliveryOrder.findMany({
-        where: { status: 'PENDING' },
+        where: { status: 'PENDING', driverId: null },
         select: {
           id: true,
           orderNumber: true,
@@ -568,35 +544,11 @@ export class DispatchController {
     }
   }
 
+  /** Repair tool: close dispatches whose order is finished and recompute every driver and vehicle status. */
   static async syncStatuses(req: Request, res: Response) {
     try {
-      const dispatches = await prisma.dispatch.findMany({
-        include: {
-          order: true,
-          driver: true,
-          vehicle: true
-        }
-      });
-
-      let syncedCount = 0;
-
-      for (const dispatch of dispatches) {
-        if (dispatch.order.status !== dispatch.status) {
-          await prisma.deliveryOrder.update({
-            where: { id: dispatch.orderId },
-            data: { 
-              status: dispatch.status,
-              ...(dispatch.status === 'DELIVERED' && { deliveredAt: dispatch.actualDelivery })
-            }
-          });
-          syncedCount++;
-        }
-      }
-
-      res.json({
-        success: true,
-        message: `Synced ${syncedCount} order statuses with dispatch statuses`
-      });
+      const { closedDispatches } = await reconcileFleet();
+      res.json({ success: true, message: `Closed ${closedDispatches} stale dispatches and refreshed driver and vehicle statuses` });
     } catch (error) {
       res.status(500).json({ 
         success: false,

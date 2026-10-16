@@ -1,3 +1,4 @@
+import { refreshOperations } from '@/utils/operations';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -51,10 +52,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     s.on('event', (e: { type: string; data: any }) => {
       // Keep lists and dashboards fresh without polling
       if (e.type.startsWith('order') || e.type.startsWith('dispatch') || e.type.startsWith('delivery')) {
-        queryClient.invalidateQueries({ queryKey: ['list', 'orders'] });
-        queryClient.invalidateQueries({ queryKey: ['list', 'dispatches'] });
-        queryClient.invalidateQueries({ queryKey: ['insights'] });
-        queryClient.invalidateQueries({ queryKey: ['my-deliveries'] });
+        refreshOperations(queryClient);
       }
       if (e.type.startsWith('return')) queryClient.invalidateQueries({ queryKey: ['list', 'returns'] });
       if (e.type.startsWith('payment')) queryClient.invalidateQueries({ queryKey: ['list', 'payments'] });

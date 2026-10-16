@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { refreshOperations } from '@/utils/operations';
 import { useState, useEffect } from 'react';
 import { dispatchService } from '../../services/dispatchService';
 import { ordersService } from '../../services/ordersService';
@@ -9,11 +11,14 @@ interface DispatchFormProps {
   onClose: () => void;
   onSave?: (data: any) => void;
   dispatch?: any;
+  /** Pre-select this order (e.g. "Assign driver" from the Tracking page). */
+  initialOrderId?: number | string;
 }
 
-export default function DispatchForm({ onClose, onSave, dispatch }: DispatchFormProps) {
+export default function DispatchForm({ onClose, onSave, dispatch, initialOrderId }: DispatchFormProps) {
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
-    orderId: dispatch?.orderId?.toString() || '',
+    orderId: dispatch?.orderId?.toString() || (initialOrderId ? String(initialOrderId) : ''),
     driverId: dispatch?.driverId?.toString() || '',
     vehicleId: dispatch?.vehicleId?.toString() || '',
     scheduledDate: dispatch?.scheduledDate ? new Date(dispatch.scheduledDate).toISOString().slice(0, 16) : '',
@@ -55,21 +60,19 @@ export default function DispatchForm({ onClose, onSave, dispatch }: DispatchForm
     e.preventDefault();
     
     try {
-      if (dispatch) {
-        await dispatchService.updateDispatch(dispatch.id, formData);
-        toast.success('Dispatch updated successfully');
-      } else {
-        await dispatchService.createDispatch(formData);
-        toast.success('Dispatch created successfully');
-      }
-      
+      const res = dispatch
+        ? await dispatchService.updateDispatch(dispatch.id, formData)
+        : await dispatchService.createDispatch(formData);
+      if (res?.success === false) throw new Error(res?.error?.message || 'Failed to save dispatch');
+      toast.success(dispatch ? 'Dispatch updated' : 'Dispatch created: driver and vehicle are now busy');
+      refreshOperations(queryClient);
       if (onSave) {
         onSave(formData);
       }
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save dispatch:', error);
-      toast.error('Failed to save dispatch');
+      toast.error(error?.message || 'Failed to save dispatch', { duration: 6000 });
     }
   };
 

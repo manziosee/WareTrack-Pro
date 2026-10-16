@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { ACTIVE_ORDER_STATUSES, activeOrdersForVehicle, syncVehicleStatus } from '../services/fleetStatus';
 
 export class VehiclesController {
   static async getVehicles(req: Request, res: Response) {
@@ -22,47 +23,21 @@ export class VehiclesController {
             ]
           })
         },
+        orderBy: { plateNumber: 'asc' },
         include: {
-          dispatches: {
-            where: {
-              status: {
-                in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT']
-              }
-            },
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 1
-          }
+          // Open deliveries: the status is kept in sync with these (see services/fleetStatus)
+          orders: {
+            where: { status: { in: [...ACTIVE_ORDER_STATUSES] } },
+            select: { id: true, orderNumber: true, status: true, driver: { select: { id: true, name: true } } },
+          },
         }
       });
 
-      // Update vehicle status based on current dispatch
-      const updatedVehicles = await Promise.all(vehicles.map(async (vehicle) => {
-        const activeDispatch = vehicle.dispatches[0];
-        let correctStatus = 'AVAILABLE';
-        
-        if (activeDispatch) {
-          if (activeDispatch.status === 'PENDING' || activeDispatch.status === 'DISPATCHED' || activeDispatch.status === 'IN_TRANSIT') {
-            correctStatus = 'IN_USE';
-          }
-        }
-        
-        // Don't override maintenance status
-        if (vehicle.status === 'MAINTENANCE' || vehicle.status === 'UNAVAILABLE') {
-          correctStatus = vehicle.status;
-        }
-        
-        // Update vehicle status if it doesn't match
-        if (vehicle.status !== correctStatus) {
-          await prisma.vehicle.update({
-            where: { id: vehicle.id },
-            data: { status: correctStatus as any }
-          });
-          vehicle.status = correctStatus as any;
-        }
-        
-        return vehicle;
+      const updatedVehicles = vehicles.map(({ orders, ...vehicle }) => ({
+        ...vehicle,
+        activeOrders: orders,
+        activeJobs: orders.length,
+        currentDriver: orders.find((o) => o.driver)?.driver || null,
       }));
 
       const total = await prisma.vehicle.count();
@@ -122,6 +97,88 @@ export class VehiclesController {
         success: false,
         error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
       });
+    }
+  }
+
+  /**
+   * Everything the vehicle has done since it joined the fleet: every delivery
+   * with the driver who drove it, the drivers who have used it, and what it is
+   * doing right now.
+   */
+  static async getVehicleHistory(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      const vehicle = await prisma.vehicle.findUnique({
+        where: { id },
+        select: { id: true, plateNumber: true, type: true, vehicleModel: true, status: true, createdAt: true },
+      });
+      if (!vehicle) {
+        return res.status(404).json({ success: false, error: { code: 'VEHICLE_NOT_FOUND', message: 'Vehicle not found' } });
+      }
+      const [orders, maintenance] = await Promise.all([
+        prisma.deliveryOrder.findMany({
+          where: { vehicleId: id },
+          orderBy: { updatedAt: 'desc' },
+          take: 500,
+          select: {
+            id: true, orderNumber: true, customerName: true, deliveryAddress: true, status: true, totalAmount: true,
+            scheduledDate: true, timeSlotStart: true, deliveredAt: true, createdAt: true, updatedAt: true,
+            driver: { select: { id: true, name: true, phone: true } },
+          },
+        }),
+        prisma.maintenanceRecord.findMany({
+          where: { vehicleId: id },
+          orderBy: { scheduledDate: 'desc' },
+          select: { id: true, type: true, description: true, scheduledDate: true, completedDate: true, cost: true },
+        }),
+      ]);
+      const isActive = (status: string) => (ACTIVE_ORDER_STATUSES as readonly string[]).includes(status);
+      const active = orders.filter((o) => isActive(o.status));
+      const drivers = new Map<number, { id: number; name: string; phone: string; trips: number; lastTrip: Date }>();
+      for (const o of orders) {
+        if (!o.driver) continue;
+        const d = drivers.get(o.driver.id) || { ...o.driver, trips: 0, lastTrip: o.updatedAt };
+        d.trips += 1;
+        if (o.updatedAt > d.lastTrip) d.lastTrip = o.updatedAt;
+        drivers.set(o.driver.id, d);
+      }
+      // One timeline: deliveries and maintenance, newest first
+      const timeline = [
+        ...orders.map((o) => ({
+          kind: 'delivery' as const,
+          at: o.deliveredAt || o.timeSlotStart || o.scheduledDate || o.createdAt,
+          orderId: o.id, orderNumber: o.orderNumber, customerName: o.customerName, address: o.deliveryAddress,
+          status: o.status, amount: Number(o.totalAmount || 0), driver: o.driver,
+        })),
+        ...maintenance.map((m) => ({
+          kind: 'maintenance' as const,
+          at: m.completedDate || m.scheduledDate,
+          id: m.id, type: m.type, description: m.description, cost: Number(m.cost || 0), completed: Boolean(m.completedDate),
+        })),
+      ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+      const delivered = orders.filter((o) => o.status === 'DELIVERED');
+      res.json({
+        success: true,
+        data: {
+          vehicle,
+          inUse: active.length > 0,
+          active,
+          currentDriver: active.find((o) => o.driver)?.driver || null,
+          drivers: [...drivers.values()].sort((a, b) => b.trips - a.trips),
+          timeline,
+          summary: {
+            trips: orders.length,
+            delivered: delivered.length,
+            deliveredValue: delivered.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0),
+            maintenanceCost: maintenance.reduce((sum, m) => sum + Number(m.cost || 0), 0),
+            inServiceSince: vehicle.createdAt,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Vehicle history error:', error);
+      res.status(500).json({ success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' } });
     }
   }
 
@@ -260,7 +317,7 @@ export class VehiclesController {
         }
       });
 
-      // Update vehicle status back to available
+      // Back to available (or in use, if it still has open deliveries)
       await prisma.vehicle.update({
         where: { id: Number(id) },
         data: { 
@@ -268,6 +325,7 @@ export class VehiclesController {
           lastMaintenance: new Date()
         }
       });
+      await syncVehicleStatus(Number(id));
 
       res.json({ 
         success: true,
@@ -350,6 +408,30 @@ export class VehiclesController {
     try {
       const { id } = req.params;
       const { plateNumber, type, capacity, status, fuelType, vehicleModel, year } = req.body;
+
+      // In Use is automatic: it follows the vehicle's open deliveries
+      if (status !== undefined) {
+        if (!['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'UNAVAILABLE'].includes(status)) {
+          return res.status(400).json({ success: false, error: { code: 'INVALID_STATUS', message: 'Status must be AVAILABLE, MAINTENANCE or UNAVAILABLE' } });
+        }
+        const active = await activeOrdersForVehicle(Number(id));
+        if (status !== 'IN_USE' && active.length) {
+          const list = active.slice(0, 5).map((o) => o.orderNumber).join(', ');
+          return res.status(409).json({
+            success: false,
+            error: {
+              code: 'VEHICLE_BUSY',
+              message: `This vehicle is on ${active.length} open ${active.length === 1 ? 'delivery' : 'deliveries'} (${list}). It becomes available automatically when ${active.length === 1 ? 'it is' : 'they are'} finished, or reassign ${active.length === 1 ? 'it' : 'them'} first.`,
+            },
+          });
+        }
+        if (status === 'IN_USE' && !active.length) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'NO_ACTIVE_DELIVERY', message: 'In Use is set automatically when the vehicle is assigned to a delivery.' },
+          });
+        }
+      }
 
       const vehicle = await prisma.vehicle.update({
         where: { id: Number(id) },

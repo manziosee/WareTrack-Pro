@@ -34,7 +34,7 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
     setLoading(true);
     
     try {
-      await vehiclesService.updateVehicle(Number(vehicle.id), {
+      const res = await vehiclesService.updateVehicle(Number(vehicle.id), {
         plateNumber: formData.plateNumber,
         type: formData.type,
         capacity: Number(formData.capacity),
@@ -43,13 +43,14 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
         fuelType: formData.fuelType,
         status: formData.status
       });
+      if (res?.success === false) throw new Error(res?.error?.message || 'Failed to update vehicle');
       
       toast.success(`Vehicle ${formData.plateNumber} updated successfully!`);
       onClose();
       if (onSave) onSave();
     } catch (error: any) {
       console.error('Failed to update vehicle:', error);
-      toast.error(error.response?.data?.error?.message || 'Failed to update vehicle');
+      toast.error(error.response?.data?.error?.message || error.message || 'Failed to update vehicle', { duration: 6000 });
     } finally {
       setLoading(false);
     }
@@ -137,11 +138,12 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
+            {vehicle.status === 'IN_USE' && <option value="IN_USE">In Use (on a delivery)</option>}
             <option value="AVAILABLE">Available</option>
-            <option value="IN_USE">In Use</option>
             <option value="MAINTENANCE">Maintenance</option>
             <option value="UNAVAILABLE">Unavailable</option>
           </select>
+          <p className="mt-1 text-xs text-gray-500">In Use is automatic while the vehicle is on a delivery.</p>
         </div>
       </div>
       

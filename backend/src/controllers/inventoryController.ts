@@ -44,15 +44,95 @@ export class InventoryController {
     }
   }
 
+  /** Every category: the managed list plus any name already used by an item, with item counts. */
   static async getCategories(req: Request, res: Response) {
     try {
-      const categories = ['Electronics', 'Furniture', 'Office Supplies', 'Equipment', 'Tools', 'Materials'];
-      res.json({ success: true, data: categories });
+      const [saved, used] = await Promise.all([
+        prisma.inventoryCategory.findMany({ orderBy: { name: 'asc' } }),
+        prisma.inventoryItem.groupBy({ by: ['category'], _count: { _all: true }, _sum: { quantity: true } }),
+      ]);
+      const byName = new Map<string, any>();
+      for (const c of saved) byName.set(c.name.toLowerCase(), { id: c.id, name: c.name, description: c.description, color: c.color, items: 0, units: 0 });
+      for (const u of used) {
+        if (!u.category) continue;
+        const key = u.category.toLowerCase();
+        const row = byName.get(key) || { id: null, name: u.category, description: null, color: null, items: 0, units: 0 };
+        row.items += u._count._all;
+        row.units += u._sum.quantity || 0;
+        byName.set(key, row);
+      }
+      const data = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+      // ?names=1 keeps the old plain list for simple clients
+      res.json({ success: true, data: req.query.names ? data.map((c) => c.name) : data });
     } catch (error) {
       res.status(500).json({ 
         success: false,
         error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
       });
+    }
+  }
+
+  static async createCategory(req: Request, res: Response) {
+    try {
+      const name = String(req.body?.name || '').trim().replace(/\s+/g, ' ');
+      if (name.length < 2 || name.length > 60) {
+        return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name must be 2 to 60 characters' } });
+      }
+      const existing = await prisma.inventoryCategory.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } });
+      if (existing) return res.json({ success: true, data: existing });
+      const category = await prisma.inventoryCategory.create({
+        data: { name, description: req.body?.description ? String(req.body.description).slice(0, 200) : null, color: req.body?.color || null },
+      });
+      res.status(201).json({ success: true, data: category });
+    } catch (error) {
+      res.status(500).json({ success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' } });
+    }
+  }
+
+  /** Rename (by current name, so categories only used by items can be renamed too). */
+  static async renameCategory(req: Request, res: Response) {
+    try {
+      const from = String(req.body?.from || '').trim();
+      const to = String(req.body?.to || '').trim().replace(/\s+/g, ' ');
+      if (!from || to.length < 2 || to.length > 60) {
+        return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Give the current name and a new name of 2 to 60 characters' } });
+      }
+      const result = await prisma.$transaction(async (tx) => {
+        const items = await tx.inventoryItem.updateMany({ where: { category: { equals: from, mode: 'insensitive' } }, data: { category: to } });
+        const current = await tx.inventoryCategory.findFirst({ where: { name: { equals: from, mode: 'insensitive' } } });
+        const target = await tx.inventoryCategory.findFirst({ where: { name: { equals: to, mode: 'insensitive' } } });
+        if (current && target && current.id !== target.id) await tx.inventoryCategory.delete({ where: { id: current.id } });
+        else if (current) await tx.inventoryCategory.update({ where: { id: current.id }, data: { name: to, description: req.body?.description ?? current.description } });
+        else if (!target) await tx.inventoryCategory.create({ data: { name: to } });
+        return items.count;
+      });
+      res.json({ success: true, data: { name: to, itemsUpdated: result } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' } });
+    }
+  }
+
+  /** Delete a category; items in it move to `moveTo` (required when it has items). */
+  static async deleteCategory(req: Request, res: Response) {
+    try {
+      const name = String(req.query.name || req.body?.name || '').trim();
+      const moveTo = String(req.query.moveTo || req.body?.moveTo || '').trim();
+      if (!name) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required' } });
+      const count = await prisma.inventoryItem.count({ where: { category: { equals: name, mode: 'insensitive' } } });
+      if (count && !moveTo) {
+        return res.status(409).json({ success: false, error: { code: 'CATEGORY_IN_USE', message: `${count} item${count === 1 ? ' is' : 's are'} in this category. Choose a category to move ${count === 1 ? 'it' : 'them'} to.` } });
+      }
+      await prisma.$transaction(async (tx) => {
+        if (count) await tx.inventoryItem.updateMany({ where: { category: { equals: name, mode: 'insensitive' } }, data: { category: moveTo } });
+        await tx.inventoryCategory.deleteMany({ where: { name: { equals: name, mode: 'insensitive' } } });
+        if (moveTo) {
+          const exists = await tx.inventoryCategory.findFirst({ where: { name: { equals: moveTo, mode: 'insensitive' } } });
+          if (!exists) await tx.inventoryCategory.create({ data: { name: moveTo } });
+        }
+      });
+      res.json({ success: true, data: { moved: count } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' } });
     }
   }
 

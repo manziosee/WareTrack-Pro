@@ -864,3 +864,16 @@ model SavedReport {
 
   @@map("saved_reports")
 }
+
+/// Inventory categories that can be managed from the app. Items keep the
+/// category name; renaming a category renames it on its items too.
+model InventoryCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  color       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("inventory_categories")
+}

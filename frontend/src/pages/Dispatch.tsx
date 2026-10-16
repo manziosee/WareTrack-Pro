@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Eye, Edit, Trash2, Truck, Package, MapPin, User, Clock, CalendarClock, StickyNote, Navigation, CheckCircle2, CalendarDays, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { Plus, Eye, Edit, Trash2, Truck, Package, MapPin, User, Clock, CalendarClock, StickyNote, Navigation, CheckCircle2, CalendarDays, RefreshCw, Radar, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -22,6 +23,7 @@ import { useList } from '@/hooks/useList';
 import { undoableAction } from '@/utils/undoableAction';
 import { formatDate } from '@/utils/formatters';
 import { statusLabel } from '@/utils/status';
+import { refreshOperations, stageOf, isToday } from '@/utils/operations';
 
 const STATUSES = ['PENDING', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'];
 
@@ -32,13 +34,29 @@ const timeRange = (start?: string, end?: string) => {
 };
 
 function DispatchContent() {
-  const { rows, loading, setRows, refresh } = useList<any>('dispatches', '/dispatch');
+  const queryClient = useQueryClient();
+  const [params, setParams] = useSearchParams();
+  const { rows, loading, setRows } = useList<any>('dispatches', '/dispatch');
+  const { rows: orders } = useList<any>('orders', '/orders');
+  const refresh = () => refreshOperations(queryClient);
+  const [newForOrder, setNewForOrder] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [driver, setDriver] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewId, setViewId] = useState<number | null>(null);
+
+  // /dispatch?view=ID (from Tracking) opens that dispatch; /dispatch?order=ID starts one for that order
+  useEffect(() => {
+    const view = Number(params.get('view'));
+    const order = Number(params.get('order'));
+    if (view) setViewId(view);
+    if (order) { setNewForOrder(order); setShowCreate(true); }
+    if (view || order) setParams({}, { replace: true });
+  }, [params, setParams]);
+
+  const waiting = useMemo(() => orders.filter((o) => stageOf(o) === 'WAITING'), [orders]);
 
   const drivers = useMemo(() => Array.from(new Set(rows.map((d) => d.driver?.name).filter(Boolean))).sort(), [rows]);
   const filtered = useMemo(() => rows.filter((d) => (!status || d.status === status) && (!driver || d.driver?.name === driver)), [rows, status, driver]);
@@ -48,12 +66,13 @@ function DispatchContent() {
   const stats = {
     today: rows.filter((d) => new Date(d.scheduledDate).toDateString() === today).length,
     active: rows.filter((d) => ['DISPATCHED', 'IN_TRANSIT'].includes(d.status)).length,
-    delivered: rows.filter((d) => d.status === 'DELIVERED').length,
+    delivered: rows.filter((d) => d.status === 'DELIVERED' && isToday(d.actualDelivery || d.updatedAt)).length,
     pending: rows.filter((d) => d.status === 'PENDING').length,
   };
 
   const onSaved = () => {
     setShowCreate(false);
+    setNewForOrder(null);
     setEditing(null);
     refresh();
   };
@@ -64,7 +83,7 @@ function DispatchContent() {
     const results = await Promise.all(targets.map((d) => dispatchService.updateDispatchStatus(d.id, next).catch(() => ({ success: false }))));
     const failed = results.filter((r: any) => r?.success === false).length;
     if (failed) toast.error(`${failed} dispatch${failed === 1 ? '' : 'es'} could not be updated`);
-    else toast.success(`Marked ${statusLabel(next).toLowerCase()}`);
+    else toast.success(next === 'CANCELLED' ? 'Assignment cancelled: the order is back to waiting for a driver' : `Marked ${statusLabel(next).toLowerCase()}. The order, driver and vehicle are updated too.`);
     refresh();
   };
 
@@ -125,9 +144,23 @@ function DispatchContent() {
       <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard label="Scheduled today" value={stats.today} icon={<CalendarClock className="h-5 w-5" />} tone="accent" />
         <StatCard label="On the road" value={stats.active} icon={<Navigation className="h-5 w-5" />} tone="info" />
-        <StatCard label="Delivered" value={stats.delivered} icon={<CheckCircle2 className="h-5 w-5" />} tone="success" />
-        <StatCard label="Waiting" value={stats.pending} icon={<Clock className="h-5 w-5" />} />
+        <StatCard label="Delivered today" value={stats.delivered} icon={<CheckCircle2 className="h-5 w-5" />} tone="success" />
+        <StatCard label="Assigned, not left" value={stats.pending} icon={<Clock className="h-5 w-5" />} />
       </div>
+
+      {waiting.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900">
+          <span className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            <b>{waiting.length}</b> {waiting.length === 1 ? 'order is' : 'orders are'} waiting for a driver
+            <span className="hidden text-warning-700 sm:inline">({waiting.slice(0, 3).map((o) => o.orderNumber).join(', ')}{waiting.length > 3 ? '…' : ''})</span>
+          </span>
+          <span className="flex gap-2">
+            <Link to="/tracking" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-warning-300 bg-white px-3 text-xs font-semibold text-warning-800 hover:bg-warning-100"><Radar className="h-3.5 w-3.5" /> See in Tracking</Link>
+            <Button size="sm" onClick={() => { setNewForOrder(waiting[0].id); setShowCreate(true); }}><Plus className="mr-1 h-4 w-4" /> Assign {waiting[0].orderNumber}</Button>
+          </span>
+        </div>
+      )}
 
       <DataTable
         storageKey="dispatch"
@@ -160,6 +193,7 @@ function DispatchContent() {
         rowActions={(d) => (
           <>
             <button onClick={() => setViewId(d.id)} className="action-btn action-btn-view" title="View"><Eye className="h-4 w-4" /></button>
+            <Link to={`/tracking?order=${d.orderId}`} onClick={(e) => e.stopPropagation()} className="action-btn action-btn-view" title="Track order"><Radar className="h-4 w-4" /></Link>
             <button onClick={() => setEditing(d)} className="action-btn action-btn-edit" title="Edit"><Edit className="h-4 w-4" /></button>
             <button onClick={() => removeDispatches([d])} className="action-btn action-btn-delete" title="Delete"><Trash2 className="h-4 w-4" /></button>
           </>
@@ -175,7 +209,7 @@ function DispatchContent() {
               className="h-8 rounded-lg border border-accent-200 bg-white px-2 text-xs font-medium text-gray-700"
             >
               <option value="" disabled>Change status…</option>
-              {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+              {STATUSES.map((s) => <option key={s} value={s}>{s === 'CANCELLED' ? 'Cancel assignment' : statusLabel(s)}</option>)}
             </select>
             <button onClick={() => { removeDispatches(selected); clear(); }} className="inline-flex h-8 items-center gap-1 rounded-lg bg-error-500 px-2.5 text-xs font-semibold text-white hover:bg-error-600"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
           </>
@@ -194,8 +228,9 @@ function DispatchContent() {
           <>
             <select value="" onChange={(e) => e.target.value && changeStatus([viewing], e.target.value)} className="h-9 rounded-xl border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700">
               <option value="">Change status…</option>
-              {STATUSES.filter((s) => s !== viewing.status).map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+              {STATUSES.filter((s) => s !== viewing.status).map((s) => <option key={s} value={s}>{s === 'CANCELLED' ? 'Cancel assignment' : statusLabel(s)}</option>)}
             </select>
+            <Link to={`/tracking?order=${viewing.orderId}`} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50"><Radar className="h-4 w-4" /> Track</Link>
             <Button variant="secondary" size="sm" onClick={() => setEditing(viewing)}><Edit className="mr-1.5 h-4 w-4" /> Edit</Button>
           </>
         ) : undefined}
@@ -211,7 +246,7 @@ function DispatchContent() {
               <DetailSection title="Order" icon={<Package className="h-4 w-4" />}>
                 <DetailGrid>
                   <DetailField label="Customer">{viewing.order?.customerName || '—'}</DetailField>
-                  <DetailField label="Order">{viewing.order?.orderNumber || '—'}</DetailField>
+                  <DetailField label="Order">{viewing.order ? <Link to={`/orders/${viewing.orderId}`} className="text-primary-700 hover:underline">{viewing.order.orderNumber}</Link> : '—'}</DetailField>
                   <DetailField label="Address" className="sm:col-span-2">
                     <span className="inline-flex items-start gap-1.5"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-500" />{viewing.order?.deliveryAddress || '—'}</span>
                   </DetailField>
@@ -220,11 +255,11 @@ function DispatchContent() {
               <DetailSection title="Assignment" icon={<User className="h-4 w-4" />}>
                 <DetailGrid>
                   <DetailField label="Driver">
-                    {viewing.driver?.name || '—'}
+                    {viewing.driver ? <Link to={`/drivers?view=${viewing.driverId}`} className="hover:underline">{viewing.driver.name}</Link> : '—'}
                     {viewing.driver?.phone && <a href={`tel:${viewing.driver.phone}`} className="block text-xs font-normal text-primary-600 hover:underline">{viewing.driver.phone}</a>}
                   </DetailField>
                   <DetailField label="Vehicle">
-                    {viewing.vehicle?.plateNumber || '—'}
+                    {viewing.vehicle ? <Link to={`/vehicles?view=${viewing.vehicleId}`} className="hover:underline">{viewing.vehicle.plateNumber}</Link> : '—'}
                     {viewing.vehicle && <span className="block text-xs font-normal text-gray-500">{viewing.vehicle.type} · {viewing.vehicle.capacity}kg</span>}
                   </DetailField>
                   <DetailField label="Route" className="sm:col-span-2">{viewing.route || '—'}</DetailField>
@@ -241,8 +276,8 @@ function DispatchContent() {
         )}
       </Drawer>
 
-      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="New dispatch" subtitle="Pick an order, a driver and a vehicle" icon={<Plus className="h-5 w-5" />} size="lg">
-        <DispatchForm onClose={() => setShowCreate(false)} onSave={onSaved} />
+      <Modal isOpen={showCreate} onClose={() => { setShowCreate(false); setNewForOrder(null); }} title="New dispatch" subtitle="Pick an order, a driver and a vehicle" icon={<Plus className="h-5 w-5" />} size="lg">
+        {showCreate && <DispatchForm key={newForOrder || 'new'} initialOrderId={newForOrder || undefined} onClose={() => { setShowCreate(false); setNewForOrder(null); }} onSave={onSaved} />}
       </Modal>
       <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)} title="Edit dispatch" icon={<Edit className="h-5 w-5" />} size="lg">
         {editing && <DispatchForm dispatch={editing} onClose={() => setEditing(null)} onSave={onSaved} />}

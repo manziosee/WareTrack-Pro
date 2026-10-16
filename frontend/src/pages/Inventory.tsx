@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Eye, Edit, Trash2, Package, Boxes, PackageX, AlertTriangle, Wallet, RefreshCw, Printer } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Package, Boxes, PackageX, AlertTriangle, Wallet, RefreshCw, Printer, Tags } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -17,6 +17,7 @@ import ExportMenu from '@/components/table/ExportMenu';
 import AddInventoryForm from '@/components/forms/AddInventoryForm';
 import EditInventoryForm from '@/components/forms/EditInventoryForm';
 import ViewInventoryModal from '@/components/forms/ViewInventoryModal';
+import { CategoryManager, useCategories } from '@/components/inventory/Categories';
 import { inventoryService } from '@/services/inventoryService';
 import { useList } from '@/hooks/useList';
 import { undoableAction } from '@/utils/undoableAction';
@@ -37,6 +38,7 @@ export default function Inventory() {
   const [level, setLevel] = useState('');
   const [status, setStatus] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [showCategories, setShowCategories] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewId, setViewId] = useState<number | null>(null);
 
@@ -47,7 +49,11 @@ export default function Inventory() {
     if (params.get('new') || params.get('view')) setParams({}, { replace: true });
   }, [params, setParams]);
 
-  const categories = useMemo(() => Array.from(new Set(rows.map((i) => i.category))).sort(), [rows]);
+  const { data: managedCategories = [] } = useCategories();
+  const categories = useMemo(
+    () => Array.from(new Set([...managedCategories.map((c) => c.name), ...rows.map((i) => i.category)].filter(Boolean))).sort(),
+    [rows, managedCategories]
+  );
   const filtered = useMemo(
     () => rows.filter((i) => (!category || i.category === category) && (!level || stockLevel(i) === level) && (!status || i.status === status)),
     [rows, category, level, status]
@@ -149,6 +155,7 @@ export default function Inventory() {
             <button onClick={refresh} className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50" title="Refresh">
               <RefreshCw className="h-4 w-4" />
             </button>
+            {canEdit && <Button size="sm" variant="secondary" onClick={() => setShowCategories(true)}><Tags className="mr-1.5 h-4 w-4" /> Categories</Button>}
             {canEdit && <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="mr-1.5 h-4 w-4" /> Add item</Button>}
           </>
         }
@@ -244,6 +251,9 @@ export default function Inventory() {
         )}
       </Drawer>
 
+      <Modal isOpen={showCategories} onClose={() => setShowCategories(false)} title="Inventory categories" subtitle="Add, rename or remove categories" icon={<Tags className="h-5 w-5" />}>
+        <CategoryManager onChanged={refresh} />
+      </Modal>
       <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add inventory item" icon={<Plus className="h-5 w-5" />} size="lg">
         <AddInventoryForm onClose={() => setShowAdd(false)} onSave={saveItem} />
       </Modal>

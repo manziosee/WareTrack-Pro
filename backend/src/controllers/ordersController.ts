@@ -1,5 +1,6 @@
 import { emitEvent } from '../services/events';
 import { ORDER_STATUSES, onOrderStatusChanged } from '../services/orderLifecycle';
+import { syncDriverStatus, syncVehicleStatus } from '../services/fleetStatus';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { QueueService } from '../services/queueService';
@@ -27,7 +28,9 @@ export class OrdersController {
         include: {
           items: { include: { item: true } },
           driver: true,
-          vehicle: true
+          vehicle: true,
+          // Latest dispatch, so the Tracking and Dispatch pages can link to each other
+          dispatches: { select: { id: true, status: true, scheduledDate: true, estimatedDelivery: true }, orderBy: { createdAt: 'desc' }, take: 1 }
         },
         orderBy: { createdAt: 'desc' }
       });
@@ -292,6 +295,7 @@ export class OrdersController {
         });
       });
 
+      if (status && status !== existingOrder.status) await onOrderStatusChanged(order.id, existingOrder.status);
       res.json({ success: true, data: order });
     } catch (error: any) {
       console.error('Update order error:', error);
@@ -320,7 +324,13 @@ export class OrdersController {
         });
       }
 
-      const previous = await prisma.deliveryOrder.findUnique({ where: { id: Number(id) }, select: { status: true } });
+      const previous = await prisma.deliveryOrder.findUnique({ where: { id: Number(id) }, select: { status: true, driverId: true } });
+      if (previous && !previous.driverId && ['DISPATCHED', 'IN_TRANSIT', 'DELIVERED'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_DRIVER', message: 'Assign a driver and vehicle first (Dispatch), then update the status.' }
+        });
+      }
       const updateData: any = { status };
       if (status === 'DELIVERED') {
         updateData.deliveredAt = new Date();
@@ -337,7 +347,7 @@ export class OrdersController {
         }
       });
 
-      onOrderStatusChanged(order.id, previous?.status);
+      await onOrderStatusChanged(order.id, previous?.status);
       res.json({ success: true, data: order });
     } catch (error: any) {
       if (error.code === 'P2025') {
@@ -385,6 +395,9 @@ export class OrdersController {
           where: { id: Number(id) }
         });
       });
+      // Free the driver and vehicle if this was their open delivery
+      await syncDriverStatus(order.driverId);
+      await syncVehicleStatus(order.vehicleId);
 
       res.json({ 
         success: true,

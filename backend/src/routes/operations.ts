@@ -152,12 +152,10 @@ router.post('/auto-dispatch/:orderId', ...fleet, async (req, res, next) => {
         include: { driver: { select: { name: true, userId: true } }, vehicle: { select: { plateNumber: true } } },
       });
       await tx.deliveryOrder.update({ where: { id: orderId }, data: { status: 'DISPATCHED', driverId: driverId!, vehicleId: vehicleId! } });
-      await tx.driver.update({ where: { id: driverId! }, data: { status: 'ON_DUTY' } });
-      await tx.vehicle.update({ where: { id: vehicleId! }, data: { status: 'IN_USE' } });
       return d;
     });
     emitEvent('dispatch.created', { id: dispatch.id, orderId, orderNumber: order.orderNumber, driver: dispatch.driver.name, auto: true });
-    onOrderStatusChanged(orderId, order.status);
+    await onOrderStatusChanged(orderId, order.status);
     res.status(201).json({ success: true, data: dispatch });
   } catch (error) {
     next(error);
@@ -211,9 +209,8 @@ router.post('/my-deliveries/:orderId/start', auth, authorizeRoles('DRIVER'), asy
     await prisma.$transaction([
       prisma.deliveryOrder.update({ where: { id: order.id }, data: { status: 'IN_TRANSIT' } }),
       prisma.dispatch.updateMany({ where: { orderId: order.id, status: { in: ['PENDING', 'DISPATCHED'] } }, data: { status: 'IN_TRANSIT', dispatchedAt: new Date() } }),
-      prisma.driver.update({ where: { id: driver.id }, data: { status: 'ON_DUTY' } }),
     ]);
-    onOrderStatusChanged(order.id, order.status);
+    await onOrderStatusChanged(order.id, order.status);
     res.json({ success: true });
   } catch (error) {
     next(error);
@@ -247,13 +244,8 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
       });
       await tx.deliveryOrder.update({ where: { id: order.id }, data: { status: 'DELIVERED', deliveredAt: now, deliveryAttempts: { increment: 1 } } });
       await tx.dispatch.update({ where: { id: dispatch.id }, data: { status: 'DELIVERED', actualDelivery: now } });
-      const stillBusy = await tx.deliveryOrder.count({ where: { driverId: driver.id, status: { in: ['DISPATCHED', 'IN_TRANSIT'] } } });
-      if (!stillBusy) {
-        await tx.driver.update({ where: { id: driver.id }, data: { status: 'AVAILABLE' } });
-        await tx.vehicle.update({ where: { id: dispatch.vehicleId }, data: { status: 'AVAILABLE' } });
-      }
     });
-    onOrderStatusChanged(order.id, order.status);
+    await onOrderStatusChanged(order.id, order.status);
     res.json({ success: true, data: { confirmationCode } });
   } catch (error) {
     next(error);
@@ -283,11 +275,7 @@ router.post('/orders/:orderId/fail', auth, async (req, res, next) => {
         data: { returnNumber: `RET-${String(count + 1).padStart(6, '0')}`, orderId: order.id, type: 'FAILED_DELIVERY', reason: String(reason).slice(0, 200), notes, createdBy: Number(req.user!.userId) },
       });
     });
-    if (order.driverId) {
-      const busy = await prisma.deliveryOrder.count({ where: { driverId: order.driverId, status: { in: ['DISPATCHED', 'IN_TRANSIT'] } } });
-      if (!busy) await prisma.driver.update({ where: { id: order.driverId }, data: { status: 'AVAILABLE' } });
-    }
-    onOrderStatusChanged(order.id, order.status);
+    await onOrderStatusChanged(order.id, order.status);
     emitEvent('return.created', { id: ret.id, returnNumber: ret.returnNumber, orderNumber: order.orderNumber, type: ret.type });
     res.json({ success: true, data: ret });
   } catch (error) {
@@ -453,7 +441,7 @@ router.post('/returns/:id/status', ...orderStaff, async (req, res, next) => {
         },
       });
     });
-    onOrderStatusChanged(ret.orderId, previousOrderStatus);
+    await onOrderStatusChanged(ret.orderId, previousOrderStatus);
     emitEvent('return.updated', { id: updated.id, returnNumber: updated.returnNumber, status: updated.status });
     res.json({ success: true, data: updated });
   } catch (error) {

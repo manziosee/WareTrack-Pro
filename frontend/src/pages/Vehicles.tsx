@@ -17,6 +17,7 @@ import ExportMenu from '@/components/table/ExportMenu';
 import AddVehicleForm from '@/components/forms/AddVehicleForm';
 import EditVehicleForm from '@/components/forms/EditVehicleForm';
 import ScheduleMaintenanceForm from '@/components/forms/ScheduleMaintenanceForm';
+import { VehicleUsage } from '@/components/fleet/FleetHistory';
 import { vehiclesService } from '@/services/vehiclesService';
 import { useList } from '@/hooks/useList';
 import { undoableAction } from '@/utils/undoableAction';
@@ -120,6 +121,10 @@ export default function Vehicles() {
     },
     { id: 'type', header: 'Type', accessor: (v) => v.type },
     { id: 'status', header: 'Status', accessor: (v) => v.status, cell: (v) => <StatusBadge status={v.status} /> },
+    {
+      id: 'driver', header: 'Driver now', accessor: (v) => v.currentDriver?.name || '',
+      cell: (v) => v.currentDriver ? <span className="text-gray-800">{v.currentDriver.name}</span> : <span className="text-gray-400">—</span>,
+    },
     { id: 'capacity', header: 'Capacity', align: 'right', accessor: (v) => v.capacity, cell: (v) => `${Number(v.capacity || 0).toLocaleString()} kg` },
     { id: 'fuel', header: 'Fuel', accessor: (v) => v.fuelType || '' },
     { id: 'service', header: 'Last service', accessor: (v) => (v.lastMaintenance ? new Date(v.lastMaintenance) : null), cell: (v) => <span className="text-gray-600">{v.lastMaintenance ? formatDate(v.lastMaintenance) : 'Never'}</span> },
@@ -213,6 +218,7 @@ export default function Vehicles() {
                 <DetailField label="Added">{formatDate(viewing.createdAt)}</DetailField>
               </DetailGrid>
             </DetailSection>
+            <VehicleUsage vehicleId={viewing.id} />
             <DetailSection title="Maintenance history" icon={<Wrench className="h-4 w-4" />}>
               <MaintenanceHistory vehicleId={viewing.id} />
             </DetailSection>

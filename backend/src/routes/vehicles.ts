@@ -8,6 +8,7 @@ router.get('/', auth, VehiclesController.getVehicles);
 router.get('/status', auth, VehiclesController.getStatuses);
 router.get('/:id', auth, VehiclesController.getVehicleById);
 router.get('/:id/maintenance', auth, VehiclesController.getMaintenanceHistory);
+router.get('/:id/history', auth, VehiclesController.getVehicleHistory);
 router.post('/', auth, authorizeRoles(...ROLES.fleetManagers), VehiclesController.createVehicle);
 router.post('/:id/maintenance', auth, authorizeRoles(...ROLES.fleetManagers), VehiclesController.scheduleMaintenance);
 router.put('/:id', auth, authorizeRoles(...ROLES.fleetManagers), VehiclesController.updateVehicle);

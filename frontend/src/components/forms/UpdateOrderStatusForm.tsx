@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { refreshOperations } from '@/utils/operations';
 import { useState } from 'react';
 import { ordersService } from '@/services/ordersService';
 import toast from 'react-hot-toast';
@@ -10,6 +12,7 @@ interface UpdateOrderStatusFormProps {
 }
 
 const UpdateOrderStatusForm = ({ orderId, currentStatus, onClose }: UpdateOrderStatusFormProps) => {
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     status: currentStatus,
     notes: '',
@@ -23,21 +26,23 @@ const UpdateOrderStatusForm = ({ orderId, currentStatus, onClose }: UpdateOrderS
     { value: 'PENDING', label: 'Pending' },
     { value: 'DISPATCHED', label: 'Dispatched' },
     { value: 'IN_TRANSIT', label: 'In Transit' },
-    { value: 'DELIVERED', label: 'Delivered' }
+    { value: 'DELIVERED', label: 'Delivered' },
+    { value: 'CANCELLED', label: 'Cancelled' }
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await ordersService.updateOrderStatus(Number(orderId), {
+      const res = await ordersService.updateOrderStatus(Number(orderId), {
         status: formData.status
       });
-      toast.success(`Order status updated to ${formData.status}`);
+      if (res?.success === false) throw new Error(res?.error?.message || 'Failed to update order status');
+      toast.success(`Order marked ${formData.status.replace('_', ' ').toLowerCase()}`);
+      refreshOperations(queryClient);
       onClose();
-      window.location.reload();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update order status:', error);
-      toast.error('Failed to update order status');
+      toast.error(error?.message || 'Failed to update order status', { duration: 6000 });
     }
   };
 

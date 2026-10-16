@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
 import Button from '../ui/Button';
+import { CategorySelect } from '@/components/inventory/Categories';
 import { unitCategories } from '../../utils/units';
 
 interface EditInventoryFormProps {
@@ -53,7 +54,7 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
         unitCategory: foundCategory,
         location: item.location,
         description: item.description || '',
-        status: item.status || 'active',
+        status: String(item.status || 'active').toLowerCase(),
         unitPrice: item.unitPrice || 0,
         supplier: item.supplier || '',
         barcode: item.barcode || ''
@@ -68,7 +69,7 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
     try {
       console.log('Updating inventory item:', formData);
       if (onSave) {
-        await onSave(formData);
+        await onSave({ ...formData, status: formData.status.toUpperCase() });
       }
       // Don't call onClose() here - let the parent handle it after successful save
     } catch (error) {
@@ -103,17 +104,7 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-          <select
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          >
-            <option value="">Select Category</option>
-            <option value="Electronics">Electronics</option>
-            <option value="Furniture">Furniture</option>
-            <option value="Office Supplies">Office Supplies</option>
-          </select>
+          <CategorySelect value={formData.category} onChange={(category) => setFormData({ ...formData, category })} required />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>

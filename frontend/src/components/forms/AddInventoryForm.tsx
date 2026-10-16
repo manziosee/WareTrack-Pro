@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CategorySelect } from '@/components/inventory/Categories';
 import { unitCategories } from '@/utils/units';
 
 interface AddInventoryFormProps {
@@ -10,7 +11,7 @@ const AddInventoryForm = ({ onClose, onSave }: AddInventoryFormProps) => {
   const [formData, setFormData] = useState({
     name: '',
     code: '',
-    category: 'Electronics',
+    category: '',
     quantity: '',
     minQuantity: '',
     unitPrice: '',
@@ -74,16 +75,7 @@ const AddInventoryForm = ({ onClose, onSave }: AddInventoryFormProps) => {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-          <select
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="Electronics">Electronics</option>
-            <option value="Furniture">Furniture</option>
-            <option value="Office Supplies">Office Supplies</option>
-            <option value="Tools">Tools</option>
-          </select>
+          <CategorySelect value={formData.category} onChange={(category) => setFormData({ ...formData, category })} required />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
