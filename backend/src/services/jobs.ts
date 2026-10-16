@@ -1,3 +1,4 @@
+import { linkOrdersToAccounts } from './finance';
 import { reconcileFleet } from './fleetStatus';
 import { prisma } from '../lib/prisma';
 import { NotificationService } from './notificationService';
@@ -124,6 +125,12 @@ export function startJobs() {
   };
 
   setTimeout(safe('dedupe-notifications', dedupeNotifications), 20 * 1000);
+  // First run after customer accounts were added: build them from existing orders
+  setTimeout(safe('customer-accounts', async () => {
+    if (await prisma.customerAccount.count()) return;
+    const { created, linked } = await linkOrdersToAccounts();
+    if (created) console.log(`🏢 Customer accounts created from orders: ${created} accounts, ${linked} orders linked`);
+  }), 15 * 1000);
   setTimeout(safe('fleet-status', async () => {
     const { closedDispatches } = await reconcileFleet();
     if (closedDispatches) console.log(`🚚 Fleet status repaired: ${closedDispatches} stale dispatches closed`);

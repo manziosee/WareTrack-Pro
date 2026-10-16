@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Route as RouteIcon, Navigation, Phone, Play, CheckCircle2, XCircle, Camera, MapPin, Package, Clock, Radio, Banknote, WifiOff, Loader2, Sparkles,
+  Route as RouteIcon, Navigation, Phone, Play, CheckCircle2, XCircle, Camera, MapPin, Package, Clock, Radio, Banknote, WifiOff, Loader2, Sparkles, Receipt,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
@@ -13,6 +13,8 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import SignaturePad, { type SignaturePadHandle } from '@/components/ui/SignaturePad';
 import api from '@/services/api';
 import { useRealtime } from '@/context/RealtimeContext';
+import { compressImage } from '@/utils/image';
+import ExpenseForm from '@/components/finance/ExpenseForm';
 
 const QUEUE_KEY = 'waretrack-pod-queue';
 const FAIL_REASONS = ['Customer not available', 'Wrong address', 'Customer refused delivery', 'Business closed', 'Road closed', 'Vehicle problem'];
@@ -22,28 +24,6 @@ const slot = (o: any) => {
   const f = (d: string) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return `${f(o.timeSlotStart)}${o.timeSlotEnd ? `–${f(o.timeSlotEnd)}` : ''}`;
 };
-
-/** Resize a photo to keep uploads small (max 1280px, JPEG). */
-function compressImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = () => {
-      img.onload = () => {
-        const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
-      };
-      img.onerror = reject;
-      img.src = String(reader.result);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 function readQueue(): any[] {
   try {
@@ -72,6 +52,8 @@ export default function MyDeliveries() {
   const [recipient, setRecipient] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [cash, setCash] = useState('');
+  const [addingExpense, setAddingExpense] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
@@ -86,6 +68,12 @@ export default function MyDeliveries() {
     refetchInterval: 60_000,
   });
 
+  const { data: myCash, refetch: refetchCash } = useQuery({
+    queryKey: ['my-cash'],
+    queryFn: async () => (await api.get('/my-cash', { params: { t: Date.now() } })).data?.data,
+    refetchInterval: 120_000,
+  });
+
   const driverId = data?.driver?.id;
   const { data: route } = useQuery({
     queryKey: ['my-route', driverId, data?.open?.length],
@@ -96,7 +84,10 @@ export default function MyDeliveries() {
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['my-deliveries'] });
     queryClient.invalidateQueries({ queryKey: ['my-route'] });
+    refetchCash();
   };
+
+  const collectsCash = (o: any) => o && o.paymentMethod === 'CASH' && o.paymentStatus !== 'PAID' && Number(o.amountDue ?? o.totalAmount) > 0;
 
   // Online/offline and sending queued proofs when back online
   useEffect(() => {
@@ -167,6 +158,7 @@ export default function MyDeliveries() {
     setRecipient(o.customerName || '');
     setPhoto(null);
     setNotes('');
+    setCash(collectsCash(o) ? String(Math.round(Number(o.amountDue ?? o.totalAmount))) : '');
     setHasSignature(false);
     navigator.geolocation?.getCurrentPosition((pos) => { positionRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }; }, () => undefined, { timeout: 8000 });
   };
@@ -174,7 +166,11 @@ export default function MyDeliveries() {
   const complete = async () => {
     const signatureData = signatureRef.current?.toDataURL();
     if (!recipient.trim() || !signatureData) return toast.error('Add the recipient name and a signature');
-    const body = { recipientName: recipient.trim(), signatureData, photoData: photo || undefined, notes: notes || undefined, latitude: positionRef.current?.lat, longitude: positionRef.current?.lng };
+    const body = {
+      recipientName: recipient.trim(), signatureData, photoData: photo || undefined, notes: notes || undefined,
+      latitude: positionRef.current?.lat, longitude: positionRef.current?.lng,
+      cashCollected: cash ? Number(cash) : undefined,
+    };
     setBusy(true);
     if (!navigator.onLine) {
       writeQueue([...readQueue(), { orderId: completing.id, body }]);
@@ -202,14 +198,6 @@ export default function MyDeliveries() {
       setFailing(null);
       refresh();
     } else toast.error(res.data?.error?.message || 'Could not update');
-  };
-
-  const collectCash = async (o: any) => {
-    const res = await api.post('/payments/manual', { orderId: o.id, provider: 'CASH' });
-    if (res.data?.success) {
-      toast.success(`Cash payment recorded for ${o.orderNumber}`);
-      refresh();
-    } else toast.error(res.data?.error?.message || 'Could not record the payment');
   };
 
   // Show stops in the optimized order when available
@@ -243,6 +231,19 @@ export default function MyDeliveries() {
           <WifiOff className="h-4 w-4" /> {!online ? 'You are offline. Completed deliveries are saved and sent when you reconnect.' : `${queued} saved deliver${queued === 1 ? 'y' : 'ies'} waiting to send…`}
         </div>
       )}
+
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <div className={`rounded-2xl border p-3 ${myCash?.cashInHand ? 'border-warning-200 bg-warning-50' : 'border-gray-100 bg-white'}`}>
+          <p className="flex items-center gap-1.5 text-xs text-gray-600"><Banknote className="h-3.5 w-3.5" /> Cash in hand</p>
+          <p className="text-lg font-bold text-gray-900">RWF {Math.round(myCash?.cashInHand || 0).toLocaleString()}</p>
+          <p className="text-[11px] text-gray-500">{myCash?.payments?.length ? `${myCash.payments.length} deliver${myCash.payments.length === 1 ? 'y' : 'ies'} · hand in at the office` : 'Nothing to hand in'}</p>
+        </div>
+        <button onClick={() => setAddingExpense(true)} className="flex flex-col items-start justify-center rounded-2xl border border-gray-100 bg-white p-3 text-left hover:bg-gray-50">
+          <span className="flex items-center gap-1.5 text-xs text-gray-600"><Receipt className="h-3.5 w-3.5" /> Fuel or other cost?</span>
+          <span className="text-sm font-semibold text-primary-700">+ Add expense</span>
+          <span className="text-[11px] text-gray-500">With a receipt photo</span>
+        </button>
+      </div>
 
       {route && route.stops.length > 1 && (
         <div className="mb-4 flex items-center gap-3 rounded-2xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-accent-800">
@@ -290,10 +291,10 @@ export default function MyDeliveries() {
                   )}
                   <button onClick={() => { setFailing(o); setFailReason(FAIL_REASONS[0]); }} className="flex flex-col items-center gap-1 border-l border-gray-100 py-3 text-error-600 hover:bg-error-50"><XCircle className="h-4 w-4" /> Can't deliver</button>
                 </div>
-                {o.paymentStatus !== 'PAID' && o.paymentMethod === 'CASH' && (
-                  <button onClick={() => collectCash(o)} className="flex w-full items-center justify-center gap-1.5 border-t border-gray-100 bg-warning-50 py-2 text-xs font-semibold text-warning-800 hover:bg-warning-100">
-                    <Banknote className="h-4 w-4" /> Collect RWF {Number(o.totalAmount || 0).toLocaleString()} cash
-                  </button>
+                {collectsCash(o) && (
+                  <p className="flex w-full items-center justify-center gap-1.5 border-t border-gray-100 bg-warning-50 py-2 text-xs font-semibold text-warning-800">
+                    <Banknote className="h-4 w-4" /> Collect RWF {Math.round(Number(o.amountDue ?? o.totalAmount)).toLocaleString()} cash on delivery
+                  </p>
                 )}
               </li>
             );
@@ -340,6 +341,12 @@ export default function MyDeliveries() {
               </label>
             )}
           </div>
+          {collectsCash(completing) && (
+            <label className="block rounded-xl bg-warning-50 p-3 text-sm"><span className="mb-1 flex items-center gap-1.5 font-medium text-warning-900"><Banknote className="h-4 w-4" /> Cash collected (RWF)</span>
+              <input type="number" min={0} inputMode="numeric" value={cash} onChange={(e) => setCash(e.target.value)} className="h-11 w-full rounded-xl border border-warning-200 bg-white px-3 text-base font-semibold" />
+              <span className="mt-1 block text-xs text-warning-800">Due: RWF {Math.round(Number(completing.amountDue ?? completing.totalAmount)).toLocaleString()}. Put 0 if the customer didn't pay.</span>
+            </label>
+          )}
           <label className="block text-sm"><span className="mb-1 block font-medium text-gray-700">Notes (optional)</span>
             <input value={notes} onChange={(e) => setNotes(e.target.value)} className="h-10 w-full rounded-xl border border-gray-200 px-3 text-sm" placeholder="e.g. left with security" />
           </label>
@@ -347,6 +354,10 @@ export default function MyDeliveries() {
             {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />} Confirm delivery
           </Button>
         </div>
+      </Modal>
+
+      <Modal isOpen={addingExpense} onClose={() => setAddingExpense(false)} title="Add expense" icon={<Receipt className="h-5 w-5" />}>
+        {addingExpense && <ExpenseForm onSaved={() => setAddingExpense(false)} />}
       </Modal>
 
       <Modal isOpen={Boolean(failing)} onClose={() => setFailing(null)} title="Couldn't deliver" subtitle={failing?.orderNumber} icon={<XCircle className="h-5 w-5" />} size="sm">

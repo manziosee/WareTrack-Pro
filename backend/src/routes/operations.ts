@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { haversineKm, optimizeRoute, routeLegs, type Point } from '../services/routing';
 import { onOrderStatusChanged } from '../services/orderLifecycle';
+import { refreshOrderPayment } from '../services/finance';
 import { emitEvent } from '../services/events';
 import { emitToRoles } from '../services/realtime';
 
@@ -184,14 +185,19 @@ router.get('/my-deliveries', auth, authorizeRoles('DRIVER'), async (req, res, ne
         vehicle: { select: { plateNumber: true } },
         proofs: { select: { confirmationCode: true, recipientName: true, createdAt: true } },
         dispatches: { select: { id: true, status: true }, orderBy: { createdAt: 'desc' }, take: 1 },
+        payments: { where: { status: 'SUCCESSFUL' }, select: { amount: true } },
       },
     });
+    const withDue = orders.map(({ payments, ...o }) => ({
+      ...o,
+      amountDue: Math.max(0, Math.round((Number(o.totalAmount) - payments.reduce((s, p) => s + Number(p.amount), 0)) * 100) / 100),
+    }));
     res.json({
       success: true,
       data: {
         driver: { id: driver.id, name: driver.name, status: driver.status },
-        open: orders.filter((o) => (OPEN as readonly string[]).includes(o.status)),
-        done: orders.filter((o) => !(OPEN as readonly string[]).includes(o.status)).slice(-20).reverse(),
+        open: withDue.filter((o) => (OPEN as readonly string[]).includes(o.status)),
+        done: withDue.filter((o) => !(OPEN as readonly string[]).includes(o.status)).slice(-20).reverse(),
       },
     });
   } catch (error) {
@@ -223,7 +229,9 @@ router.post('/my-deliveries/:orderId/start', auth, authorizeRoles('DRIVER'), asy
  */
 router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), async (req, res, next) => {
   try {
-    const { recipientName, signatureData, photoData, notes, latitude, longitude } = req.body || {};
+    const { recipientName, signatureData, photoData, notes, latitude, longitude, cashCollected } = req.body || {};
+    const cash = Math.round(Number(cashCollected || 0) * 100) / 100;
+    if (!Number.isFinite(cash) || cash < 0) return bad(res, 'Cash collected must be a positive amount');
     if (!recipientName || !signatureData) return bad(res, 'Recipient name and signature are required');
     if (String(signatureData).length > 400_000 || (photoData && String(photoData).length > 2_000_000)) return bad(res, 'Signature or photo is too large');
 
@@ -244,7 +252,18 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
       });
       await tx.deliveryOrder.update({ where: { id: order.id }, data: { status: 'DELIVERED', deliveredAt: now, deliveryAttempts: { increment: 1 } } });
       await tx.dispatch.update({ where: { id: dispatch.id }, data: { status: 'DELIVERED', actualDelivery: now } });
+      // Cash on delivery: the driver holds it until they hand it in (Cash page)
+      if (cash > 0) {
+        await tx.deliveryOrder.update({ where: { id: order.id }, data: { cashCollected: cash } });
+        await tx.payment.create({
+          data: {
+            orderId: order.id, provider: 'CASH', amount: cash, status: 'SUCCESSFUL', completedAt: now,
+            accountId: order.accountId, collectedByDriverId: driver.id, message: `Collected by ${driver.name} on delivery`,
+          },
+        });
+      }
     });
+    if (cash > 0) await refreshOrderPayment(order.id);
     await onOrderStatusChanged(order.id, order.status);
     res.json({ success: true, data: { confirmationCode } });
   } catch (error) {

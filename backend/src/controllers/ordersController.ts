@@ -1,6 +1,7 @@
 import { emitEvent } from '../services/events';
 import { ORDER_STATUSES, onOrderStatusChanged } from '../services/orderLifecycle';
 import { syncDriverStatus, syncVehicleStatus } from '../services/fleetStatus';
+import { accountForCustomer, createOrderRecord, OrderInputError } from '../services/orderCreation';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { QueueService } from '../services/queueService';
@@ -82,110 +83,33 @@ export class OrdersController {
 
   static async createOrder(req: Request, res: Response) {
     try {
-      const { 
-        customerName, customerEmail, customerPhone, contactNumber,
-        deliveryAddress, priority = 'MEDIUM', orderType = 'Delivery',
-        paymentMethod = 'Cash', scheduledDate, deliveryInstructions,
-        items = []
-      } = req.body;
-
-      // Validate required fields
-      if (!customerName || !deliveryAddress || !contactNumber) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Customer name, delivery address, and contact number are required' }
+      const body = req.body || {};
+      // Every order belongs to a customer account (found or created by name) so balances add up
+      let accountId = body.accountId ? Number(body.accountId) : null;
+      if (!accountId && body.customerName) {
+        const account = await accountForCustomer(String(body.customerName), {
+          phone: body.contactNumber || body.customerPhone, address: body.deliveryAddress, email: body.customerEmail,
         });
+        accountId = account?.id ?? null;
       }
-
-      if (!items || items.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'At least one item is required' }
-        });
-      }
-
-      // Generate order number
-      const orderCount = await prisma.deliveryOrder.count();
-      const orderNumber = `ORD-${String(orderCount + 1).padStart(6, '0')}`;
-
-      // Calculate total from items
-      let totalAmount = 0;
-      const processedItems = [];
-
-      for (const item of items) {
-        const inventoryItem = await prisma.inventoryItem.findUnique({
-          where: { id: Number(item.itemId || item.inventoryId) }
-        });
-
-        if (!inventoryItem) {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'ITEM_NOT_FOUND', message: `Item with ID ${item.itemId || item.inventoryId} not found` }
-          });
+      const order = await createOrderRecord(
+        { ...body, accountId },
+        {
+          createdBy: Number(req.user?.userId) || 1,
+          source: 'STAFF',
+          trustPrices: true,
+          allowOverCredit: req.user?.role === 'ADMIN' && body.overrideCredit === true,
         }
-
-        const quantity = Number(item.quantity);
-        const unitPrice = Number(item.unitPrice || item.price || inventoryItem.unitPrice);
-        const itemTotal = quantity * unitPrice;
-
-        processedItems.push({
-          itemId: inventoryItem.id,
-          itemName: inventoryItem.name,
-          quantity,
-          unit: item.unit || inventoryItem.unit,
-          unitPrice,
-          totalPrice: itemTotal
-        });
-
-        totalAmount += itemTotal;
-      }
-
-      // Create order with items in transaction
-      const order = await prisma.$transaction(async (tx) => {
-        const newOrder = await tx.deliveryOrder.create({
-          data: {
-            orderNumber,
-            customerId: 1,
-            customerName,
-            deliveryAddress,
-            contactNumber: contactNumber || customerPhone || '',
-            priority: priority as any,
-            status: 'PENDING',
-            orderType,
-            paymentMethod,
-            totalAmount,
-            deliveryInstructions,
-            scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
-            createdBy: Number(req.user?.userId) || 1,
-            items: {
-              create: processedItems
-            }
-          },
-          include: {
-            items: { include: { item: true } },
-            driver: true,
-            vehicle: true
-          }
-        });
-
-        // Update inventory for each item
-        for (const item of processedItems) {
-          await tx.inventoryItem.update({
-            where: { id: item.itemId },
-            data: { quantity: { decrement: item.quantity } }
-          });
-        }
-
-        return newOrder;
-      });
-
-      emitEvent('order.created', { id: order.id, orderNumber: order.orderNumber, customerName: order.customerName, totalAmount: Number(order.totalAmount) });
+      );
       res.status(201).json({ success: true, data: order });
     } catch (error: any) {
+      if (error instanceof OrderInputError) {
+        return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message, details: error.details } });
+      }
       console.error('Create order error:', error);
       res.status(500).json({ 
         success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: error.message || 'Server error' }
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Server error' }
       });
     }
   }

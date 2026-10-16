@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Truck, Car, MapPin, BarChart3, Bell, UserCheck, Settings,
   KanbanSquare, CalendarDays, Map, RotateCcw, ScanLine, Warehouse, FileText, TrendingUp, Award, FileBarChart,
-  Wallet, MessagesSquare, History, Route,
+  Wallet, MessagesSquare, History, Route, Building2, Banknote, Receipt, BookOpen,
 } from 'lucide-react';
 import type { UserRole } from '@/types';
 
@@ -65,6 +65,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { name: 'Drivers', href: '/drivers', icon: UserCheck, roles: ['ADMIN', 'DISPATCH_OFFICER', 'DRIVER'], keywords: 'staff' },
       { name: 'Vehicles', href: '/vehicles', icon: Car, roles: ['ADMIN', 'DISPATCH_OFFICER', 'DRIVER'], keywords: 'trucks fleet maintenance' },
       { name: 'Scorecards', href: '/scorecards', icon: Award, roles: FLEET, keywords: 'performance drivers ranking' },
+      { name: 'Expenses', href: '/expenses', icon: Receipt, roles: ['ADMIN', 'DISPATCH_OFFICER', 'DRIVER'], keywords: 'fuel toll repair receipt costs' },
     ],
   },
   {
@@ -72,7 +73,15 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: 'Reports', href: '/reports', icon: BarChart3, roles: STAFF, keywords: 'analytics charts export' },
       { name: 'Report Builder', href: '/reports/builder', icon: FileBarChart, roles: STAFF, keywords: 'custom schedule email' },
+    ],
+  },
+  {
+    title: 'Money',
+    items: [
       { name: 'Payments', href: '/payments', icon: Wallet, roles: STAFF, keywords: 'momo airtel invoices cash' },
+      { name: 'Customer accounts', href: '/accounts', icon: Building2, roles: STAFF, keywords: 'credit balance owe debt statement customers' },
+      { name: 'Driver cash', href: '/cash', icon: Banknote, roles: STAFF, keywords: 'cash on delivery handover reconcile' },
+      { name: 'Accounting export', href: '/accounting', icon: BookOpen, roles: ['ADMIN'], keywords: 'quickbooks odoo vat csv accountant' },
     ],
   },
   {

@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { refreshOrderPayment } from '../services/finance';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { providerConfigured, requestCollection, collectionStatus, type Provider } from '../services/payments';
 import { emitEvent } from '../services/events';
@@ -13,11 +14,8 @@ const bad = (res: Response, message: string, status = 400) =>
 const VAT = 0.18;
 
 async function markPaid(orderId: number, paymentId: number) {
-  await prisma.$transaction([
-    prisma.payment.update({ where: { id: paymentId }, data: { status: 'SUCCESSFUL', completedAt: new Date() } }),
-    prisma.deliveryOrder.update({ where: { id: orderId }, data: { paymentStatus: 'PAID' } }),
-    prisma.invoice.updateMany({ where: { orderId }, data: { status: 'PAID', paidAt: new Date() } }),
-  ]);
+  await prisma.payment.update({ where: { id: paymentId }, data: { status: 'SUCCESSFUL', completedAt: new Date() } });
+  await refreshOrderPayment(orderId);
   const payment = await prisma.payment.findUnique({ where: { id: paymentId }, include: { order: { select: { orderNumber: true } } } });
   emitEvent('payment.completed', { id: paymentId, orderId, orderNumber: payment?.order.orderNumber, amount: Number(payment?.amount), provider: payment?.provider });
 }
@@ -100,13 +98,19 @@ router.post('/payments/manual', auth, async (req, res, next) => {
     if (!['CASH', 'BANK_TRANSFER', 'CARD'].includes(provider)) return bad(res, 'provider must be CASH, BANK_TRANSFER or CARD');
     const order = await prisma.deliveryOrder.findUnique({ where: { id: Number(orderId) } });
     if (!order) return bad(res, 'Order not found', 404);
+    let collectedByDriverId: number | null = null;
     if (req.user!.role === 'DRIVER') {
       const driver = await prisma.driver.findUnique({ where: { userId: Number(req.user!.userId) }, select: { id: true } });
       if (!driver || order.driverId !== driver.id) return bad(res, 'Order not found', 404);
+      // Cash taken by a driver stays "in hand" until handed in (Cash page)
+      if (provider === 'CASH') collectedByDriverId = driver.id;
     }
     if (order.paymentStatus === 'PAID') return bad(res, 'This order is already paid');
     const payment = await prisma.payment.create({
-      data: { orderId: order.id, provider, amount: amount ? Number(amount) : Number(order.totalAmount), status: 'PENDING', externalRef: reference || null },
+      data: {
+        orderId: order.id, provider, amount: amount ? Number(amount) : Number(order.totalAmount), status: 'PENDING', externalRef: reference || null,
+        accountId: order.accountId, collectedByDriverId, receivedById: collectedByDriverId ? null : Number(req.user!.userId),
+      },
     });
     await markPaid(order.id, payment.id);
     res.status(201).json({ success: true, data: await prisma.payment.findUnique({ where: { id: payment.id } }) });
@@ -141,17 +145,24 @@ router.get('/invoices/order/:orderId', ...staff, async (req, res, next) => {
       include: { items: true, payments: { where: { status: 'SUCCESSFUL' }, orderBy: { completedAt: 'desc' } } },
     });
     if (!order) return bad(res, 'Order not found', 404);
+    // Prices include VAT: the invoice total is the order total (what the customer pays)
+    const total = Math.round(Number(order.totalAmount) * 100) / 100;
+    const subtotal = Math.round((total / (1 + VAT)) * 100) / 100;
+    const tax = Math.round((total - subtotal) * 100) / 100;
+    const account = order.accountId ? await prisma.customerAccount.findUnique({ where: { id: order.accountId } }) : null;
+    const dueDate = new Date((order.deliveredAt || order.createdAt).getTime() + (account?.paymentTermsDays || 0) * 86400000);
+    const status = order.paymentStatus === 'PAID' ? 'PAID' : order.paymentStatus === 'PARTIAL' ? 'PARTIAL' : 'UNPAID';
     let invoice = await prisma.invoice.findUnique({ where: { orderId } });
     if (!invoice) {
-      const subtotal = Number(order.totalAmount);
-      const tax = Math.round(subtotal * VAT);
       invoice = await prisma.invoice.create({
         data: {
-          invoiceNumber: `INV-${String(order.id).padStart(6, '0')}`, orderId, subtotal, tax, total: subtotal + tax,
-          status: order.paymentStatus === 'PAID' ? 'PAID' : 'UNPAID', dueDate: new Date(Date.now() + 14 * 86400000),
-          paidAt: order.paymentStatus === 'PAID' ? new Date() : null,
+          invoiceNumber: `INV-${String(order.id).padStart(6, '0')}`, orderId, subtotal, tax, total, status, dueDate,
+          paidAt: status === 'PAID' ? new Date() : null,
         },
       });
+    } else if (Number(invoice.total) !== total) {
+      // Older invoices added VAT on top of the order total; bring them in line
+      invoice = await prisma.invoice.update({ where: { id: invoice.id }, data: { subtotal, tax, total, status } });
     }
     res.json({
       success: true,

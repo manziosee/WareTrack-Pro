@@ -26,6 +26,7 @@ import operationsRoutes from './routes/operations';
 import commerceRoutes from './routes/commerce';
 import intelligenceRoutes from './routes/intelligence';
 import platformRoutes from './routes/platform';
+import financeRoutes from './routes/finance';
 import chatRoutes from './routes/chat';
 import swaggerUi from 'swagger-ui-express';
 import rateLimit from 'express-rate-limit';
@@ -225,6 +226,7 @@ app.use('/api', warehousingRoutes);
 app.use('/api', operationsRoutes);
 app.use('/api', commerceRoutes);
 app.use('/api', platformRoutes);
+app.use('/api', financeRoutes);
 
 // Unknown routes return JSON instead of Express's HTML page
 app.use((req, res) => {

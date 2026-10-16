@@ -100,6 +100,7 @@ model Vehicle {
   currentDrivers     Driver[]
   maintenanceRecords MaintenanceRecord[]
   healthRecords      VehicleHealth[]
+  expenses           Expense[]
 
   @@map("vehicles")
 }
@@ -135,6 +136,9 @@ model Driver {
   orders         DeliveryOrder[]
   dispatches     Dispatch[]
   achievements   DriverAchievement[]
+  cashPayments   Payment[]           @relation("CashCollectedBy")
+  cashHandovers  CashHandover[]
+  expenses       Expense[]
   leaderboard    DriverLeaderboard[]
   ratings        CustomerRating[]
 
@@ -169,10 +173,17 @@ model DeliveryOrder {
   warehouseId          Int?          @map("warehouse_id")
   failureReason        String?       @map("failure_reason")
   deliveryAttempts     Int           @default(0) @map("delivery_attempts")
+  accountId            Int?          @map("account_id")
+  /// Where the order came from: STAFF, ONLINE (order page), API, IMPORT
+  source               String        @default("STAFF")
+  /// Cash the driver collected on delivery (cash on delivery)
+  cashCollected        Decimal?      @map("cash_collected") @db.Decimal(14, 2)
   createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt            DateTime      @updatedAt @map("updated_at")
 
   // Relations
+  account       CustomerAccount? @relation(fields: [accountId], references: [id])
+  expenses      Expense[]
   warehouse     Warehouse?       @relation(fields: [warehouseId], references: [id])
   returns       ReturnRequest[]
   payments      Payment[]
@@ -752,21 +763,32 @@ model ReturnRequest {
 }
 
 model Payment {
-  id          Int       @id @default(autoincrement())
-  orderId     Int       @map("order_id")
-  provider    String
-  phoneNumber String?   @map("phone_number")
-  amount      Decimal   @db.Decimal(14, 2)
-  currency    String    @default("RWF")
-  status      String    @default("PENDING")
-  externalRef String?   @map("external_ref")
-  message     String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  completedAt DateTime? @map("completed_at")
+  id                  Int       @id @default(autoincrement())
+  orderId             Int       @map("order_id")
+  provider            String
+  phoneNumber         String?   @map("phone_number")
+  amount              Decimal   @db.Decimal(14, 2)
+  currency            String    @default("RWF")
+  status              String    @default("PENDING")
+  externalRef         String?   @map("external_ref")
+  message             String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  completedAt         DateTime? @map("completed_at")
+  accountId           Int?      @map("account_id")
+  /// Driver who collected this cash payment on delivery
+  collectedByDriverId Int?      @map("collected_by_driver_id")
+  /// Set once the driver has handed the cash in
+  handoverId          Int?      @map("handover_id")
+  receivedById        Int?      @map("received_by_id")
 
-  order DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order       DeliveryOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  account     CustomerAccount? @relation(fields: [accountId], references: [id])
+  collectedBy Driver?          @relation("CashCollectedBy", fields: [collectedByDriverId], references: [id])
+  handover    CashHandover?    @relation(fields: [handoverId], references: [id])
 
   @@index([orderId])
+  @@index([accountId])
+  @@index([collectedByDriverId, handoverId])
   @@map("payments")
 }
 
@@ -876,4 +898,86 @@ model InventoryCategory {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("inventory_categories")
+}
+
+/// A business customer (shop, clinic, hotel…) that orders, often on credit.
+model CustomerAccount {
+  id               Int      @id @default(autoincrement())
+  accountNumber    String   @unique @map("account_number")
+  name             String
+  contactName      String?  @map("contact_name")
+  phone            String?
+  email            String?
+  address          String?
+  /// RRA tax identification number
+  tin              String?
+  creditLimit      Decimal  @default(0) @map("credit_limit") @db.Decimal(14, 2)
+  /// Days the customer has to pay after delivery (0 = pay on delivery)
+  paymentTermsDays Int      @default(0) @map("payment_terms_days")
+  /// ACTIVE, ON_HOLD (no new credit orders), CLOSED
+  status           String   @default("ACTIVE")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  orders   DeliveryOrder[]
+  payments Payment[]
+
+  @@index([name])
+  @@map("customer_accounts")
+}
+
+/// A driver handing in the cash collected on deliveries.
+model CashHandover {
+  id             Int      @id @default(autoincrement())
+  handoverNumber String   @unique @map("handover_number")
+  driverId       Int      @map("driver_id")
+  expected       Decimal  @db.Decimal(14, 2)
+  received       Decimal  @db.Decimal(14, 2)
+  difference     Decimal  @db.Decimal(14, 2)
+  /// BALANCED, SHORT, OVER
+  status         String
+  notes          String?
+  receivedById   Int      @map("received_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  driver   Driver    @relation(fields: [driverId], references: [id])
+  payments Payment[]
+
+  @@index([driverId, createdAt])
+  @@map("cash_handovers")
+}
+
+/// Fuel, tolls, repairs and other running costs, with a receipt photo.
+model Expense {
+  id            Int       @id @default(autoincrement())
+  expenseNumber String    @unique @map("expense_number")
+  /// FUEL, TOLL, PARKING, REPAIR, MAINTENANCE, OTHER
+  type          String
+  amount        Decimal   @db.Decimal(14, 2)
+  liters        Decimal?  @db.Decimal(10, 2)
+  odometer      Int?
+  vehicleId     Int?      @map("vehicle_id")
+  driverId      Int?      @map("driver_id")
+  orderId       Int?      @map("order_id")
+  description   String?
+  receiptPhoto  String?   @map("receipt_photo")
+  /// PENDING, APPROVED, REJECTED
+  status        String    @default("PENDING")
+  spentAt       DateTime  @default(now()) @map("spent_at")
+  createdById   Int       @map("created_by_id")
+  reviewedById  Int?      @map("reviewed_by_id")
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewNote    String?   @map("review_note")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  vehicle Vehicle?       @relation(fields: [vehicleId], references: [id])
+  driver  Driver?        @relation(fields: [driverId], references: [id])
+  order   DeliveryOrder? @relation(fields: [orderId], references: [id])
+
+  @@index([spentAt])
+  @@index([vehicleId])
+  @@index([driverId])
+  @@map("expenses")
 }

@@ -42,6 +42,10 @@ const Scorecards = lazy(() => import('./pages/Scorecards'));
 const Reports = lazy(() => import('./pages/Reports'));
 const ReportBuilder = lazy(() => import('./pages/ReportBuilder'));
 const Payments = lazy(() => import('./pages/Payments'));
+const Accounts = lazy(() => import('./pages/Accounts'));
+const Cash = lazy(() => import('./pages/Cash'));
+const Expenses = lazy(() => import('./pages/Expenses'));
+const Accounting = lazy(() => import('./pages/Accounting'));
 const Messages = lazy(() => import('./pages/Messages'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
@@ -130,6 +134,10 @@ function App() {
                 <Route path="/reports" element={<AppPage roles={STAFF}><Reports /></AppPage>} />
                 <Route path="/reports/builder" element={<AppPage roles={STAFF}><ReportBuilder /></AppPage>} />
                 <Route path="/payments" element={<AppPage roles={STAFF}><Payments /></AppPage>} />
+                <Route path="/accounts" element={<AppPage roles={STAFF}><Accounts /></AppPage>} />
+                <Route path="/cash" element={<AppPage roles={STAFF}><Cash /></AppPage>} />
+                <Route path="/expenses" element={<AppPage roles={['ADMIN', 'DISPATCH_OFFICER', 'DRIVER']}><Expenses /></AppPage>} />
+                <Route path="/accounting" element={<AppPage roles={['ADMIN']}><Accounting /></AppPage>} />
 
                 {/* Administration */}
                 <Route path="/users" element={<AppPage roles={['ADMIN']}><Users /></AppPage>} />
