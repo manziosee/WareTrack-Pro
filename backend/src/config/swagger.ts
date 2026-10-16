@@ -7,7 +7,7 @@ const options = {
     openapi: '3.0.0',
     info: {
       title: 'WareTrack-Pro API',
-      version: '2.3.0',
+      version: '2.4.0',
       description: 'Comprehensive Warehouse Delivery & Dispatch Tracking System API with Real-time Notifications, Advanced Analytics, and Role-Based Access Control',
       contact: {
         name: 'WareTrack-Pro Support',
@@ -383,7 +383,8 @@ const PUBLIC_PATHS = new Set([
   '/api/auth/register', '/api/auth/login', '/api/auth/verify-login-otp', '/api/auth/refresh',
   '/api/password-reset/request-reset', '/api/password-reset/verify-otp', '/api/password-reset/reset-password',
   '/api/password-reset/resend-otp', '/api/features/customer/register', '/api/features/customer/login',
-  '/api/features/customer/track/{orderNumber}', '/api/features/proof-of-delivery/verify/{code}'
+  '/api/features/customer/track/{orderNumber}', '/api/features/proof-of-delivery/verify/{code}',
+  '/api/public/track/{orderNumber}', '/api/public/catalog', '/api/public/orders'
 ]);
 
 /**
@@ -393,6 +394,8 @@ const PUBLIC_PATHS = new Set([
 export function addUndocumentedRoutes(spec: any, mounts: Array<[string, string, RouterLike]>) {
   spec.paths = spec.paths || {};
   spec.tags = spec.tags || [];
+  spec.components = spec.components || {};
+  spec.components.securitySchemes = { ...(spec.components.securitySchemes || {}), apiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' } };
   const knownTags = new Set(spec.tags.map((t: any) => t.name));
 
   for (const [prefix, tag, router] of mounts) {
@@ -425,7 +428,10 @@ export function addUndocumentedRoutes(spec: any, mounts: Array<[string, string, 
         if (['post', 'put', 'patch'].includes(method)) {
           entry.requestBody = { content: { 'application/json': { schema: { type: 'object' } } } };
         }
-        if (!PUBLIC_PATHS.has(openApiPath)) entry.security = [{ bearerAuth: [] }];
+        if (openApiPath.startsWith('/api/intake/')) {
+          entry.security = [{ apiKeyAuth: [] }];
+          entry.description = 'Send the key from Settings → Online ordering & API in the X-API-Key header.';
+        } else if (!PUBLIC_PATHS.has(openApiPath)) entry.security = [{ bearerAuth: [] }];
         spec.paths[openApiPath][method] = entry;
       }
     }

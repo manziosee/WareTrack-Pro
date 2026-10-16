@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, Bell, Shield, Database, Download, Languages, KeyRound, Webhook, Plug, Check, Settings as SettingsIcon } from 'lucide-react';
+import { User, Bell, Shield, Database, Download, Languages, KeyRound, Webhook, Plug, Check, Globe, Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nContext';
 import { LANGUAGES } from '@/i18n/translations';
@@ -14,6 +14,8 @@ import ReportSettingsComponent from '@/components/ReportSettings';
 import TwoFactorSettings from '@/components/settings/TwoFactorSettings';
 import WebhookSettings from '@/components/settings/WebhookSettings';
 import IntegrationSettings from '@/components/settings/IntegrationSettings';
+import PushSettings from '@/components/settings/PushSettings';
+import OrderingSettings from '@/components/settings/OrderingSettings';
 
 type Tab = { id: string; label: string; icon: typeof User; roles?: string[] };
 
@@ -26,6 +28,7 @@ const TABS: Tab[] = [
   { id: 'security', label: 'Security policy', icon: Shield, roles: ['ADMIN'] },
   { id: 'system', label: 'System', icon: Database, roles: ['ADMIN'] },
   { id: 'integrations', label: 'Integrations', icon: Plug, roles: ['ADMIN'] },
+  { id: 'ordering', label: 'Online ordering & API', icon: Globe, roles: ['ADMIN'] },
   { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['ADMIN'] },
 ];
 
@@ -39,6 +42,7 @@ const TITLES: Record<string, [string, string]> = {
   system: ['System', 'Time zone, currency and formats'],
   integrations: ['Integrations', 'Email, SMS, WhatsApp, Mobile Money and monitoring'],
   webhooks: ['Webhooks', 'Send events to other systems'],
+  ordering: ['Online ordering & API', 'An order page for customers, and keys for other systems'],
 };
 
 export default function Settings() {
@@ -87,12 +91,13 @@ export default function Settings() {
               ))}
             </div>
           )}
-          {activeTab === 'notifications' && <NotificationPreferencesComponent />}
+          {activeTab === 'notifications' && <><PushSettings /><NotificationPreferencesComponent /></>}
           {activeTab === 'reports' && <ReportSettingsComponent onExportClick={() => setShowExportModal(true)} />}
           {activeTab === 'security' && <SecuritySettings />}
           {activeTab === 'system' && <SystemConfigurationComponent />}
           {activeTab === 'integrations' && <IntegrationSettings />}
           {activeTab === 'webhooks' && <WebhookSettings />}
+          {activeTab === 'ordering' && <OrderingSettings />}
         </section>
       </div>
 

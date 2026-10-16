@@ -1054,3 +1054,43 @@ model StockCountLine {
   @@unique([countId, itemId])
   @@map("stock_count_lines")
 }
+
+/// A browser/phone that receives push notifications for a user.
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  lastUsed  DateTime @default(now()) @map("last_used")
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+/// Keys for a client's shop or system to send orders (POST /api/intake/orders).
+model ApiKey {
+  id          Int       @id @default(autoincrement())
+  name        String
+  /// First characters, shown so people can tell keys apart
+  prefix      String
+  /// SHA-256 of the key; the key itself is shown once
+  keyHash     String    @unique @map("key_hash")
+  createdById Int       @map("created_by_id")
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("api_keys")
+}
+
+/// App-wide settings (key → JSON value), e.g. online ordering on/off, VAPID keys.
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}

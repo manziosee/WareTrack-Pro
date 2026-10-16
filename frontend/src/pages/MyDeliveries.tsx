@@ -15,6 +15,7 @@ import api from '@/services/api';
 import { useRealtime } from '@/context/RealtimeContext';
 import { compressImage } from '@/utils/image';
 import ExpenseForm from '@/components/finance/ExpenseForm';
+import PushSettings from '@/components/settings/PushSettings';
 
 const QUEUE_KEY = 'waretrack-pod-queue';
 const FAIL_REASONS = ['Customer not available', 'Wrong address', 'Customer refused delivery', 'Business closed', 'Road closed', 'Vehicle problem'];
@@ -25,19 +26,39 @@ const slot = (o: any) => {
   return `${f(o.timeSlotStart)}${o.timeSlotEnd ? `–${f(o.timeSlotEnd)}` : ''}`;
 };
 
-function readQueue(): any[] {
+const CACHE_KEY = 'waretrack-my-deliveries-cache';
+
+/** Actions waiting for a connection: { url, body, label } (older entries were { orderId, body }). */
+function readQueue(): { url: string; body: any; label?: string }[] {
   try {
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    const items = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    return items.map((i: any) => (i.url ? i : { url: `/my-deliveries/${i.orderId}/complete`, body: i.body, label: 'delivery' }));
   } catch {
     return [];
   }
 }
 
+/** Save the queue; if the phone is out of space, keep the deliveries but drop photos. */
 function writeQueue(items: any[]) {
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(items));
+    return true;
   } catch {
-    // Storage full or unavailable
+    try {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(items.map((i) => ({ ...i, body: { ...i.body, photoData: undefined } }))));
+      toast('Phone storage is full: the delivery is saved without its photo.', { icon: '⚠️', duration: 6000 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function readCache() {
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null') || undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -64,7 +85,13 @@ export default function MyDeliveries() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-deliveries'],
-    queryFn: async () => (await api.get('/my-deliveries', { params: { t: Date.now() } })).data?.data,
+    queryFn: async () => {
+      const result = (await api.get('/my-deliveries', { params: { t: Date.now() } })).data?.data;
+      // Keep the last list on the phone so stops are still visible without signal
+      if (result?.driver) try { localStorage.setItem(CACHE_KEY, JSON.stringify(result)); } catch { /* storage full */ }
+      return result ?? readCache();
+    },
+    initialData: readCache,
     refetchInterval: 60_000,
   });
 
@@ -96,13 +123,15 @@ export default function MyDeliveries() {
       if (!items.length || !navigator.onLine) return;
       const remaining = [];
       for (const item of items) {
-        const res = await api.post(`/my-deliveries/${item.orderId}/complete`, item.body).catch(() => null);
-        if (!res?.data?.success && res?.status !== 400) remaining.push(item);
+        const res = await api.post(item.url, item.body).catch(() => null);
+        // No real answer from the server (the API client turns network errors into a reply
+        // without a status): still offline, keep it. A server rejection can't succeed later.
+        if (!res?.status) remaining.push(item);
       }
       writeQueue(remaining);
       setQueued(remaining.length);
       if (items.length !== remaining.length) {
-        toast.success(`${items.length - remaining.length} saved deliver${items.length - remaining.length === 1 ? 'y' : 'ies'} sent`);
+        toast.success(`${items.length - remaining.length} saved update${items.length - remaining.length === 1 ? '' : 's'} sent`);
         refresh();
       }
     };
@@ -117,6 +146,22 @@ export default function MyDeliveries() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep the screen awake while sharing location, so tracking doesn't pause when the phone would sleep
+  useEffect(() => {
+    if (!sharing || !('wakeLock' in navigator)) return;
+    let lock: any = null;
+    const acquire = async () => {
+      try { lock = await (navigator as any).wakeLock.request('screen'); } catch { /* not allowed (e.g. battery saver) */ }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') acquire(); };
+    acquire();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      lock?.release?.().catch?.(() => undefined);
+    };
+  }, [sharing]);
 
   // Location sharing while the page is open
   useEffect(() => {
@@ -144,7 +189,26 @@ export default function MyDeliveries() {
     return () => navigator.geolocation.clearWatch(watch);
   }, [sharing, socket]);
 
+  /** No signal: remember the action, update the list on the phone, send it later. */
+  const queueOffline = (url: string, body: any, label: string, update: (d: any) => any) => {
+    const ok = writeQueue([...readQueue(), { url, body, label }]);
+    if (!ok) { toast.error('Could not save on this phone. Try again when you have signal.'); return false; }
+    setQueued(readQueue().length);
+    queryClient.setQueryData(['my-deliveries'], (d: any) => {
+      const next = d ? update(d) : d;
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch { /* storage full */ }
+      return next;
+    });
+    return true;
+  };
+
   const start = async (o: any) => {
+    if (!navigator.onLine) {
+      if (queueOffline(`/my-deliveries/${o.id}/start`, {}, 'start', (d) => ({ ...d, open: d.open.map((x: any) => (x.id === o.id ? { ...x, status: 'IN_TRANSIT' } : x)) }))) {
+        toast('No signal: marked on the way here, will sync later.', { icon: '📶' });
+      }
+      return;
+    }
     const res = await api.post(`/my-deliveries/${o.id}/start`, {});
     if (res.data?.success) {
       toast.success(`On the way to ${o.customerName}`);
@@ -172,15 +236,23 @@ export default function MyDeliveries() {
       cashCollected: cash ? Number(cash) : undefined,
     };
     setBusy(true);
-    if (!navigator.onLine) {
-      writeQueue([...readQueue(), { orderId: completing.id, body }]);
-      setQueued(readQueue().length);
+    const saveForLater = () => {
+      const id = completing.id;
+      const saved = queueOffline(`/my-deliveries/${id}/complete`, body, 'delivery', (d) => ({
+        ...d,
+        open: d.open.filter((x: any) => x.id !== id),
+        done: [{ ...d.open.find((x: any) => x.id === id), status: 'DELIVERED' }, ...(d.done || [])],
+      }));
       setBusy(false);
-      setCompleting(null);
-      toast('No connection. Saved on this phone and will send automatically.', { icon: '📶' });
-      return;
-    }
+      if (saved) {
+        setCompleting(null);
+        toast('No connection. Saved on this phone and will send automatically.', { icon: '📶' });
+      }
+    };
+    if (!navigator.onLine) return saveForLater();
     const res = await api.post(`/my-deliveries/${completing.id}/complete`, body).catch(() => null);
+    // Weak signal: the phone thinks it's online but the request never reached the server
+    if (!res?.status) return saveForLater();
     setBusy(false);
     if (res?.data?.success) {
       toast.success(`Delivered ✅ Code ${res.data.data.confirmationCode}`);
@@ -192,6 +264,14 @@ export default function MyDeliveries() {
   };
 
   const fail = async () => {
+    if (!navigator.onLine) {
+      const id = failing.id;
+      if (queueOffline(`/orders/${id}/fail`, { reason: failReason }, 'failed delivery', (d) => ({ ...d, open: d.open.filter((x: any) => x.id !== id) }))) {
+        toast('No signal: saved, dispatch will be told when you reconnect.', { icon: '📶' });
+        setFailing(null);
+      }
+      return;
+    }
     const res = await api.post(`/orders/${failing.id}/fail`, { reason: failReason });
     if (res.data?.success) {
       toast(`${failing.orderNumber} marked as not delivered`, { icon: '📝' });
@@ -228,9 +308,11 @@ export default function MyDeliveries() {
 
       {(!online || queued > 0) && (
         <div className="mb-4 flex items-center gap-2 rounded-2xl bg-warning-50 px-4 py-3 text-sm text-warning-800">
-          <WifiOff className="h-4 w-4" /> {!online ? 'You are offline. Completed deliveries are saved and sent when you reconnect.' : `${queued} saved deliver${queued === 1 ? 'y' : 'ies'} waiting to send…`}
+          <WifiOff className="h-4 w-4 shrink-0" /> {!online ? `You are offline. Keep working: starts, deliveries and problems are saved on this phone${queued ? ` (${queued} waiting)` : ''} and sent when you reconnect.` : `${queued} saved update${queued === 1 ? '' : 's'} waiting to send…`}
         </div>
       )}
+
+      <PushSettings compact />
 
       <div className="mb-4 grid grid-cols-2 gap-3">
         <div className={`rounded-2xl border p-3 ${myCash?.cashInHand ? 'border-warning-200 bg-warning-50' : 'border-gray-100 bg-white'}`}>

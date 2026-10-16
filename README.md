@@ -11,7 +11,7 @@ Manage inventory, orders, vehicles, drivers and deliveries in one place, with a 
 [![API Docs](https://img.shields.io/badge/Swagger-API_Docs-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://waretrack-pro.onrender.com/api-docs)
 [![Postman](https://img.shields.io/badge/Postman-Collection-FF6C37?style=for-the-badge&logo=postman&logoColor=white)](./WareTrack-Pro-API.postman_collection.json)
 
-![Version](https://img.shields.io/badge/version-2.3.0-FF8C42?style=flat-square)
+![Version](https://img.shields.io/badge/version-2.4.0-FF8C42?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
 
 </div>
@@ -31,7 +31,7 @@ Manage inventory, orders, vehicles, drivers and deliveries in one place, with a 
 - [API documentation](#-api-documentation)
 - [Security](#-security)
 - [Project structure](#-project-structure)
-- [What's new in 2.3.0](#-whats-new-in-230)
+- [What's new in 2.4.0](#-whats-new-in-240)
 
 ---
 
@@ -39,15 +39,16 @@ Manage inventory, orders, vehicles, drivers and deliveries in one place, with a 
 
 | Area | Highlights |
 |---|---|
-| 📦 **Inventory** | Stock levels, categories, low-stock alerts, bulk import, barcode labels and phone scanning |
-| 🏬 **Warehouses** | Several warehouses, stock per site, transfers, batches with expiry dates |
+| 📦 **Inventory** | Stock levels, managed categories, pack sizes (crate of 24…), low-stock alerts, bulk import, barcode labels and scanning |
+| 🏬 **Warehouses** | Several warehouses, stock per site, transfers, batches with expiry dates, stock counts with approval |
+| 📋 **Picking & packing** | Pick lists sorted by shelf, scan-to-pack checking, Packed status before dispatch |
 | 🛒 **Purchasing** | Suppliers, purchase orders, receiving, automatic restock of low items |
-| 🧾 **Orders** | Table and Kanban board, delivery calendar, SLA deadlines, returns and failed deliveries |
-| 🚚 **Dispatch** | Auto-dispatch to the best driver, optimised route order, live map of drivers |
-| 📱 **Driver app** | Installable phone app: today's stops, navigation, signature and photo proof of delivery |
+| 🧾 **Orders** | Table and Kanban board, Excel import, online order page, order API, SLA deadlines, returns and failed deliveries |
+| 🚚 **Dispatch** | Auto-dispatch to the best driver, route order and ETAs on real roads, live map; drivers and vehicles free up automatically |
+| 📱 **Driver app** | Installable phone app: today's stops, navigation, proof of delivery, cash collected, expenses, works offline, push notifications |
 | 📍 **Tracking** | Public tracking page with live driver position and ETA; SMS and WhatsApp updates |
-| 💳 **Payments** | MTN MoMo and Airtel Money requests, cash records, printable invoices |
-| 📊 **Insights** | Role dashboards, demand forecast, driver scorecards, anomaly alerts, custom report builder |
+| 💳 **Money** | MoMo and Airtel requests, customer accounts with credit limits and aging, statements, driver cash handovers, expenses, VAT invoices, accounting export (QuickBooks, Odoo) |
+| 📊 **Insights** | Role dashboards, daily/weekly/monthly reports, demand forecast, driver scorecards, anomaly alerts, custom report builder |
 | 💬 **Team** | Real-time chat, notification centre, audit log of every change |
 | 👥 **Users** | Admin approval for new accounts, two-factor sign-in, English / Kinyarwanda / French |
 
@@ -314,7 +315,10 @@ Backend (`backend/.env`; never commit this file):
 | `AIRTEL_CLIENT_ID`, `AIRTEL_CLIENT_SECRET`, `AIRTEL_BASE_URL`, `AIRTEL_COUNTRY`, `AIRTEL_CURRENCY` | Airtel Money |
 | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE` | Sentry error reporting for the API |
 | `AUTO_RESTOCK` | `true` lets the daily job create purchase orders for low stock automatically |
-| `RUN_JOBS` | `true` runs the background jobs outside production (SLA checks, anomalies, scheduled reports) |
+| `RUN_JOBS` | `true` runs the background jobs outside production (SLA checks, anomalies, fleet status, scheduled reports) |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Push notification keys. Optional: if missing, a key pair is generated once and stored in the database. Create your own with `npx web-push generate-vapid-keys`; `VAPID_SUBJECT` is `mailto:you@yourdomain.rw` |
+| `OSRM_URL` | Road routing server (default: the free public OSRM server). `off` uses straight-line estimates only |
+| `ROUTE_TRAFFIC_FACTOR` | Multiplies road drive times for city traffic (default `1.6`) |
 
 The server **refuses to start in production** if `DATABASE_URL` or `JWT_SECRET` is missing, or if `JWT_SECRET` is shorter than 32 characters.
 
@@ -373,7 +377,7 @@ Alternatively, create it from the [`render.yaml`](render.yaml) Blueprint. Secret
 | OpenAPI JSON | [/api-docs.json](https://waretrack-pro.onrender.com/api-docs.json) |
 | Postman | [`WareTrack-Pro-API.postman_collection.json`](./WareTrack-Pro-API.postman_collection.json) |
 
-### Using the Postman collection (v2.3.0)
+### Using the Postman collection (v2.4.0)
 
 1. Import the collection into Postman.
 2. In the collection variables, set `email` and `password`.
@@ -381,6 +385,7 @@ Alternatively, create it from the [`render.yaml`](render.yaml) Blueprint. Secret
 4. Put the code in `otp` and run **POST auth/verify-login-otp**. The tokens are saved for every other request.
 
 Each request's description says which roles may call it. Every path also works under `/api/v1/...`.
+For the **order API** (`/intake/...`), create a key in **Settings → Online ordering & API** and put it in the `api_key` variable.
 
 ### Main endpoint groups
 
@@ -409,6 +414,18 @@ Each request's description says which roles may call it. Every path also works u
 | Chat | `/api/chat` |
 | Two-factor, webhooks, report builder | `/api/auth/2fa`, `/api/webhooks`, `/api/report-builder`, `/api/saved-reports` |
 | Audit log, saved filters | `/api/audit`, `/api/saved-filters` |
+| Customer accounts, credit, statements | `/api/accounts` |
+| Driver cash handovers | `/api/cash`, `/api/my-cash` |
+| Expenses | `/api/expenses` |
+| Accounting export (CSV) | `/api/accounting/export?type=sales\|payments\|expenses\|receivables\|quickbooks\|journal` |
+| Pack sizes | `/api/inventory/:id/packagings`, `/api/packagings` |
+| Stock counts | `/api/stock-counts` |
+| Picking and packing | `/api/packing`, `/api/orders/:id/packing` |
+| Order import | `/api/orders/import` |
+| Push notifications | `/api/push` |
+| API keys (admin) | `/api/api-keys` |
+| Order API (X-API-Key) | `/api/intake/catalog`, `/api/intake/orders` |
+| Online order page (public) | `/api/public/catalog`, `/api/public/orders` |
 
 ---
 
@@ -458,13 +475,44 @@ WareTrack-Pro/
 ├── .github/workflows/        CI, keep-alive, nightly backup
 ├── render.yaml               Render Blueprint for the API
 ├── docs/screenshots/         README screenshots (laptop and phone)
+├── docs/ANDROID.md           Building the Android driver app (background GPS)
 ├── docker-compose.yml        Local stack
 └── WareTrack-Pro-API.postman_collection.json
 ```
 
 ---
 
-## 🆕 What's new in 2.3.0
+## 🆕 What's new in 2.4.0
+
+**Fixes**
+- Drivers and vehicles become **Available** automatically when their last delivery is finished (and **On duty / In use** when given one); Off duty, Maintenance and Unavailable are kept. A background job repairs any mismatch.
+- Driver panel shows deliveries in progress and finished, and the vehicle being driven; vehicle panel shows who drives it now and everything it has done since it joined the fleet.
+- Reports show real **daily, weekly and monthly** numbers (they showed 0 before).
+- Inventory categories can be added, renamed and deleted; editing an item keeps its category.
+- Tracking and Dispatch share the same data and link to each other; cancelling a dispatch puts the order back to "waiting for a driver".
+- Forms show the server's error instead of a false "saved"; order and dispatch status changes are limited to staff.
+
+**Money**
+- **Customer accounts**: balances, credit limits (orders over the limit are blocked), payment terms, aging, printable statements, Excel import. Payments settle the oldest orders first.
+- **Driver cash**: cash collected on delivery is tracked per driver until handed in; short or over handovers are flagged.
+- **Expenses**: fuel, tolls, repairs with receipt photos and approval; cost per delivery.
+- **Accounting export**: VAT sales, payments, expenses, receivables aging, QuickBooks invoices and a balanced Odoo/ledger journal.
+- Prices are VAT-inclusive everywhere, so invoices match what customers pay.
+
+**Warehouse**
+- **Pack sizes** (crate, carton…) with their own price and barcode; orders can sell by pack.
+- **Stock counts** (cycle or full) by scanner, camera or typing, with admin approval that applies only the difference found.
+- **Picking & packing**: pick lists by shelf, scan-to-pack, Packed status shown when dispatching.
+- **Excel import** for orders; orders can't take more stock than is available.
+
+**Drivers and orders in**
+- Driver app works **offline**: starts, deliveries (with signature, photo and cash) and failed deliveries are saved on the phone and sent later.
+- **Push notifications** on phones, even with the app closed (Settings → Notifications).
+- Routes, ETAs and auto-dispatch use **real road distances** (OSRM); the live map draws the road path.
+- **Online order page** (`/order`) for customers and an **order API** with keys for clients' shops.
+- Screen stays on while sharing location; [docs/ANDROID.md](docs/ANDROID.md) explains the native app for background GPS.
+
+## What was new in 2.3.0
 
 **Operations**
 - Live map of drivers and deliveries, Kanban order board, delivery calendar.

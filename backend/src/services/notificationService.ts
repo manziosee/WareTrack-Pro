@@ -1,5 +1,12 @@
 import { prisma } from '../lib/prisma';
 import { EmailService } from './emailService';
+import { pushToUsers } from './push';
+
+async function isDriver(userId?: number) {
+  if (!userId) return false;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  return user?.role === 'DRIVER';
+}
 
 export interface NotificationData {
   userId?: number;
@@ -35,6 +42,12 @@ export class NotificationService {
           // Send to all connected clients (system-wide notification)
           io.emit('notification', notification);
         }
+      }
+
+      // Phone/browser push, so people hear about it even with the app closed
+      const url = data.type === 'MESSAGE' ? '/messages' : data.type === 'ORDER_UPDATE' ? (await isDriver(data.userId) ? '/my-deliveries' : '/orders') : '/notifications';
+      if (data.userId) {
+        void pushToUsers([data.userId], { title: data.title, body: data.message, url, tag: data.type });
       }
 
       // Send email if requested and user has email enabled

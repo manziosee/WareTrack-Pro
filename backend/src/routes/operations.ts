@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
-import { haversineKm, optimizeRoute, routeLegs, type Point } from '../services/routing';
+import { haversineKm, optimizeRouteByRoad, roadDistancesTo, roadLegs, ROAD_FACTOR, type Point } from '../services/routing';
 import { onOrderStatusChanged } from '../services/orderLifecycle';
 import { refreshOrderPayment } from '../services/finance';
 import { emitEvent } from '../services/events';
@@ -49,8 +49,10 @@ router.get('/routes/driver/:driverId', auth, async (req, res, next) => {
     const start = driver.currentLat && driver.currentLng ? { lat: Number(driver.currentLat), lng: Number(driver.currentLng) } : await depotFor(orders[0]?.warehouseId);
     const stops = orders.map((o) => ({ ...o, lat: Number(o.latitude), lng: Number(o.longitude), priorityWeight: PRIORITY_WEIGHT[o.priority] || 1, deadline: o.slaDeadline }));
 
-    const naive = routeLegs(start, [...stops].sort((a, b) => (a.timeSlotStart?.getTime() || 0) - (b.timeSlotStart?.getTime() || 0)));
-    const best = routeLegs(start, optimizeRoute(start, stops));
+    const bySlot = [...stops].sort((a, b) => (a.timeSlotStart?.getTime() || 0) - (b.timeSlotStart?.getTime() || 0));
+    const ordered = await optimizeRouteByRoad(start, stops);
+    // Road distances and the road path when the routing service answers; estimates otherwise
+    const [best, naive] = await Promise.all([roadLegs(start, ordered.route), roadLegs(start, bySlot)]);
     res.json({
       success: true,
       data: {
@@ -59,6 +61,8 @@ router.get('/routes/driver/:driverId', auth, async (req, res, next) => {
         totalKm: best.totalKm,
         totalMinutes: best.totalMinutes,
         savedKm: Math.max(0, Math.round((naive.totalKm - best.totalKm) * 10) / 10),
+        distanceSource: best.source,
+        line: best.line,
         stops: best.legs.map((l, i) => ({
           sequence: i + 1, id: l.stop.id, orderNumber: l.stop.orderNumber, customerName: l.stop.customerName, address: l.stop.deliveryAddress,
           phone: l.stop.contactNumber, priority: l.stop.priority, status: l.stop.status, lat: l.stop.lat, lng: l.stop.lng,
@@ -95,16 +99,20 @@ async function suggestFor(orderId: number) {
   const depot = await depotFor(order.warehouseId);
   const fitting = vehicles.filter((v) => v.capacity >= loadKg).sort((a, b) => a.capacity - b.capacity);
 
+  // Real road distance from each driver to the customer when available
+  const positions = drivers.map((d) => (d.currentLat && d.currentLng ? { lat: Number(d.currentLat), lng: Number(d.currentLng) } : depot));
+  const road = destination ? await roadDistancesTo(positions, destination) : null;
+
   const ranked = drivers
-    .map((d) => {
-      const pos = d.currentLat && d.currentLng ? { lat: Number(d.currentLat), lng: Number(d.currentLng) } : depot;
-      const km = destination ? haversineKm(pos, destination) : haversineKm(pos, depot);
+    .map((d, i) => {
+      const pos = positions[i];
+      const km = road?.[i]?.km ?? (destination ? haversineKm(pos, destination) : haversineKm(pos, depot)) * ROAD_FACTOR;
       const jobs = load.get(d.id) || 0;
       const vehicle = fitting.find((v) => v.id === d.currentVehicleId) || fitting[0] || null;
       // Lower is better: distance, current jobs, and a small bonus for rating and being free
       const score = km * 1.0 + jobs * 4 - (Number(d.rating) || 4) * 0.8 + (d.status === 'AVAILABLE' ? 0 : 3) + (vehicle ? 0 : 50);
       const reasons = [
-        `${Math.round(km * 10) / 10} km away`,
+        `${Math.round(km * 10) / 10} km ${road ? 'by road' : 'away'}`,
         jobs ? `${jobs} active deliver${jobs === 1 ? 'y' : 'ies'}` : 'no active deliveries',
         d.rating ? `rated ${Number(d.rating).toFixed(1)}★` : null,
         vehicle ? `${vehicle.plateNumber} fits ~${loadKg} kg` : 'no free vehicle large enough',

@@ -28,6 +28,7 @@ import intelligenceRoutes from './routes/intelligence';
 import platformRoutes from './routes/platform';
 import financeRoutes from './routes/finance';
 import warehouseOpsRoutes from './routes/warehouseOps';
+import intakeRoutes from './routes/intake';
 import chatRoutes from './routes/chat';
 import swaggerUi from 'swagger-ui-express';
 import rateLimit from 'express-rate-limit';
@@ -36,7 +37,7 @@ import { getAllowedOrigins } from './config/env';
 import { errorHandler } from './middleware/errorHandler';
 import { prisma } from './lib/prisma';
 
-const API_VERSION = '2.3.0';
+const API_VERSION = '2.4.0';
 
 const app = express();
 
@@ -158,7 +159,9 @@ app.get('/api', (req, res) => {
       '/api/warehouses', '/api/transfers', '/api/suppliers', '/api/purchase-orders', '/api/batches', '/api/returns',
       '/api/routes', '/api/dispatch-suggestions', '/api/auto-dispatch', '/api/my-deliveries', '/api/live-map',
       '/api/payments', '/api/invoices', '/api/webhooks', '/api/report-builder', '/api/saved-reports', '/api/auth/2fa',
-      '/api/public/track/:orderNumber'
+      '/api/public/track/:orderNumber', '/api/accounts', '/api/cash', '/api/expenses', '/api/accounting/export',
+      '/api/stock-counts', '/api/packing', '/api/orders/import', '/api/push', '/api/api-keys', '/api/intake/orders',
+      '/api/public/catalog', '/api/public/orders'
     ]
   });
 });
@@ -188,6 +191,9 @@ addUndocumentedRoutes(swaggerSpec, [
   ['/api', 'Operations', operationsRoutes],
   ['/api', 'Payments & Invoices', commerceRoutes],
   ['/api', 'Platform', platformRoutes],
+  ['/api', 'Customer Accounts, Cash & Expenses', financeRoutes],
+  ['/api', 'Stock Counts, Packing & Import', warehouseOpsRoutes],
+  ['/api', 'Push, API Keys & Online Ordering', intakeRoutes],
 ] as any);
 
 app.get('/api-docs.json', (req, res) => {
@@ -229,6 +235,7 @@ app.use('/api', commerceRoutes);
 app.use('/api', platformRoutes);
 app.use('/api', financeRoutes);
 app.use('/api', warehouseOpsRoutes);
+app.use('/api', intakeRoutes);
 
 // Unknown routes return JSON instead of Express's HTML page
 app.use((req, res) => {

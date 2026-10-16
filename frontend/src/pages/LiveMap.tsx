@@ -153,9 +153,11 @@ export default function LiveMap() {
                   </Popup>
                 </Marker>
               ))}
-              {route?.stops?.length > 0 && (
+              {route?.stops?.length > 0 && (route.line?.length ? (
+                <Polyline positions={route.line} pathOptions={{ color: '#FF8C42', weight: 5, opacity: 0.9 }} />
+              ) : (
                 <Polyline positions={[[route.start.lat, route.start.lng], ...route.stops.map((s: any) => [s.lat, s.lng])]} pathOptions={{ color: '#FF8C42', weight: 4, dashArray: '8 8' }} />
-              )}
+              ))}
             </MapContainer>
           )}
 
@@ -185,7 +187,7 @@ export default function LiveMap() {
           {route && (
             <div className="rounded-2xl border border-accent-200 bg-accent-50 p-4">
               <p className="flex items-center gap-2 text-sm font-semibold text-accent-800"><RouteIcon className="h-4 w-4" /> {route.driver.name}'s best route</p>
-              <p className="mt-1 text-xs text-accent-700">{route.stops.length} stops · {route.totalKm} km · about {route.totalMinutes} min{route.savedKm > 0 ? ` · saves ${route.savedKm} km` : ''}</p>
+              <p className="mt-1 text-xs text-accent-700">{route.stops.length} stops · {route.totalKm} km {route.distanceSource === 'roads' ? 'by road' : '(estimate)'} · about {route.totalMinutes} min{route.savedKm > 0 ? ` · saves ${route.savedKm} km` : ''}</p>
               <ol className="mt-2 space-y-1 text-xs text-gray-700">
                 {route.stops.map((s: any) => (
                   <li key={s.id} className="flex justify-between gap-2"><span className="truncate">{s.sequence}. {s.customerName}</span><span className={`shrink-0 ${s.late ? 'font-semibold text-error-600' : 'text-gray-500'}`}>{new Date(s.eta).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></li>

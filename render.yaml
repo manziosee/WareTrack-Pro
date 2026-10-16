@@ -67,3 +67,11 @@ services:
         sync: false
       - key: AUTO_RESTOCK
         sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: OSRM_URL
+        sync: false

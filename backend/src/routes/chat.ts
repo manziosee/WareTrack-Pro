@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { auth } from '../middleware/auth';
 import { emitToUser } from '../services/realtime';
+import { pushToUsers } from '../services/push';
 
 /** Direct messages between team members (e.g. dispatch ↔ drivers). Mounted at /api/chat. */
 const router = Router();
@@ -68,6 +69,8 @@ router.post('/send', auth, async (req, res, next) => {
       select: { id: true, senderId: true, receiverId: true, message: true, createdAt: true, read: true, sender: { select: { name: true } } },
     });
     emitToUser(to, 'chat:message', message);
+    // Phone notification for the recipient (the in-app bubble covers open apps)
+    void pushToUsers([to], { title: message.sender.name, body: text, url: '/messages', tag: `chat-${me}` });
     res.status(201).json({ success: true, data: message });
   } catch (error) {
     next(error);

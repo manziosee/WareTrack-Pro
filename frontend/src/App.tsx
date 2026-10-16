@@ -55,6 +55,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Profile = lazy(() => import('./pages/Profile'));
 const MyDeliveries = lazy(() => import('./pages/MyDeliveries'));
 const TrackOrder = lazy(() => import('./pages/TrackOrder'));
+const OrderOnline = lazy(() => import('./pages/OrderOnline'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -96,6 +97,7 @@ function App() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/track" element={<Suspense fallback={null}><TrackOrder /></Suspense>} />
+                <Route path="/order" element={<Suspense fallback={null}><OrderOnline /></Suspense>} />
                 <Route path="/track/:orderNumber" element={<Suspense fallback={null}><TrackOrder /></Suspense>} />
 
                 {/* Everyone signed in */}

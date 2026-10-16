@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ReportsController } from '../controllers/reportsController';
-import { auth } from '../middleware/auth';
+import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 
 const router = Router();
 
@@ -18,7 +18,7 @@ const router = Router();
  *       401:
  *         description: Unauthorized
  */
-router.get('/analytics', auth, ReportsController.getAnalytics);
+router.get('/analytics', auth, authorizeRoles(...ROLES.orderManagers), ReportsController.getAnalytics);
 
 /**
  * @swagger
@@ -34,7 +34,7 @@ router.get('/analytics', auth, ReportsController.getAnalytics);
  *       401:
  *         description: Unauthorized
  */
-router.get('/sales', auth, ReportsController.getSalesReport);
+router.get('/sales', auth, authorizeRoles(...ROLES.orderManagers), ReportsController.getSalesReport);
 
 /**
  * @swagger
@@ -50,7 +50,7 @@ router.get('/sales', auth, ReportsController.getSalesReport);
  *       401:
  *         description: Unauthorized
  */
-router.get('/inventory', auth, ReportsController.getInventoryReport);
+router.get('/inventory', auth, authorizeRoles(...ROLES.orderManagers), ReportsController.getInventoryReport);
 
 /**
  * @swagger
@@ -66,7 +66,7 @@ router.get('/inventory', auth, ReportsController.getInventoryReport);
  *       401:
  *         description: Unauthorized
  */
-router.get('/vehicles', auth, ReportsController.getVehiclesReport);
+router.get('/vehicles', auth, authorizeRoles(...ROLES.orderManagers), ReportsController.getVehiclesReport);
 
 /**
  * @swagger
@@ -82,7 +82,7 @@ router.get('/vehicles', auth, ReportsController.getVehiclesReport);
  *       401:
  *         description: Unauthorized
  */
-router.get('/drivers', auth, ReportsController.getDriversReport);
+router.get('/drivers', auth, authorizeRoles(...ROLES.orderManagers), ReportsController.getDriversReport);
 
 /**
  * @swagger
@@ -108,6 +108,6 @@ router.get('/drivers', auth, ReportsController.getDriversReport);
  *       401:
  *         description: Unauthorized
  */
-router.post('/export', auth, ReportsController.exportReport);
+router.post('/export', auth, authorizeRoles(...ROLES.orderManagers), ReportsController.exportReport);
 
 export default router;

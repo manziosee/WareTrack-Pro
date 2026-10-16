@@ -1,5 +1,5 @@
 /* WareTrack Pro service worker: the app shell works offline; API data always comes from the network. */
-const VERSION = 'waretrack-v4';
+const VERSION = 'waretrack-v5';
 const SHELL = ['/', '/manifest.webmanifest', '/logo.svg', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -56,4 +56,41 @@ self.addEventListener('fetch', (event) => {
       }))
     );
   }
+});
+
+// Push notifications: show them even when the app is closed
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: 'WareTrack Pro', body: event.data ? event.data.text() : '' };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'WareTrack Pro', {
+      body: data.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: data.tag || undefined,
+      renotify: Boolean(data.tag),
+      data: { url: data.url || '/notifications' },
+    })
+  );
+});
+
+// Tapping a notification opens (or focuses) the app on the right page
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      for (const win of windows) {
+        if (win.url.startsWith(self.location.origin) && 'focus' in win) {
+          win.navigate(url).catch(() => undefined);
+          return win.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
 });
