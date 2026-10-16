@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Truck, Car, MapPin, BarChart3, Bell, UserCheck, Settings,
   KanbanSquare, CalendarDays, Map, RotateCcw, ScanLine, Warehouse, FileText, TrendingUp, Award, FileBarChart,
-  Wallet, MessagesSquare, History, Route, Building2, Banknote, Receipt, BookOpen,
+  Wallet, MessagesSquare, History, Route, Building2, Banknote, Receipt, BookOpen, PackageCheck, ClipboardCheck,
 } from 'lucide-react';
 import type { UserRole } from '@/types';
 
@@ -53,6 +53,8 @@ export const NAV_SECTIONS: NavSection[] = [
     title: 'Warehouse',
     items: [
       { name: 'Inventory', href: '/inventory', icon: Package, roles: STOCK, keywords: 'stock items products', mobileFor: ['WAREHOUSE_STAFF'] },
+      { name: 'Picking & packing', href: '/packing', icon: PackageCheck, roles: STAFF, keywords: 'pick list pack scan parcel' },
+      { name: 'Stock counts', href: '/stock-counts', icon: ClipboardCheck, roles: STOCK, keywords: 'stocktake count audit adjust' },
       { name: 'Scanner', href: '/scanner', icon: ScanLine, roles: STOCK, keywords: 'barcode qr camera', mobileFor: ['WAREHOUSE_STAFF'] },
       { name: 'Warehouses', href: '/warehouses', icon: Warehouse, roles: STOCK, keywords: 'locations transfers' },
       { name: 'Purchasing', href: '/purchasing', icon: FileText, roles: STOCK, keywords: 'suppliers purchase orders restock' },

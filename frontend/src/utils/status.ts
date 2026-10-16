@@ -56,6 +56,18 @@ const TONES: Record<string, StatusTone> = {
   RETURN: 'accent',
   // Accounts
   PENDING_APPROVAL: 'warning',
+  ON_HOLD: 'warning',
+  CLOSED: 'gray',
+  // Cash handovers
+  BALANCED: 'success',
+  SHORT: 'error',
+  OVER: 'warning',
+  // Stock counts and packing
+  OPEN: 'info',
+  SUBMITTED: 'warning',
+  NOT_STARTED: 'gray',
+  PICKING: 'info',
+  PACKED: 'success',
 };
 
 export const toneFor = (status?: string | null): StatusTone =>

@@ -29,6 +29,8 @@ const ENTITY: Record<string, string> = {
   accounts: 'CustomerAccount',
   cash: 'CashHandover',
   expenses: 'Expense',
+  'stock-counts': 'StockCount',
+  packagings: 'ItemPackaging',
 };
 
 const LABEL: Record<string, string> = {
@@ -37,6 +39,7 @@ const LABEL: Record<string, string> = {
   PurchaseOrder: 'purchase order', ReturnRequest: 'return', Payment: 'payment', Invoice: 'invoice',
   Webhook: 'webhook', Settings: 'settings', SavedReport: 'saved report',
   CustomerAccount: 'customer account', CashHandover: 'cash handover', Expense: 'expense',
+  StockCount: 'stock count', ItemPackaging: 'pack size',
 };
 
 const SENSITIVE = /password|otp|token|secret|signature|photo|code$/i;

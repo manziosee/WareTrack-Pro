@@ -26,7 +26,8 @@ export class InventoryController {
               { code: { contains: search as string, mode: 'insensitive' } }
             ]
           })
-        }
+        },
+        include: { packagings: { orderBy: { unitsPerPack: 'asc' } } }
       });
 
       const total = await prisma.inventoryItem.count();

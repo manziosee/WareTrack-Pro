@@ -372,12 +372,19 @@ router.post('/purchase-orders/auto-restock', ...manage, async (req, res, next) =
 router.get('/inventory-lookup/:code', auth, async (req, res, next) => {
   try {
     const code = String(req.params.code).trim();
-    const item = await prisma.inventoryItem.findFirst({
+    const include = { warehouseStock: { include: { warehouse: { select: { id: true, name: true, code: true } } } }, packagings: true };
+    let item = await prisma.inventoryItem.findFirst({
       where: { OR: [{ barcode: code }, { code: { equals: code, mode: 'insensitive' } }] },
-      include: { warehouseStock: { include: { warehouse: { select: { id: true, name: true, code: true } } } } },
+      include,
     });
+    // A pack barcode (e.g. a crate) finds its item, and says which pack was scanned
+    let packaging = null;
+    if (!item) {
+      packaging = await prisma.itemPackaging.findUnique({ where: { barcode: code } });
+      if (packaging) item = await prisma.inventoryItem.findUnique({ where: { id: packaging.itemId }, include });
+    }
     if (!item) return bad(res, `No item found for “${code}”`, 404);
-    res.json({ success: true, data: item });
+    res.json({ success: true, data: { ...item, scannedPackaging: packaging } });
   } catch (error) {
     next(error);
   }

@@ -93,7 +93,7 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
 
     let pack: { id: number; name: string; unitsPerPack: number; price: unknown } | null = null;
     if (raw.packagingId) {
-      pack = await (prisma as any).itemPackaging?.findFirst?.({ where: { id: Number(raw.packagingId), itemId: item.id } }) ?? null;
+      pack = await prisma.itemPackaging.findFirst({ where: { id: Number(raw.packagingId), itemId: item.id } });
       if (!pack) throw new OrderInputError(`That pack size isn't set up for ${item.name}`);
     }
     const stockUnits = pack ? quantity * pack.unitsPerPack : quantity;

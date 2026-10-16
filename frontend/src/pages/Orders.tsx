@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Plus, Eye, Edit, Trash2, Receipt, ShoppingCart, Clock, CheckCircle2, Wallet, KanbanSquare as Board, RefreshCw, Zap, Printer } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Receipt, ShoppingCart, Clock, CheckCircle2, Wallet, KanbanSquare as Board, RefreshCw, Zap, Printer, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -25,6 +25,7 @@ import { statusLabel } from '@/utils/status';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import { printInvoice } from '@/utils/invoice';
+import ImportDialog from '@/components/import/ImportDialog';
 
 const STATUSES = ['PENDING', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED', 'CANCELLED'];
 const PRIORITIES = ['HIGH', 'MEDIUM', 'LOW'];
@@ -43,6 +44,7 @@ export default function Orders() {
   const [priority, setPriority] = useState('');
   const [payment, setPayment] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewId, setViewId] = useState<number | null>(null);
 
@@ -190,6 +192,11 @@ export default function Orders() {
               <RefreshCw className="h-4 w-4" />
             </button>
             {canEdit && (
+              <Button onClick={() => setImporting(true)} size="sm" variant="secondary">
+                <Upload className="mr-1.5 h-4 w-4" /> Import
+              </Button>
+            )}
+            {canEdit && (
               <Button onClick={() => setShowCreate(true)} size="sm">
                 <Plus className="mr-1.5 h-4 w-4" /> New order
               </Button>
@@ -315,6 +322,34 @@ export default function Orders() {
         )}
       </Drawer>
 
+      <Modal isOpen={importing} onClose={() => setImporting(false)} title="Import orders" subtitle="From Excel or CSV" icon={<Upload className="h-5 w-5" />} size="xl">
+        {importing && (
+          <ImportDialog
+            templateName="orders-template.csv"
+            hint="One row per item. Rows with the same Reference become one order (or the same customer, phone and address)."
+            fields={[
+              { key: 'reference', label: 'Reference', aliases: ['ref', 'order ref', 'order'], example: 'PO-1001' },
+              { key: 'customerName', label: 'Customer', required: true, aliases: ['customer name', 'name', 'client'], example: 'Ineza Clinic' },
+              { key: 'contactNumber', label: 'Phone', required: true, aliases: ['contact', 'telephone', 'mobile'], example: '+250788000000' },
+              { key: 'deliveryAddress', label: 'Address', required: true, aliases: ['delivery address', 'location'], example: 'KG 493 St, Kigali' },
+              { key: 'itemCode', label: 'Item code', required: true, aliases: ['code', 'sku', 'barcode', 'item'], example: 'FB-WATER24' },
+              { key: 'quantity', label: 'Quantity', required: true, aliases: ['qty'], example: 2 },
+              { key: 'pack', label: 'Pack', aliases: ['pack size', 'unit'], example: '' },
+              { key: 'unitPrice', label: 'Price', aliases: ['unit price'], example: '' },
+              { key: 'paymentMethod', label: 'Payment', aliases: ['payment method'], example: 'CASH' },
+              { key: 'priority', label: 'Priority', example: 'MEDIUM' },
+              { key: 'deliveryDate', label: 'Delivery date', aliases: ['date', 'scheduled date'], example: '2026-10-20' },
+              { key: 'instructions', label: 'Instructions', aliases: ['notes', 'delivery instructions'], example: '' },
+            ]}
+            onImport={async (rows) => {
+              const res = await api.post('/orders/import', { rows });
+              if (res.data?.success === false) throw new Error(res.data?.error?.message || 'Import failed');
+              return { message: `${res.data.data.created} order${res.data.data.created === 1 ? '' : 's'} created`, errors: res.data.data.errors };
+            }}
+            onDone={refresh}
+          />
+        )}
+      </Modal>
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="New order" subtitle="Add the customer, items and delivery details" icon={<Plus className="h-5 w-5" />} size="xl">
         <CreateOrderForm onClose={() => setShowCreate(false)} onSave={saveOrder} />
       </Modal>

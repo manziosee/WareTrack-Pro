@@ -474,7 +474,8 @@ export class DispatchController {
           deliveryAddress: true,
           priority: true,
           totalAmount: true,
-          createdAt: true
+          createdAt: true,
+          packingStatus: true
         }
       });
       res.json({ success: true, data: orders });

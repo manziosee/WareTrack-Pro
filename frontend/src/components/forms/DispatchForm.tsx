@@ -99,10 +99,16 @@ export default function DispatchForm({ onClose, onSave, dispatch, initialOrderId
           <option value="">Select Order</option>
           {orders.map((order) => (
             <option key={order.id} value={order.id}>
-              {order.orderNumber} - {order.customerName}
+              {order.orderNumber} - {order.customerName}{order.packingStatus && order.packingStatus !== 'PACKED' ? ' · not packed yet' : ''}
             </option>
           ))}
         </select>
+        {(() => {
+          const chosen = orders.find((o) => String(o.id) === String(formData.orderId));
+          return chosen?.packingStatus && chosen.packingStatus !== 'PACKED'
+            ? <p className="mt-1 text-xs text-warning-700">This order isn't packed yet (Picking &amp; packing). You can still dispatch it.</p>
+            : null;
+        })()}
       </div>
 
       <div>

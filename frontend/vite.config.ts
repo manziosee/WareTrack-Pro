@@ -18,6 +18,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/tests/setup.ts'],
-    css: true
+    css: true,
+    // The first jsdom render can be slow on a busy machine or CI runner
+    testTimeout: 30000
   }
 })

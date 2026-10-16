@@ -18,6 +18,7 @@ import AddInventoryForm from '@/components/forms/AddInventoryForm';
 import EditInventoryForm from '@/components/forms/EditInventoryForm';
 import ViewInventoryModal from '@/components/forms/ViewInventoryModal';
 import { CategoryManager, useCategories } from '@/components/inventory/Categories';
+import PackSizes from '@/components/inventory/PackSizes';
 import { inventoryService } from '@/services/inventoryService';
 import { useList } from '@/hooks/useList';
 import { undoableAction } from '@/utils/undoableAction';
@@ -246,6 +247,7 @@ export default function Inventory() {
         {viewing && (
           <div className="space-y-5">
             <ViewInventoryModal item={viewing} />
+            <PackSizes item={viewing} canEdit={canEdit} onChanged={refresh} />
             <ActivityTimeline entityType="InventoryItem" entityId={viewing.id} />
           </div>
         )}

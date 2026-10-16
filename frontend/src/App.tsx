@@ -46,6 +46,8 @@ const Accounts = lazy(() => import('./pages/Accounts'));
 const Cash = lazy(() => import('./pages/Cash'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const Accounting = lazy(() => import('./pages/Accounting'));
+const Packing = lazy(() => import('./pages/Packing'));
+const StockCounts = lazy(() => import('./pages/StockCounts'));
 const Messages = lazy(() => import('./pages/Messages'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
@@ -138,6 +140,8 @@ function App() {
                 <Route path="/cash" element={<AppPage roles={STAFF}><Cash /></AppPage>} />
                 <Route path="/expenses" element={<AppPage roles={['ADMIN', 'DISPATCH_OFFICER', 'DRIVER']}><Expenses /></AppPage>} />
                 <Route path="/accounting" element={<AppPage roles={['ADMIN']}><Accounting /></AppPage>} />
+                <Route path="/packing" element={<AppPage roles={STAFF}><Packing /></AppPage>} />
+                <Route path="/stock-counts" element={<AppPage roles={['ADMIN', 'WAREHOUSE_STAFF']}><StockCounts /></AppPage>} />
 
                 {/* Administration */}
                 <Route path="/users" element={<AppPage roles={['ADMIN']}><Users /></AppPage>} />

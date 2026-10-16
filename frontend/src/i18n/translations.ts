@@ -56,6 +56,8 @@ const rw: Dictionary = {
   'Driver cash': 'Amafaranga y\'abashoferi',
   'Expenses': 'Amafaranga yakoreshejwe',
   'Accounting export': 'Kohereza ibaruramari',
+  'Picking & packing': 'Gutoranya no gupfunyika',
+  'Stock counts': 'Kubarura ububiko',
   'Changes are saved automatically': 'Impinduka zibikwa ako kanya',
   // Common UI
   'Search…': 'Shakisha…',
@@ -135,6 +137,8 @@ const fr: Dictionary = {
   'Driver cash': 'Espèces des chauffeurs',
   'Expenses': 'Dépenses',
   'Accounting export': 'Export comptable',
+  'Picking & packing': 'Préparation des commandes',
+  'Stock counts': 'Inventaires',
   'Changes are saved automatically': 'Les modifications sont enregistrées automatiquement',
   'Search…': 'Rechercher…',
   'Search orders, items, drivers…': 'Rechercher commandes, articles, chauffeurs…',
