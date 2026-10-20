@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { getTenantContext } from '../lib/tenantContext';
 
 export class BarcodeController {
   static generateBarcode(prefix: string, id: number): string {
@@ -11,6 +12,8 @@ export class BarcodeController {
     try {
       const { itemId } = req.params;
       const userId = req.user?.userId;
+      const tenant = getTenantContext();
+      if (!tenant) return res.status(400).json({ success: false, error: { message: 'Company context is required' } });
       
       const item = await prisma.inventoryItem.findUnique({ where: { id: Number(itemId) } });
       if (!item) {
@@ -25,8 +28,8 @@ export class BarcodeController {
       });
       
       await prisma.$executeRaw`
-        INSERT INTO barcode_logs (item_id, barcode, format, generated_by)
-        VALUES (${itemId}, ${barcode}, 'CODE128', ${userId})
+        INSERT INTO barcode_logs (company_id, branch_id, item_id, barcode, format, generated_by)
+        VALUES (${tenant.companyId}, ${tenant.branchId}, ${itemId}, ${barcode}, 'CODE128', ${userId})
       `;
       
       res.json({ success: true, data: { barcode, format: 'CODE128' } });
@@ -39,6 +42,8 @@ export class BarcodeController {
     try {
       const { itemIds } = req.body;
       const userId = req.user?.userId;
+      const tenant = getTenantContext();
+      if (!tenant) return res.status(400).json({ success: false, error: { message: 'Company context is required' } });
       const results = [];
       
       for (const itemId of itemIds) {
@@ -52,8 +57,8 @@ export class BarcodeController {
           });
           
           await prisma.$executeRaw`
-            INSERT INTO barcode_logs (item_id, barcode, format, generated_by)
-            VALUES (${itemId}, ${barcode}, 'CODE128', ${userId})
+            INSERT INTO barcode_logs (company_id, branch_id, item_id, barcode, format, generated_by)
+            VALUES (${tenant.companyId}, ${tenant.branchId}, ${itemId}, ${barcode}, 'CODE128', ${userId})
           `;
           
           results.push({ itemId, barcode, name: item.name });

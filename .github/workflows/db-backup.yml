@@ -11,8 +11,22 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    services:
+      restore-db:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: restore-only
+          POSTGRES_DB: waretrack_restore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d waretrack_restore"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      RESTORE_URL: postgresql://postgres:restore-only@localhost:5432/waretrack_restore
     steps:
       - name: Check the secret is set
         id: check
@@ -33,6 +47,24 @@ jobs:
           pg_dump "$DATABASE_URL" --no-owner --no-privileges | gzip > "$file"
           ls -lh "$file"
           echo "BACKUP_FILE=$file" >> "$GITHUB_ENV"
+      - name: Restore backup into isolated PostgreSQL and verify core tables
+        if: steps.check.outputs.enabled == 'true'
+        run: |
+          gunzip -c "$BACKUP_FILE" | psql "$RESTORE_URL" --set ON_ERROR_STOP=1 --quiet
+          psql "$RESTORE_URL" --set ON_ERROR_STOP=1 --tuples-only --no-align <<'SQL'
+          DO $$
+          BEGIN
+            IF to_regclass('public.users') IS NULL
+              OR to_regclass('public.inventory_items') IS NULL
+              OR to_regclass('public.delivery_orders') IS NULL THEN
+              RAISE EXCEPTION 'Restored backup is missing one or more core WareTrack tables';
+            END IF;
+            IF (SELECT COUNT(*) FROM users) < 1 THEN
+              RAISE EXCEPTION 'Restored backup contains no user records';
+            END IF;
+          END $$;
+          SELECT 'Backup restore verification passed';
+          SQL
       - uses: actions/upload-artifact@v4
         if: steps.check.outputs.enabled == 'true'
         with:

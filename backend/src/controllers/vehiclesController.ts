@@ -366,7 +366,8 @@ export class VehiclesController {
               order: true,
               driver: true
             }
-          }
+          },
+          currentDrivers: { select: { id: true, name: true, currentLat: true, currentLng: true, lastLocationAt: true }, orderBy: { lastLocationAt: 'desc' }, take: 1 }
         }
       });
 
@@ -377,20 +378,26 @@ export class VehiclesController {
         });
       }
 
-      // Mock GPS tracking data
+      const latestDriver = vehicle.currentDrivers[0];
+      const locationIsFresh = latestDriver?.lastLocationAt
+        ? Date.now() - latestDriver.lastLocationAt.getTime() <= 10 * 60 * 1000
+        : false;
+      const hasCoordinates = locationIsFresh && latestDriver?.currentLat !== null && latestDriver?.currentLng !== null;
       const trackingData = {
         vehicleId: vehicle.id,
         plateNumber: vehicle.plateNumber,
         status: vehicle.status,
-        currentLocation: {
-          lat: -1.9441 + (Math.random() - 0.5) * 0.1, // Kigali area
-          lng: 30.0619 + (Math.random() - 0.5) * 0.1,
-          address: 'Kigali, Rwanda',
-          timestamp: new Date()
-        },
-        speed: vehicle.status === 'IN_USE' ? Math.floor(Math.random() * 60) + 20 : 0,
-        fuel: Math.floor(Math.random() * 100),
-        mileage: Math.floor(Math.random() * 100000) + 50000,
+        currentLocation: hasCoordinates ? {
+          lat: Number(latestDriver!.currentLat),
+          lng: Number(latestDriver!.currentLng),
+          address: null,
+          timestamp: latestDriver!.lastLocationAt,
+          driverName: latestDriver!.name,
+        } : null,
+        locationIsStale: !hasCoordinates,
+        speed: null,
+        fuel: null,
+        mileage: null,
         activeOrders: vehicle.orders,
         activeDispatches: vehicle.dispatches
       };

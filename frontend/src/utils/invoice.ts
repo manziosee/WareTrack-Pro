@@ -2,7 +2,10 @@ import toast from 'react-hot-toast';
 import api from '@/services/api';
 
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
-const rwf = (v: number) => `RWF ${Math.round(v).toLocaleString()}`;
+const money = (v: number, currency = 'RWF') => {
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(v); }
+  catch { return `${currency} ${v.toLocaleString()}`; }
+};
 const day = (d?: string | null) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—');
 
 /** Open a branded, print-ready invoice (or receipt, when paid) for an order. */
@@ -19,7 +22,8 @@ export async function printInvoice(orderId: number) {
     toast.error(res.data?.error?.message || 'Could not load the invoice');
     return;
   }
-  const { invoice, order, payments, vatRate } = res.data.data;
+  const { invoice, order, payments, vatRate, company, taxLabel = 'VAT' } = res.data.data;
+  const currency = company?.currency || 'RWF';
   const paid = invoice.status === 'PAID';
   const logo = `${window.location.origin}/logo.svg`;
 
@@ -48,7 +52,7 @@ td{padding:10px 12px;border-top:1px solid #F1F3F6}.r{text-align:right}tbody tr:n
 .foot{margin-top:36px;padding-top:12px;border-top:1px dashed #E5E7EB;color:#6B7280;font-size:11px;display:flex;justify-content:space-between}
 </style></head><body>
 <div class="top">
-  <div class="brand"><img src="${logo}" alt=""/><div><b>WareTrack Pro</b><span>Warehouse Delivery &amp; Dispatch · Kigali, Rwanda</span></div></div>
+  <div class="brand"><img src="${logo}" alt=""/><div><b>${esc(company?.legalName || company?.name || 'WareTrack Pro')}</b><span>${company?.legalAddress ? `${esc(company.legalAddress)} · ` : ''}${company?.taxNumber ? `TIN ${esc(company.taxNumber)}` : 'Invoice'}</span></div></div>
   <div class="doc"><h1>${paid ? 'RECEIPT' : 'INVOICE'}</h1><p><b>${esc(invoice.invoiceNumber)}</b></p><p>Issued ${day(invoice.issuedAt)}</p>${!paid && invoice.dueDate ? `<p>Due ${day(invoice.dueDate)}</p>` : ''}<span class="stamp">${paid ? 'PAID' : 'UNPAID'}</span></div>
 </div>
 <div class="bar"></div>
@@ -57,13 +61,13 @@ td{padding:10px 12px;border-top:1px solid #F1F3F6}.r{text-align:right}tbody tr:n
   <div class="box"><h3>Order</h3><p><b>${esc(order.orderNumber)}</b></p><p>Placed ${day(order.createdAt)}</p>${order.deliveredAt ? `<p>Delivered ${day(order.deliveredAt)}</p>` : ''}<p>Payment: ${esc(String(order.paymentMethod || '').replace(/_/g, ' ').toLowerCase())}</p></div>
 </div>
 <table><thead><tr><th>#</th><th>Item</th><th class="r">Qty</th><th class="r">Unit price</th><th class="r">Amount</th></tr></thead><tbody>
-${order.items.map((it: any, i: number) => `<tr><td>${i + 1}</td><td>${esc(it.name)}</td><td class="r">${it.quantity} ${esc(it.unit)}</td><td class="r">${rwf(it.unitPrice)}</td><td class="r">${rwf(it.total)}</td></tr>`).join('')}
+${order.items.map((it: any, i: number) => `<tr><td>${i + 1}</td><td>${esc(it.name)}</td><td class="r">${it.quantity} ${esc(it.unit)}</td><td class="r">${money(it.unitPrice, currency)}</td><td class="r">${money(it.total, currency)}</td></tr>`).join('')}
 </tbody></table>
 <div class="totals">
-  <div><span>Subtotal</span><span>${rwf(Number(invoice.subtotal))}</span></div>
-  <div><span>VAT (${Math.round(vatRate * 100)}%)</span><span>${rwf(Number(invoice.tax))}</span></div>
-  <div class="grand"><span>Total</span><span>${rwf(Number(invoice.total))}</span></div>
-  ${payments.map((p: any) => `<div style="color:#047857"><span>Paid · ${esc(String(p.provider).replace(/_/g, ' '))}</span><span>${rwf(Number(p.amount))}</span></div>`).join('')}
+  <div><span>Subtotal</span><span>${money(Number(invoice.subtotal), currency)}</span></div>
+  <div><span>${esc(taxLabel)} (${Math.round(vatRate * 10000) / 100}%)</span><span>${money(Number(invoice.tax), currency)}</span></div>
+  <div class="grand"><span>Total</span><span>${money(Number(invoice.total), currency)}</span></div>
+  ${payments.map((p: any) => `<div style="color:#047857"><span>Paid · ${esc(String(p.provider).replace(/_/g, ' '))}</span><span>${money(Number(p.amount), p.currency || currency)}</span></div>`).join('')}
 </div>
 <div class="foot"><span>Thank you for your business.</span><span>${esc(invoice.invoiceNumber)} · Generated ${new Date().toLocaleString('en-GB')}</span></div>
 <script>window.onload=function(){(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(function(){window.print()})}</script>

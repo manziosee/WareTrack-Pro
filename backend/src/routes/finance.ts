@@ -560,7 +560,6 @@ router.delete('/expenses/:id', auth, async (req, res, next) => {
 // Accounting export (CSV for QuickBooks, Odoo or the accountant)
 // ===========================================================================
 
-const VAT = 0.18;
 const csvCell = (v: unknown) => {
   const s = v === null || v === undefined ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -571,14 +570,24 @@ const toCsv = (rows: Record<string, unknown>[]) => {
   return [headers.join(','), ...rows.map((r) => headers.map((h) => csvCell(r[h])).join(','))].join('\n');
 };
 const d = (date: Date | null | undefined) => (date ? new Date(date.getTime() + KIGALI).toISOString().slice(0, 10) : '');
-const vatSplit = (gross: number) => {
-  const net = money(gross / (1 + VAT));
+const vatSplit = (gross: number, taxRate: number) => {
+  const net = money(gross / (1 + taxRate));
   return { net, vat: money(gross - net) };
 };
 
 router.get('/accounting/export', ...admin, async (req, res, next) => {
   try {
     const type = String(req.query.type || 'sales');
+    const company = await prisma.company.findUnique({
+      where: { id: req.user!.companyId },
+      select: { name: true, legalName: true, legalAddress: true, taxNumber: true, currency: true, taxRate: true, invoicePrefix: true },
+    });
+    if (!company) return bad(res, 'Company settings not found', 404);
+    const taxRate = Number(company.taxRate);
+    const taxLabel = company.taxNumber ? 'Tax' : 'VAT';
+    const percent = (rate: number) => `${Math.round(rate * 10000) / 100}%`;
+    const orderTaxRate = (invoice: { subtotal: unknown; tax: unknown } | null) =>
+      invoice && Number(invoice.subtotal) > 0 ? Number(invoice.tax) / Number(invoice.subtotal) : taxRate;
     const to = dayEnd(req.query.to, new Date());
     const from = dayStart(req.query.from, new Date(to.getTime() - 31 * 86400000));
     let rows: Record<string, unknown>[] = [];
@@ -593,26 +602,28 @@ router.get('/accounting/export', ...admin, async (req, res, next) => {
       if (type === 'sales') {
         rows = orders.map((o) => {
           const gross = money(o.totalAmount);
-          const { net, vat } = vatSplit(gross);
+            const rate = orderTaxRate(o.invoice);
+            const { net, vat } = vatSplit(gross, rate);
           return {
-            Date: d(o.deliveredAt), 'Invoice No': o.invoice?.invoiceNumber || `INV-${String(o.id).padStart(6, '0')}`, 'Order No': o.orderNumber,
+            Date: d(o.deliveredAt), 'Invoice No': o.invoice?.invoiceNumber || `${company.invoicePrefix}-${String(o.id).padStart(6, '0')}`, 'Order No': o.orderNumber,
             Customer: o.account?.name || o.customerName, 'Account No': o.account?.accountNumber || '', TIN: o.account?.tin || '',
-            'Net (RWF)': net, 'VAT 18% (RWF)': vat, 'Total (RWF)': gross, 'Paid (RWF)': paid.get(o.id) || 0,
-            'Balance (RWF)': money(gross - (paid.get(o.id) || 0)), 'Payment method': o.paymentMethod, Status: o.paymentStatus,
+            [`Net (${company.currency})`]: net, [`${taxLabel} (${percent(rate)}, ${company.currency})`]: vat, [`Total (${company.currency})`]: gross, [`Paid (${company.currency})`]: paid.get(o.id) || 0,
+            [`Balance (${company.currency})`]: money(gross - (paid.get(o.id) || 0)), 'Payment method': o.paymentMethod, Status: o.paymentStatus,
           };
         });
       } else if (type === 'quickbooks') {
         // QuickBooks Online "Import invoices" layout: one row per line item
         for (const o of orders) {
+          const rate = orderTaxRate(o.invoice);
           const terms = o.account?.paymentTermsDays || 0;
           for (const item of o.items) {
             rows.push({
-              InvoiceNo: o.invoice?.invoiceNumber || `INV-${String(o.id).padStart(6, '0')}`, Customer: o.account?.name || o.customerName,
+              InvoiceNo: o.invoice?.invoiceNumber || `${company.invoicePrefix}-${String(o.id).padStart(6, '0')}`, Customer: o.account?.name || o.customerName,
               InvoiceDate: d(o.deliveredAt), DueDate: d(new Date((o.deliveredAt || o.createdAt).getTime() + terms * 86400000)),
               Terms: terms ? `Net ${terms}` : 'Due on receipt', Location: '', Memo: o.orderNumber,
               'Item(Product/Service)': item.itemName, ItemDescription: `${item.quantity} ${item.unit}`, ItemQuantity: item.quantity,
-              ItemRate: money(item.unitPrice), ItemAmount: money(item.totalPrice), ItemTaxCode: 'VAT 18%', ItemTaxAmount: vatSplit(money(item.totalPrice)).vat,
-              Currency: 'RWF',
+              ItemRate: money(item.unitPrice), ItemAmount: money(item.totalPrice), ItemTaxCode: `${taxLabel} ${percent(rate)}`, ItemTaxAmount: vatSplit(money(item.totalPrice), rate).vat,
+              Currency: company.currency,
             });
           }
         }
@@ -620,12 +631,13 @@ router.get('/accounting/export', ...admin, async (req, res, next) => {
         // Double-entry journal (Odoo / general ledger import)
         for (const o of orders) {
           const gross = money(o.totalAmount);
-          const { net, vat } = vatSplit(gross);
-          const ref = o.invoice?.invoiceNumber || o.orderNumber;
+          const rate = orderTaxRate(o.invoice);
+          const { net, vat } = vatSplit(gross, rate);
+          const ref = o.invoice?.invoiceNumber || `${company.invoicePrefix}-${String(o.id).padStart(6, '0')}`;
           const partner = o.account?.name || o.customerName;
-          rows.push({ Date: d(o.deliveredAt), Journal: 'Sales', Reference: ref, Account: 'Accounts Receivable', Partner: partner, Debit: gross, Credit: 0, Label: `Delivery ${o.orderNumber}` });
-          rows.push({ Date: d(o.deliveredAt), Journal: 'Sales', Reference: ref, Account: 'Sales', Partner: partner, Debit: 0, Credit: net, Label: `Delivery ${o.orderNumber}` });
-          rows.push({ Date: d(o.deliveredAt), Journal: 'Sales', Reference: ref, Account: 'VAT Payable', Partner: partner, Debit: 0, Credit: vat, Label: 'VAT 18%' });
+          rows.push({ Date: d(o.deliveredAt), Journal: 'Sales', Reference: ref, Account: 'Accounts Receivable', Partner: partner, Debit: gross, Credit: 0, Currency: company.currency, Label: `Delivery ${o.orderNumber}` });
+          rows.push({ Date: d(o.deliveredAt), Journal: 'Sales', Reference: ref, Account: 'Sales', Partner: partner, Debit: 0, Credit: net, Currency: company.currency, Label: `Delivery ${o.orderNumber}` });
+          rows.push({ Date: d(o.deliveredAt), Journal: 'Sales', Reference: ref, Account: 'Tax Payable', Partner: partner, Debit: 0, Credit: vat, Currency: company.currency, Label: `${taxLabel} ${percent(rate)}` });
         }
         const payments = await prisma.payment.findMany({
           where: { status: 'SUCCESSFUL', completedAt: { gte: from, lt: to } },
@@ -634,14 +646,14 @@ router.get('/accounting/export', ...admin, async (req, res, next) => {
         for (const p of payments) {
           const partner = p.order.account?.name || p.order.customerName;
           const cashAccount = p.provider === 'CASH' ? 'Cash' : p.provider === 'MTN_MOMO' ? 'MTN MoMo' : p.provider === 'AIRTEL_MONEY' ? 'Airtel Money' : 'Bank';
-          rows.push({ Date: d(p.completedAt), Journal: 'Receipts', Reference: p.externalRef || `PAY-${p.id}`, Account: cashAccount, Partner: partner, Debit: money(p.amount), Credit: 0, Label: `Payment ${p.order.orderNumber}` });
-          rows.push({ Date: d(p.completedAt), Journal: 'Receipts', Reference: p.externalRef || `PAY-${p.id}`, Account: 'Accounts Receivable', Partner: partner, Debit: 0, Credit: money(p.amount), Label: `Payment ${p.order.orderNumber}` });
+          rows.push({ Date: d(p.completedAt), Journal: 'Receipts', Reference: p.externalRef || `PAY-${p.id}`, Account: cashAccount, Partner: partner, Debit: money(p.amount), Credit: 0, Currency: company.currency, Label: `Payment ${p.order.orderNumber}` });
+          rows.push({ Date: d(p.completedAt), Journal: 'Receipts', Reference: p.externalRef || `PAY-${p.id}`, Account: 'Accounts Receivable', Partner: partner, Debit: 0, Credit: money(p.amount), Currency: company.currency, Label: `Payment ${p.order.orderNumber}` });
         }
         const expenses = await prisma.expense.findMany({ where: { status: 'APPROVED', spentAt: { gte: from, lt: to } }, include: { vehicle: { select: { plateNumber: true } } } });
         for (const e of expenses) {
           const account = e.type === 'FUEL' ? 'Fuel' : e.type === 'REPAIR' || e.type === 'MAINTENANCE' ? 'Vehicle Repairs' : e.type === 'TOLL' || e.type === 'PARKING' ? 'Tolls and Parking' : 'Other Expenses';
-          rows.push({ Date: d(e.spentAt), Journal: 'Expenses', Reference: e.expenseNumber, Account: account, Partner: e.vehicle?.plateNumber || '', Debit: money(e.amount), Credit: 0, Label: e.description || e.type });
-          rows.push({ Date: d(e.spentAt), Journal: 'Expenses', Reference: e.expenseNumber, Account: 'Cash', Partner: e.vehicle?.plateNumber || '', Debit: 0, Credit: money(e.amount), Label: e.description || e.type });
+          rows.push({ Date: d(e.spentAt), Journal: 'Expenses', Reference: e.expenseNumber, Account: account, Partner: e.vehicle?.plateNumber || '', Debit: money(e.amount), Credit: 0, Currency: company.currency, Label: e.description || e.type });
+          rows.push({ Date: d(e.spentAt), Journal: 'Expenses', Reference: e.expenseNumber, Account: 'Cash', Partner: e.vehicle?.plateNumber || '', Debit: 0, Credit: money(e.amount), Currency: company.currency, Label: e.description || e.type });
         }
         rows.sort((a, b) => String(a.Date).localeCompare(String(b.Date)));
       }
@@ -653,7 +665,7 @@ router.get('/accounting/export', ...admin, async (req, res, next) => {
       });
       rows = payments.map((p) => ({
         Date: d(p.completedAt), Receipt: `PAY-${p.id}`, 'Order No': p.order.orderNumber, Customer: p.order.account?.name || p.order.customerName,
-        'Account No': p.order.account?.accountNumber || '', Method: p.provider, Reference: p.externalRef || '', 'Amount (RWF)': money(p.amount),
+        'Account No': p.order.account?.accountNumber || '', Method: p.provider, Reference: p.externalRef || '', [`Amount (${p.currency || company.currency})`]: money(p.amount),
       }));
     } else if (type === 'expenses') {
       const expenses = await prisma.expense.findMany({
@@ -663,7 +675,7 @@ router.get('/accounting/export', ...admin, async (req, res, next) => {
       });
       rows = expenses.map((e) => ({
         Date: d(e.spentAt), 'Expense No': e.expenseNumber, Type: e.type, Vehicle: e.vehicle?.plateNumber || '', Driver: e.driver?.name || '',
-        Description: e.description || '', Liters: e.liters === null ? '' : money(e.liters), 'Amount (RWF)': money(e.amount), Status: e.status,
+        Description: e.description || '', Liters: e.liters === null ? '' : money(e.liters), [`Amount (${company.currency})`]: money(e.amount), Status: e.status,
       }));
     } else if (type === 'receivables') {
       const accounts = await prisma.customerAccount.findMany({ orderBy: { name: 'asc' } });

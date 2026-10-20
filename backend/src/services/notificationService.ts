@@ -1,11 +1,18 @@
 import { prisma } from '../lib/prisma';
 import { EmailService } from './emailService';
 import { pushToUsers } from './push';
+import { getTenantContext } from '../lib/tenantContext';
+import { emitTenantNotification } from './realtime';
 
 async function isDriver(userId?: number) {
   if (!userId) return false;
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
-  return user?.role === 'DRIVER';
+  const tenant = getTenantContext();
+  if (!tenant) return false;
+  const membership = await prisma.companyMembership.findUnique({
+    where: { companyId_userId: { companyId: tenant.companyId, userId } },
+    include: { branches: { where: { branchId: tenant.branchId || -1, active: true }, select: { roleOverride: true } } },
+  });
+  return membership?.active && (membership.branches[0]?.roleOverride || membership.role) === 'DRIVER';
 }
 
 export interface NotificationData {
@@ -32,17 +39,8 @@ export class NotificationService {
         }
       });
 
-      // Send real-time notification via Socket.IO
-      const io = (global as any).io;
-      if (io) {
-        if (data.userId) {
-          // Send to specific user
-          io.to(`user-${data.userId}`).emit('notification', notification);
-        } else {
-          // Send to all connected clients (system-wide notification)
-          io.emit('notification', notification);
-        }
-      }
+      // Deliver only to sessions in the same company and branch context.
+      emitTenantNotification(data.userId ?? null, notification.companyId, notification.branchId, 'notification', notification);
 
       // Phone/browser push, so people hear about it even with the app closed
       const url = data.type === 'MESSAGE' ? '/messages' : data.type === 'ORDER_UPDATE' ? (await isDriver(data.userId) ? '/my-deliveries' : '/orders') : '/notifications';
@@ -103,9 +101,13 @@ export class NotificationService {
 
   // Create low stock alert
   static async createLowStockAlert(itemName: string, currentStock: number, minStock: number) {
-    // Get all admin users
-    const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN', status: 'ACTIVE' }
+    const tenant = getTenantContext();
+    if (!tenant) return [];
+    const admins = await prisma.companyMembership.findMany({
+      where: { active: true, user: { status: 'ACTIVE' }, OR: [
+        { role: 'ADMIN' },
+        ...(tenant.branchId ? [{ branches: { some: { branchId: tenant.branchId, roleOverride: 'ADMIN', active: true } } }] : []),
+      ] }, select: { userId: true },
     });
 
     // Check if unread low stock alert already exists for this item
@@ -128,7 +130,7 @@ export class NotificationService {
     const notifications = await Promise.all(
       admins.map(admin => 
         this.createNotification({
-          userId: admin.id,
+          userId: admin.userId,
           type: 'LOW_STOCK',
           severity: 'WARNING',
           title: 'Low Stock Alert',
@@ -186,9 +188,13 @@ export class NotificationService {
 
   // Create system alert
   static async createSystemAlert(title: string, message: string, severity: 'INFO' | 'WARNING' | 'ERROR' = 'INFO') {
-    // Send to all admin users
-    const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN', status: 'ACTIVE' }
+    const tenant = getTenantContext();
+    if (!tenant) return [];
+    const admins = await prisma.companyMembership.findMany({
+      where: { active: true, user: { status: 'ACTIVE' }, OR: [
+        { role: 'ADMIN' },
+        ...(tenant.branchId ? [{ branches: { some: { branchId: tenant.branchId, roleOverride: 'ADMIN', active: true } } }] : []),
+      ] }, select: { userId: true },
     });
 
     // Check if unread system alert with same title already exists
@@ -209,7 +215,7 @@ export class NotificationService {
     const notifications = await Promise.all(
       admins.map(admin => 
         this.createNotification({
-          userId: admin.id,
+          userId: admin.userId,
           type: 'SYSTEM',
           severity,
           title,

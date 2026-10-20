@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
+import { runWithoutTenant } from '../lib/tenantContext';
 
 const cache = CacheService.getInstance();
 
@@ -13,37 +14,35 @@ export class UsersController {
       const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
 
       const where: any = {
-        ...(role && { role: role as any }),
-        ...(status && { status: status as any }),
-        ...(search && {
-          OR: [
+        companyId: req.user!.companyId,
+        ...(status === 'INACTIVE' ? {} : { active: true }),
+        ...(role && { role: role as string }),
+        AND: [
+          ...(status && status !== 'INACTIVE' ? [{ user: { status: status as any } }] : []),
+          ...(status === 'INACTIVE' ? [{ OR: [{ active: false }, { user: { status: 'INACTIVE' } }] }] : []),
+          ...(search ? [{ user: { OR: [
             { name: { contains: search as string, mode: 'insensitive' } },
-            { email: { contains: search as string, mode: 'insensitive' } }
-          ]
-        })
+            { email: { contains: search as string, mode: 'insensitive' } },
+          ] } }] : []),
+        ],
       };
 
-      const users = await prisma.user.findMany({
+      const memberships = await prisma.companyMembership.findMany({
         skip,
         take,
         where,
         orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          name: true,
-          email: true,
-          phone: true,
-          role: true,
-          status: true,
-          lastLogin: true,
-          createdAt: true,
-          updatedAt: true
-        }
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, name: true, email: true, phone: true, status: true, lastLogin: true, createdAt: true, updatedAt: true } },
+          branches: { where: { active: true }, select: { branchId: true, roleOverride: true } },
+        },
       });
 
-      const total = await prisma.user.count({ where });
+      const users = memberships.map(({ user, role: memberRole, active, branches }) => ({
+        ...user, role: branches.find((entry) => entry.branchId === req.user!.branchId)?.roleOverride || memberRole,
+        companyRole: memberRole, branchMemberships: branches, status: active ? user.status : 'INACTIVE',
+      }));
+      const total = await prisma.companyMembership.count({ where });
 
       res.json({
         success: true,
@@ -60,12 +59,14 @@ export class UsersController {
 
   static async getRoles(req: Request, res: Response) {
     try {
-      const roles = [
+      const roles: { value: string; label: string }[] = [
         { value: 'ADMIN', label: 'Admin' },
         { value: 'WAREHOUSE_STAFF', label: 'Warehouse Staff' },
         { value: 'DISPATCH_OFFICER', label: 'Dispatch Officer' },
         { value: 'DRIVER', label: 'Driver' }
       ];
+      const custom = await prisma.rolePermission.findMany({ where: { companyId: req.user!.companyId }, select: { role: true }, distinct: ['role'] });
+      for (const entry of custom) if (!roles.some((role) => role.value === entry.role)) roles.push({ value: entry.role, label: entry.role.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) });
       res.json({ success: true, data: roles });
     } catch (error) {
       res.status(500).json({ 
@@ -78,31 +79,24 @@ export class UsersController {
   static async getUserById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const user = await prisma.user.findUnique({
-        where: { id: Number(id) },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          name: true,
-          email: true,
-          phone: true,
-          role: true,
-          status: true,
-          lastLogin: true,
-          createdAt: true,
-          updatedAt: true
-        }
+      const membership = await prisma.companyMembership.findUnique({
+        where: { companyId_userId: { companyId: req.user!.companyId, userId: Number(id) } },
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, name: true, email: true, phone: true, status: true, lastLogin: true, createdAt: true, updatedAt: true } },
+          branches: { where: { active: true }, select: { branchId: true, roleOverride: true } },
+        },
       });
-      
-      if (!user) {
+      if (!membership) {
         return res.status(404).json({ 
           success: false,
           error: { code: 'USER_NOT_FOUND', message: 'User not found' }
         });
       }
 
-      res.json({ success: true, data: user });
+      res.json({ success: true, data: {
+        ...membership.user, role: membership.branches.find((entry) => entry.branchId === req.user!.branchId)?.roleOverride || membership.role,
+        companyRole: membership.role, branchMemberships: membership.branches, status: membership.active ? membership.user.status : 'INACTIVE',
+      } });
     } catch (error) {
       res.status(500).json({ 
         success: false,
@@ -159,8 +153,10 @@ export class UsersController {
       }
 
       // Validate role
-      const validRoles = ['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'];
-      if (!validRoles.includes(role)) {
+      const validRoleKey = /^[A-Z][A-Z0-9_:-]{1,63}$/.test(String(role));
+      const roleConfigured = ['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'].includes(role)
+        || Boolean(await prisma.rolePermission.findFirst({ where: { companyId: req.user!.companyId, role } }));
+      if (!validRoleKey || !roleConfigured) {
         return res.status(400).json({ 
           success: false,
           error: {
@@ -201,28 +197,14 @@ export class UsersController {
       const lastName = nameParts.slice(1).join(' ') || '';
 
       const hashedPassword = await bcrypt.hash(password, 12);
-      const user = await prisma.user.create({
-        data: {
-          firstName,
-          lastName,
-          name,
-          email,
-          password: hashedPassword,
-          phone: phone || null,
-          role: role as any,
-          status: status as any
-        },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          name: true,
-          email: true,
-          phone: true,
-          role: true,
-          status: true,
-          createdAt: true
-        }
+      const user = await prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: { firstName, lastName, name, email, password: hashedPassword, phone: phone || null, role: (['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'].includes(role) ? role : 'WAREHOUSE_STAFF') as any, status: status === 'PENDING' ? 'PENDING' : 'ACTIVE' },
+          select: { id: true, firstName: true, lastName: true, name: true, email: true, phone: true, role: true, status: true, createdAt: true },
+        });
+        const membership = await tx.companyMembership.create({ data: { companyId: req.user!.companyId, userId: created.id, role, active: status !== 'INACTIVE' } });
+        if (req.user!.branchId) await tx.branchMembership.create({ data: { companyMembershipId: membership.id, branchId: req.user!.branchId } });
+        return { ...created, role: membership.role };
       });
 
       try {
@@ -269,32 +251,19 @@ export class UsersController {
       const { id } = req.params;
       const { name, phone, role, status } = req.body;
 
-      const user = await prisma.user.update({
-        where: { id: Number(id) },
-        data: {
-          name,
-          phone,
-          role: role as any,
-          status: status as any
-        },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          name: true,
-          email: true,
-          phone: true,
-          role: true,
-          status: true,
-          lastLogin: true,
-          createdAt: true,
-          updatedAt: true
-        }
+      const userId = Number(id);
+      if (role && (!/^[A-Z][A-Z0-9_:-]{1,63}$/.test(String(role)) || (!['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'].includes(role) && !await prisma.rolePermission.findFirst({ where: { companyId: req.user!.companyId, role } })))) return res.status(400).json({ success: false, error: { code: 'INVALID_ROLE', message: 'Choose a company role with configured permissions' } });
+      const membership = await prisma.companyMembership.findUnique({ where: { companyId_userId: { companyId: req.user!.companyId, userId } } });
+      if (!membership) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found in this company' } });
+      const result = await runWithoutTenant(async () => {
+        const user = await prisma.user.update({ where: { id: userId }, data: { name, phone } });
+        const updatedMembership = await prisma.companyMembership.update({ where: { id: membership.id }, data: {
+          ...(role ? { role } : {}), ...(status ? { active: status !== 'INACTIVE' } : {}),
+        } });
+        return { ...user, role: updatedMembership.role, status: updatedMembership.active ? user.status : 'INACTIVE' };
       });
-
-      await cache.invalidateUserCache();
       
-      res.json({ success: true, data: user });
+      res.json({ success: true, data: result });
     } catch (error: any) {
       if (error.code === 'P2025') {
         return res.status(404).json({ 
@@ -313,29 +282,13 @@ export class UsersController {
     try {
       const { id } = req.params;
       
-      const user = await prisma.user.update({
-        where: { id: Number(id) },
-        data: { status: 'ACTIVE' },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          name: true,
-          email: true,
-          phone: true,
-          role: true,
-          status: true,
-          lastLogin: true,
-          createdAt: true,
-          updatedAt: true
-        }
+      const membership = await prisma.companyMembership.update({
+        where: { companyId_userId: { companyId: req.user!.companyId, userId: Number(id) } }, data: { active: true }, include: { user: true },
       });
-
-      await cache.invalidateUserCache();
       
       res.json({ 
         success: true,
-        data: user,
+        data: { ...membership.user, role: membership.role },
         message: 'User activated successfully'
       });
     } catch (error: any) {
@@ -356,29 +309,13 @@ export class UsersController {
     try {
       const { id } = req.params;
       
-      const user = await prisma.user.update({
-        where: { id: Number(id) },
-        data: { status: 'INACTIVE' },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          name: true,
-          email: true,
-          phone: true,
-          role: true,
-          status: true,
-          lastLogin: true,
-          createdAt: true,
-          updatedAt: true
-        }
+      const membership = await prisma.companyMembership.update({
+        where: { companyId_userId: { companyId: req.user!.companyId, userId: Number(id) } }, data: { active: false }, include: { user: true },
       });
-
-      await cache.invalidateUserCache();
       
       res.json({ 
         success: true,
-        data: user,
+        data: { ...membership.user, role: membership.role, status: 'INACTIVE' },
         message: 'User deactivated successfully'
       });
     } catch (error: any) {
@@ -399,78 +336,18 @@ export class UsersController {
     try {
       const { id } = req.params;
       const userId = Number(id);
-      
-      // Check if user exists
-      const user = await prisma.user.findUnique({
-        where: { id: userId }
-      });
-
-      if (!user) {
+      const membership = await prisma.companyMembership.findUnique({ where: { companyId_userId: { companyId: req.user!.companyId, userId } } });
+      if (!membership) {
         return res.status(404).json({ 
           success: false,
-          error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+          error: { code: 'USER_NOT_FOUND', message: 'User is not a member of this company' }
         });
       }
-
-      // Use transaction to ensure all operations succeed or fail together
-      await prisma.$transaction(async (tx) => {
-        // 1. Delete driver profile if exists (cascades to related records)
-        const driverProfile = await tx.driver.findFirst({
-          where: { userId }
-        });
-        
-        if (driverProfile) {
-          await tx.driver.delete({
-            where: { id: driverProfile.id }
-          });
-        }
-
-        // 2. Update orders to remove user reference
-        await tx.deliveryOrder.updateMany({
-          where: { createdBy: userId },
-          data: { createdBy: 1 }
-        });
-
-        // 3. Update dispatches to remove user reference
-        await tx.dispatch.updateMany({
-          where: { createdBy: userId },
-          data: { createdBy: 1 }
-        });
-
-        // 4. Delete inventory history
-        await tx.inventoryHistory.deleteMany({
-          where: { performedBy: userId }
-        });
-
-        // 5. Delete notifications
-        await tx.notification.deleteMany({
-          where: { userId }
-        });
-
-        // 6. Delete user preferences
-        await tx.notificationPreferences.deleteMany({
-          where: { userId }
-        });
-
-        await tx.systemConfiguration.deleteMany({
-          where: { userId }
-        });
-
-        await tx.reportSettings.deleteMany({
-          where: { userId }
-        });
-
-        // 7. Finally delete the user
-        await tx.user.delete({
-          where: { id: userId }
-        });
-      });
-      
-      await cache.invalidateUserCache();
+      await prisma.companyMembership.delete({ where: { id: membership.id } });
       
       res.json({ 
         success: true,
-        message: 'User deleted successfully'
+        message: 'User removed from this company. Their WareTrack account and memberships in other companies are unchanged.'
       });
     } catch (error: any) {
       console.error('Delete user error:', error);

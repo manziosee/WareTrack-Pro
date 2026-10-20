@@ -86,6 +86,9 @@ export default function Landing() {
               <Link to="/about" className="transition-colors hover:text-primary-600">About</Link>
             </nav>
             <div className="flex items-center gap-2 sm:gap-3">
+              <Link to="/portal" className="hidden sm:block">
+                <Button variant="ghost">Customer Portal</Button>
+              </Link>
               <Link to="/login">
                 <Button variant="ghost">Sign In</Button>
               </Link>

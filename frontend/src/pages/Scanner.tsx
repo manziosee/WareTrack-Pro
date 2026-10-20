@@ -8,6 +8,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import api from '@/services/api';
 import { printItemLabels } from '@/utils/labels';
+import { cameraErrorMessage, startQrScanner } from '@/utils/camera';
 
 const stockLevel = (i: any) => (i.quantity === 0 ? 'OUT_OF_STOCK' : i.quantity <= i.minQuantity ? 'LOW_STOCK' : 'IN_STOCK');
 
@@ -53,21 +54,16 @@ export default function Scanner() {
     try {
       const scanner = scannerRef.current || new Html5Qrcode('scanner-view', { verbose: false });
       scannerRef.current = scanner;
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 260, height: 160 } },
-        (decoded) => {
+      await startQrScanner(scanner, (decoded) => {
           // Ignore the same code read twice within 2 seconds
           const now = Date.now();
           if (lastCode.current && lastCode.current.code === decoded && now - lastCode.current.at < 2000) return;
           lastCode.current = { code: decoded, at: now };
           lookup(decoded);
-        },
-        () => undefined
-      );
+        });
       setScanning(true);
-    } catch {
-      toast.error('Could not open the camera. Allow camera access, or type the code instead.');
+    } catch (error) {
+      toast.error(cameraErrorMessage(error), { duration: 7000 });
       setScanning(false);
     }
   };

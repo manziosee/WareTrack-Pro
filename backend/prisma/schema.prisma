@@ -11,6 +11,8 @@ datasource db {
 }
 
 model User {
+  companyId        Int        @default(1) @map("company_id")
+  branchId         Int?       @map("branch_id")
   id               Int        @id @default(autoincrement())
   firstName        String?    @map("first_name")
   lastName         String?    @map("last_name")
@@ -43,14 +45,107 @@ model User {
   barcodeGenerations      BarcodeLog[]
   savedFilters            SavedFilter[]
   savedReports            SavedReport[]
+  stockReservations       StockReservation[]
+  companyMemberships      CompanyMembership[]
+  feedbackSubmitted      FeedbackReport[]       @relation("FeedbackSubmittedBy")
+  feedbackAssigned       FeedbackReport[]       @relation("FeedbackAssignedTo")
+  feedbackResolved       FeedbackReport[]       @relation("FeedbackResolvedBy")
 
+  @@index([companyId, branchId])
   @@map("users")
 }
 
+/// Tenant organizations. Existing WareTrack data is assigned to company 1 by migration.
+model Company {
+  id          Int                 @id @default(autoincrement())
+  name        String
+  slug        String              @unique
+  legalName   String?             @map("legal_name")
+  legalAddress String?            @map("legal_address")
+  taxNumber   String?             @map("tax_number")
+  taxRate     Decimal             @default(0.18) @map("tax_rate") @db.Decimal(5, 4)
+  invoicePrefix String            @default("INV") @map("invoice_prefix")
+  currency    String              @default("RWF")
+  timezone    String              @default("Africa/Kigali")
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  branches    Branch[]
+  memberships CompanyMembership[]
+
+  @@map("companies")
+}
+
+/// Physical or operational location inside a company.
+model Branch {
+  id        Int                @id @default(autoincrement())
+  companyId Int                @map("company_id")
+  name      String
+  code      String
+  address   String?
+  active    Boolean            @default(true)
+  createdAt DateTime           @default(now()) @map("created_at")
+  company   Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  members   BranchMembership[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active])
+  @@map("branches")
+}
+
+/// Company-level role assignment; users can be members of multiple companies.
+model CompanyMembership {
+  id        Int                @id @default(autoincrement())
+  companyId Int                @map("company_id")
+  userId    Int                @map("user_id")
+  role      String
+  active    Boolean            @default(true)
+  createdAt DateTime           @default(now()) @map("created_at")
+  company   Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branches  BranchMembership[]
+
+  @@unique([companyId, userId])
+  @@index([userId, active])
+  @@map("company_memberships")
+}
+
+/// A user's role may be narrowed or changed per assigned branch.
+model BranchMembership {
+  id                  Int               @id @default(autoincrement())
+  companyMembershipId Int               @map("company_membership_id")
+  branchId            Int               @map("branch_id")
+  roleOverride        String?           @map("role_override")
+  active              Boolean           @default(true)
+  membership          CompanyMembership @relation(fields: [companyMembershipId], references: [id], onDelete: Cascade)
+  branch              Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([companyMembershipId, branchId])
+  @@index([branchId, active])
+  @@map("branch_memberships")
+}
+
+/// Action grants can be restricted to a branch; explicit grants extend legacy role access.
+model RolePermission {
+  id         Int      @id @default(autoincrement())
+  companyId  Int      @map("company_id")
+  role       String
+  permission String
+  branchId   Int?     @map("branch_id")
+  allowed    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([companyId, role, permission, branchId])
+  @@index([companyId, branchId, permission])
+  @@map("role_permissions")
+}
+
 model InventoryItem {
+  companyId    Int             @default(1) @map("company_id")
+  branchId     Int?            @map("branch_id")
   id           Int             @id @default(autoincrement())
   name         String
-  code         String          @unique
+  code         String
   category     String
   quantity     Int             @default(0)
   minQuantity  Int             @default(0) @map("min_quantity")
@@ -77,11 +172,16 @@ model InventoryItem {
   batches          InventoryBatch[]
   packagings       ItemPackaging[]
   countLines       StockCountLine[]
+  reservations     StockReservation[]
 
+  @@index([companyId, branchId])
+  @@unique([companyId, code])
   @@map("inventory_items")
 }
 
 model Vehicle {
+  companyId       Int           @default(1) @map("company_id")
+  branchId        Int?          @map("branch_id")
   id              Int           @id @default(autoincrement())
   managerId       Int?          @map("manager_id")
   plateNumber     String        @unique @map("plate_number")
@@ -104,10 +204,13 @@ model Vehicle {
   healthRecords      VehicleHealth[]
   expenses           Expense[]
 
+  @@index([companyId, branchId])
   @@map("vehicles")
 }
 
 model Driver {
+  companyId            Int          @default(1) @map("company_id")
+  branchId             Int?         @map("branch_id")
   id                   Int          @id @default(autoincrement())
   userId               Int?         @unique @map("user_id")
   managerId            Int?         @map("manager_id")
@@ -144,10 +247,13 @@ model Driver {
   leaderboard    DriverLeaderboard[]
   ratings        CustomerRating[]
 
+  @@index([companyId, branchId])
   @@map("drivers")
 }
 
 model DeliveryOrder {
+  companyId            Int           @default(1) @map("company_id")
+  branchId             Int?          @map("branch_id")
   id                   Int           @id @default(autoincrement())
   orderNumber          String        @unique @map("order_number")
   customerId           Int           @map("customer_id")
@@ -188,24 +294,30 @@ model DeliveryOrder {
   updatedAt            DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  account       CustomerAccount? @relation(fields: [accountId], references: [id])
-  expenses      Expense[]
-  warehouse     Warehouse?       @relation(fields: [warehouseId], references: [id])
-  returns       ReturnRequest[]
-  payments      Payment[]
-  invoice       Invoice?
-  driver        Driver?          @relation(fields: [driverId], references: [id])
-  vehicle       Vehicle?         @relation(fields: [vehicleId], references: [id])
-  createdByUser User             @relation("CreatedBy", fields: [createdBy], references: [id])
-  items         OrderItem[]
-  dispatches    Dispatch[]
-  proofs        DeliveryProof[]
-  ratings       CustomerRating[]
+  account          CustomerAccount?   @relation(fields: [accountId], references: [id])
+  expenses         Expense[]
+  warehouse        Warehouse?         @relation(fields: [warehouseId], references: [id])
+  returns          ReturnRequest[]
+  payments         Payment[]
+  invoice          Invoice?
+  driver           Driver?            @relation(fields: [driverId], references: [id])
+  vehicle          Vehicle?           @relation(fields: [vehicleId], references: [id])
+  createdByUser    User               @relation("CreatedBy", fields: [createdBy], references: [id])
+  items            OrderItem[]
+  dispatches       Dispatch[]
+  proofs           DeliveryProof[]
+  ratings          CustomerRating[]
+  reservations     StockReservation[]
+  inventoryHistory InventoryHistory[]
+  feedbackReports  FeedbackReport[]
 
+  @@index([companyId, branchId])
   @@map("delivery_orders")
 }
 
 model OrderItem {
+  companyId      Int      @default(1) @map("company_id")
+  branchId       Int?     @map("branch_id")
   id             Int      @id @default(autoincrement())
   orderId        Int      @map("order_id")
   itemId         Int      @map("item_id")
@@ -226,10 +338,39 @@ model OrderItem {
   item      InventoryItem  @relation(fields: [itemId], references: [id])
   packaging ItemPackaging? @relation(fields: [packagingId], references: [id], onDelete: SetNull)
 
+  @@index([companyId, branchId])
   @@map("order_items")
 }
 
+/// Stock allocated to an open order. This is the auditable allocation record;
+/// physical on-hand stock is deducted atomically when the reservation is made.
+model StockReservation {
+  companyId   Int       @default(1) @map("company_id")
+  branchId    Int?      @map("branch_id")
+  id          Int       @id @default(autoincrement())
+  orderId     Int       @map("order_id")
+  itemId      Int       @map("item_id")
+  warehouseId Int?      @map("warehouse_id")
+  quantity    Int
+  status      String    @default("RESERVED")
+  createdById Int?      @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  releasedAt  DateTime? @map("released_at")
+
+  order     DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse Warehouse?    @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  createdBy User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([orderId, itemId, warehouseId])
+  @@index([itemId, status])
+  @@index([companyId, branchId])
+  @@map("stock_reservations")
+}
+
 model Dispatch {
+  companyId         Int            @default(1) @map("company_id")
+  branchId          Int?           @map("branch_id")
   id                Int            @id @default(autoincrement())
   orderId           Int            @map("order_id")
   driverId          Int            @map("driver_id")
@@ -253,10 +394,13 @@ model Dispatch {
   createdByUser User           @relation("CreatedBy", fields: [createdBy], references: [id])
   proof         DeliveryProof?
 
+  @@index([companyId, branchId])
   @@map("dispatches")
 }
 
 model MaintenanceRecord {
+  companyId           Int       @default(1) @map("company_id")
+  branchId            Int?      @map("branch_id")
   id                  Int       @id @default(autoincrement())
   vehicleId           Int       @map("vehicle_id")
   type                String
@@ -275,10 +419,13 @@ model MaintenanceRecord {
   // Relations
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("maintenance_records")
 }
 
 model InventoryHistory {
+  companyId        Int      @default(1) @map("company_id")
+  branchId         Int?     @map("branch_id")
   id               Int      @id @default(autoincrement())
   itemId           Int      @map("item_id")
   action           String // stock_in, stock_out, adjustment
@@ -291,13 +438,17 @@ model InventoryHistory {
   performedAt      DateTime @default(now()) @map("performed_at")
 
   // Relations
-  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  performedByUser User          @relation(fields: [performedBy], references: [id])
+  item            InventoryItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  performedByUser User           @relation(fields: [performedBy], references: [id])
+  order           DeliveryOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
+  @@index([companyId, branchId])
   @@map("inventory_history")
 }
 
 model NotificationPreferences {
+  companyId      Int      @default(1) @map("company_id")
+  branchId       Int?     @map("branch_id")
   id             Int      @id @default(autoincrement())
   userId         Int      @unique @map("user_id")
   emailEnabled   Boolean  @default(true) @map("email_enabled")
@@ -310,10 +461,13 @@ model NotificationPreferences {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("notification_preferences")
 }
 
 model SystemConfiguration {
+  companyId  Int      @default(1) @map("company_id")
+  branchId   Int?     @map("branch_id")
   id         Int      @id @default(autoincrement())
   userId     Int      @unique @map("user_id")
   language   String   @default("en")
@@ -326,10 +480,13 @@ model SystemConfiguration {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("system_configuration")
 }
 
 model ReportSettings {
+  companyId          Int      @default(1) @map("company_id")
+  branchId           Int?     @map("branch_id")
   id                 Int      @id @default(autoincrement())
   userId             Int      @unique @map("user_id")
   autoReportsEnabled Boolean  @default(false) @map("auto_reports_enabled")
@@ -342,10 +499,13 @@ model ReportSettings {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("report_settings")
 }
 
 model Notification {
+  companyId Int                  @default(1) @map("company_id")
+  branchId  Int?                 @map("branch_id")
   id        Int                  @id @default(autoincrement())
   userId    Int?                 @map("user_id")
   type      NotificationType
@@ -359,6 +519,7 @@ model Notification {
   // Relations
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("notifications")
 }
 
@@ -439,6 +600,8 @@ enum NotificationSeverity {
 }
 
 model DeliveryProof {
+  companyId        Int      @default(1) @map("company_id")
+  branchId         Int?     @map("branch_id")
   id               Int      @id @default(autoincrement())
   dispatchId       Int      @unique @map("dispatch_id")
   orderId          Int      @map("order_id")
@@ -454,10 +617,13 @@ model DeliveryProof {
   dispatch Dispatch      @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
   order    DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("delivery_proofs")
 }
 
 model ChatMessage {
+  companyId   Int      @default(1) @map("company_id")
+  branchId    Int?     @map("branch_id")
   id          Int      @id @default(autoincrement())
   senderId    Int      @map("sender_id")
   receiverId  Int?     @map("receiver_id")
@@ -472,10 +638,13 @@ model ChatMessage {
 
   @@index([roomId])
   @@index([senderId])
+  @@index([companyId, branchId])
   @@map("chat_messages")
 }
 
 model DriverAchievement {
+  companyId       Int      @default(1) @map("company_id")
+  branchId        Int?     @map("branch_id")
   id              Int      @id @default(autoincrement())
   driverId        Int      @map("driver_id")
   achievementType String   @map("achievement_type")
@@ -487,10 +656,13 @@ model DriverAchievement {
   driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@index([driverId])
+  @@index([companyId, branchId])
   @@map("driver_achievements")
 }
 
 model DriverLeaderboard {
+  companyId       Int      @default(1) @map("company_id")
+  branchId        Int?     @map("branch_id")
   id              Int      @id @default(autoincrement())
   driverId        Int      @map("driver_id")
   month           String
@@ -505,10 +677,13 @@ model DriverLeaderboard {
   driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@unique([driverId, month])
+  @@index([companyId, branchId])
   @@map("driver_leaderboard")
 }
 
 model InventoryForecast {
+  companyId       Int      @default(1) @map("company_id")
+  branchId        Int?     @map("branch_id")
   id              Int      @id @default(autoincrement())
   itemId          Int      @map("item_id")
   forecastDate    DateTime @map("forecast_date") @db.Date
@@ -521,10 +696,13 @@ model InventoryForecast {
   item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@unique([itemId, forecastDate])
+  @@index([companyId, branchId])
   @@map("inventory_forecasts")
 }
 
 model SmartAlert {
+  companyId   Int       @default(1) @map("company_id")
+  branchId    Int?      @map("branch_id")
   id          Int       @id @default(autoincrement())
   alertType   String    @map("alert_type")
   entityType  String?   @map("entity_type")
@@ -538,26 +716,37 @@ model SmartAlert {
   createdAt   DateTime  @default(now()) @map("created_at")
 
   @@index([triggerDate, resolved])
+  @@index([companyId, branchId])
   @@map("smart_alerts")
 }
 
 model Customer {
+  companyId Int      @default(1) @map("company_id")
+  branchId  Int?     @map("branch_id")
   id        Int      @id @default(autoincrement())
   name      String
-  email     String   @unique
+  email     String
   password  String
   phone     String?
   address   String?
+  preferredDeliveryWindow String? @map("preferred_delivery_window")
+  deliveryInstructions String? @map("delivery_instructions") @db.Text
+  contactPreference String @default("ANY") @map("contact_preference")
   status    String   @default("ACTIVE")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   ratings CustomerRating[]
+  feedbackReports FeedbackReport[]
 
+  @@index([companyId, branchId])
+  @@unique([companyId, email])
   @@map("customers")
 }
 
 model CustomerRating {
+  companyId  Int      @default(1) @map("company_id")
+  branchId   Int?     @map("branch_id")
   id         Int      @id @default(autoincrement())
   customerId Int      @map("customer_id")
   orderId    Int      @map("order_id")
@@ -571,10 +760,58 @@ model CustomerRating {
   driver   Driver        @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@unique([customerId, orderId])
+  @@index([companyId, branchId])
   @@map("customer_ratings")
 }
 
+model FeedbackReport {
+  companyId      Int       @default(1) @map("company_id")
+  branchId       Int?      @map("branch_id")
+  id             Int       @id @default(autoincrement())
+  orderId        Int?      @map("order_id")
+  submittedById  Int?      @map("submitted_by_id")
+  customerId     Int?      @map("customer_id")
+  assignedToId   Int?      @map("assigned_to_id")
+  resolvedById   Int?      @map("resolved_by_id")
+  kind           String    @default("INTERNAL_ISSUE")
+  category       String
+  rating         Int?
+  message        String    @db.Text
+  status         String    @default("OPEN")
+  resolution     String?   @db.Text
+  resolvedAt     DateTime? @map("resolved_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  order       DeliveryOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  submitter   User?          @relation("FeedbackSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  customer    Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  assignee    User?          @relation("FeedbackAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  resolver    User?          @relation("FeedbackResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, branchId, status, createdAt])
+  @@index([orderId])
+  @@map("feedback_reports")
+}
+
+model UsageEvent {
+  companyId Int      @default(1) @map("company_id")
+  branchId  Int?     @map("branch_id")
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  event     String
+  route     String?
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([companyId, branchId, createdAt])
+  @@index([companyId, event, createdAt])
+  @@map("usage_events")
+}
+
 model VehicleHealth {
+  companyId                Int       @default(1) @map("company_id")
+  branchId                 Int?      @map("branch_id")
   id                       Int       @id @default(autoincrement())
   vehicleId                Int       @map("vehicle_id")
   odometerReading          Int       @map("odometer_reading")
@@ -587,10 +824,13 @@ model VehicleHealth {
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("vehicle_health")
 }
 
 model UserPreferences {
+  companyId       Int      @default(1) @map("company_id")
+  branchId        Int?     @map("branch_id")
   id              Int      @id @default(autoincrement())
   userId          Int      @unique @map("user_id")
   theme           String   @default("light")
@@ -602,10 +842,13 @@ model UserPreferences {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("user_preferences")
 }
 
 model BarcodeLog {
+  companyId   Int      @default(1) @map("company_id")
+  branchId    Int?     @map("branch_id")
   id          Int      @id @default(autoincrement())
   itemId      Int      @map("item_id")
   barcode     String
@@ -617,6 +860,7 @@ model BarcodeLog {
   generator User?         @relation(fields: [generatedBy], references: [id])
 
   @@index([itemId])
+  @@index([companyId, branchId])
   @@map("barcode_logs")
 }
 
@@ -625,9 +869,11 @@ model BarcodeLog {
 // ---------------------------------------------------------------------------
 
 model Warehouse {
+  companyId Int      @default(1) @map("company_id")
+  branchId  Int?     @map("branch_id")
   id        Int      @id @default(autoincrement())
   name      String
-  code      String   @unique
+  code      String
   address   String?
   city      String?
   latitude  Decimal? @db.Decimal(10, 7)
@@ -644,11 +890,16 @@ model Warehouse {
   orders         DeliveryOrder[]
   batches        InventoryBatch[]
   purchaseOrders PurchaseOrder[]
+  reservations   StockReservation[]
 
+  @@index([companyId, branchId])
+  @@unique([companyId, code])
   @@map("warehouses")
 }
 
 model WarehouseStock {
+  companyId   Int      @default(1) @map("company_id")
+  branchId    Int?     @map("branch_id")
   id          Int      @id @default(autoincrement())
   warehouseId Int      @map("warehouse_id")
   itemId      Int      @map("item_id")
@@ -659,10 +910,13 @@ model WarehouseStock {
   item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@unique([warehouseId, itemId])
+  @@index([companyId, branchId])
   @@map("warehouse_stock")
 }
 
 model StockTransfer {
+  companyId       Int       @default(1) @map("company_id")
+  branchId        Int?      @map("branch_id")
   id              Int       @id @default(autoincrement())
   transferNumber  String    @unique @map("transfer_number")
   fromWarehouseId Int       @map("from_warehouse_id")
@@ -679,10 +933,13 @@ model StockTransfer {
   toWarehouse   Warehouse     @relation("TransferTo", fields: [toWarehouseId], references: [id], onDelete: Cascade)
   item          InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("stock_transfers")
 }
 
 model Supplier {
+  companyId    Int      @default(1) @map("company_id")
+  branchId     Int?     @map("branch_id")
   id           Int      @id @default(autoincrement())
   name         String
   contactName  String?  @map("contact_name")
@@ -697,10 +954,13 @@ model Supplier {
 
   purchaseOrders PurchaseOrder[]
 
+  @@index([companyId, branchId])
   @@map("suppliers")
 }
 
 model PurchaseOrder {
+  companyId     Int       @default(1) @map("company_id")
+  branchId      Int?      @map("branch_id")
   id            Int       @id @default(autoincrement())
   poNumber      String    @unique @map("po_number")
   supplierId    Int       @map("supplier_id")
@@ -720,10 +980,13 @@ model PurchaseOrder {
   items     PurchaseOrderItem[]
   batches   InventoryBatch[]
 
+  @@index([companyId, branchId])
   @@map("purchase_orders")
 }
 
 model PurchaseOrderItem {
+  companyId        Int     @default(1) @map("company_id")
+  branchId         Int?    @map("branch_id")
   id               Int     @id @default(autoincrement())
   purchaseOrderId  Int     @map("purchase_order_id")
   itemId           Int     @map("item_id")
@@ -734,10 +997,13 @@ model PurchaseOrderItem {
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   item          InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("purchase_order_items")
 }
 
 model InventoryBatch {
+  companyId       Int       @default(1) @map("company_id")
+  branchId        Int?      @map("branch_id")
   id              Int       @id @default(autoincrement())
   itemId          Int       @map("item_id")
   batchNumber     String    @map("batch_number")
@@ -752,10 +1018,13 @@ model InventoryBatch {
   purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
 
   @@index([expiryDate])
+  @@index([companyId, branchId])
   @@map("inventory_batches")
 }
 
 model ReturnRequest {
+  companyId       Int       @default(1) @map("company_id")
+  branchId        Int?      @map("branch_id")
   id              Int       @id @default(autoincrement())
   returnNumber    String    @unique @map("return_number")
   orderId         Int       @map("order_id")
@@ -765,16 +1034,20 @@ model ReturnRequest {
   rescheduledDate DateTime? @map("rescheduled_date")
   refundAmount    Decimal   @default(0) @map("refund_amount") @db.Decimal(14, 2)
   notes           String?
+  photoUrl        String?   @map("photo_url") @db.Text
   createdBy       Int?      @map("created_by")
   createdAt       DateTime  @default(now()) @map("created_at")
   resolvedAt      DateTime? @map("resolved_at")
 
   order DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("return_requests")
 }
 
 model Payment {
+  companyId           Int       @default(1) @map("company_id")
+  branchId            Int?      @map("branch_id")
   id                  Int       @id @default(autoincrement())
   orderId             Int       @map("order_id")
   provider            String
@@ -801,10 +1074,13 @@ model Payment {
   @@index([orderId])
   @@index([accountId])
   @@index([collectedByDriverId, handoverId])
+  @@index([companyId, branchId])
   @@map("payments")
 }
 
 model Invoice {
+  companyId     Int       @default(1) @map("company_id")
+  branchId      Int?      @map("branch_id")
   id            Int       @id @default(autoincrement())
   invoiceNumber String    @unique @map("invoice_number")
   orderId       Int       @unique @map("order_id")
@@ -818,10 +1094,13 @@ model Invoice {
 
   order DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("invoices")
 }
 
 model AuditLog {
+  companyId  Int      @default(1) @map("company_id")
+  branchId   Int?     @map("branch_id")
   id         Int      @id @default(autoincrement())
   userId     Int?     @map("user_id")
   userName   String?  @map("user_name")
@@ -837,10 +1116,13 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@index([userId])
+  @@index([companyId, branchId])
   @@map("audit_logs")
 }
 
 model OtpCode {
+  companyId Int      @default(1) @map("company_id")
+  branchId  Int?     @map("branch_id")
   id        Int      @id @default(autoincrement())
   email     String
   purpose   String   @default("LOGIN")
@@ -851,10 +1133,13 @@ model OtpCode {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([email, purpose])
+  @@index([companyId, branchId])
   @@map("otp_codes")
 }
 
 model Webhook {
+  companyId       Int       @default(1) @map("company_id")
+  branchId        Int?      @map("branch_id")
   id              Int       @id @default(autoincrement())
   url             String
   events          String[]
@@ -866,10 +1151,13 @@ model Webhook {
   createdBy       Int?      @map("created_by")
   createdAt       DateTime  @default(now()) @map("created_at")
 
+  @@index([companyId, branchId])
   @@map("webhooks")
 }
 
 model SavedFilter {
+  companyId Int      @default(1) @map("company_id")
+  branchId  Int?     @map("branch_id")
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
   page      String
@@ -880,10 +1168,13 @@ model SavedFilter {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, page])
+  @@index([companyId, branchId])
   @@map("saved_filters")
 }
 
 model SavedReport {
+  companyId  Int       @default(1) @map("company_id")
+  branchId   Int?      @map("branch_id")
   id         Int       @id @default(autoincrement())
   userId     Int       @map("user_id")
   name       String
@@ -896,24 +1187,31 @@ model SavedReport {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([companyId, branchId])
   @@map("saved_reports")
 }
 
 /// Inventory categories that can be managed from the app. Items keep the
 /// category name; renaming a category renames it on its items too.
 model InventoryCategory {
+  companyId   Int      @default(1) @map("company_id")
+  branchId    Int?     @map("branch_id")
   id          Int      @id @default(autoincrement())
-  name        String   @unique
+  name        String
   description String?
   color       String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  @@index([companyId, branchId])
+  @@unique([companyId, name])
   @@map("inventory_categories")
 }
 
 /// A business customer (shop, clinic, hotel…) that orders, often on credit.
 model CustomerAccount {
+  companyId        Int      @default(1) @map("company_id")
+  branchId         Int?     @map("branch_id")
   id               Int      @id @default(autoincrement())
   accountNumber    String   @unique @map("account_number")
   name             String
@@ -936,11 +1234,14 @@ model CustomerAccount {
   payments Payment[]
 
   @@index([name])
+  @@index([companyId, branchId])
   @@map("customer_accounts")
 }
 
 /// A driver handing in the cash collected on deliveries.
 model CashHandover {
+  companyId      Int      @default(1) @map("company_id")
+  branchId       Int?     @map("branch_id")
   id             Int      @id @default(autoincrement())
   handoverNumber String   @unique @map("handover_number")
   driverId       Int      @map("driver_id")
@@ -957,11 +1258,14 @@ model CashHandover {
   payments Payment[]
 
   @@index([driverId, createdAt])
+  @@index([companyId, branchId])
   @@map("cash_handovers")
 }
 
 /// Fuel, tolls, repairs and other running costs, with a receipt photo.
 model Expense {
+  companyId     Int       @default(1) @map("company_id")
+  branchId      Int?      @map("branch_id")
   id            Int       @id @default(autoincrement())
   expenseNumber String    @unique @map("expense_number")
   /// FUEL, TOLL, PARKING, REPAIR, MAINTENANCE, OTHER
@@ -991,11 +1295,14 @@ model Expense {
   @@index([spentAt])
   @@index([vehicleId])
   @@index([driverId])
+  @@index([companyId, branchId])
   @@map("expenses")
 }
 
 /// A pack size an item is sold or received in (crate of 24, carton of 12…).
 model ItemPackaging {
+  companyId    Int      @default(1) @map("company_id")
+  branchId     Int?     @map("branch_id")
   id           Int      @id @default(autoincrement())
   itemId       Int      @map("item_id")
   name         String
@@ -1009,11 +1316,14 @@ model ItemPackaging {
   orderItems OrderItem[]
 
   @@unique([itemId, name])
+  @@index([companyId, branchId])
   @@map("item_packagings")
 }
 
 /// A stock count (full stocktake or a cycle count of some items).
 model StockCount {
+  companyId    Int       @default(1) @map("company_id")
+  branchId     Int?      @map("branch_id")
   id           Int       @id @default(autoincrement())
   countNumber  String    @unique @map("count_number")
   title        String?
@@ -1034,10 +1344,13 @@ model StockCount {
   lines StockCountLine[]
 
   @@index([status])
+  @@index([companyId, branchId])
   @@map("stock_counts")
 }
 
 model StockCountLine {
+  companyId   Int       @default(1) @map("company_id")
+  branchId    Int?      @map("branch_id")
   id          Int       @id @default(autoincrement())
   countId     Int       @map("count_id")
   itemId      Int       @map("item_id")
@@ -1052,11 +1365,14 @@ model StockCountLine {
   item  InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@unique([countId, itemId])
+  @@index([companyId, branchId])
   @@map("stock_count_lines")
 }
 
 /// A browser/phone that receives push notifications for a user.
 model PushSubscription {
+  companyId Int      @default(1) @map("company_id")
+  branchId  Int?     @map("branch_id")
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
   endpoint  String   @unique
@@ -1067,11 +1383,14 @@ model PushSubscription {
   lastUsed  DateTime @default(now()) @map("last_used")
 
   @@index([userId])
+  @@index([companyId, branchId])
   @@map("push_subscriptions")
 }
 
 /// Keys for a client's shop or system to send orders (POST /api/intake/orders).
 model ApiKey {
+  companyId   Int       @default(1) @map("company_id")
+  branchId    Int?      @map("branch_id")
   id          Int       @id @default(autoincrement())
   name        String
   /// First characters, shown so people can tell keys apart
@@ -1083,14 +1402,18 @@ model ApiKey {
   revokedAt   DateTime? @map("revoked_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
+  @@index([companyId, branchId])
   @@map("api_keys")
 }
 
 /// App-wide settings (key → JSON value), e.g. online ordering on/off, VAPID keys.
 model AppSetting {
+  companyId Int      @default(1) @map("company_id")
+  branchId  Int?     @map("branch_id")
   key       String   @id
   value     Json
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
+  @@index([companyId, branchId])
   @@map("app_settings")
 }

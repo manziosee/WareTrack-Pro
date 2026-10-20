@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
+import { getTenantContext } from '../lib/tenantContext';
 
 const cache = CacheService.getInstance();
 
@@ -8,6 +9,8 @@ export class DashboardController {
   // Create system notifications
   static async createSystemNotifications() {
     try {
+      const tenant = getTenantContext();
+      if (!tenant) return;
       // Check if welcome notification exists
       const existingWelcome = await prisma.notification.findFirst({
         where: { type: 'WELCOME' }
@@ -43,9 +46,15 @@ export class DashboardController {
 
       // Create low stock notifications
       const lowStockItems = await prisma.$queryRaw`
-        SELECT id, name, quantity, min_quantity as "minQuantity"
-        FROM inventory_items 
-        WHERE quantity < min_quantity
+        SELECT i.id, i.name, COALESCE(SUM(ws.quantity), 0)::int AS quantity, i.min_quantity AS "minQuantity"
+        FROM inventory_items i
+        LEFT JOIN warehouse_stock ws ON ws.item_id = i.id
+        LEFT JOIN warehouses w ON w.id = ws.warehouse_id
+        WHERE i.company_id = ${tenant.companyId}
+          AND (w.id IS NULL OR w.company_id = ${tenant.companyId})
+          AND (${tenant.branchId}::int IS NULL OR w.branch_id = ${tenant.branchId} OR w.branch_id IS NULL)
+        GROUP BY i.id, i.name, i.min_quantity
+        HAVING COALESCE(SUM(ws.quantity), 0) < i.min_quantity
       `;
 
       if (Array.isArray(lowStockItems)) {
@@ -75,6 +84,8 @@ export class DashboardController {
   }
   static async getSummary(req: Request, res: Response) {
     try {
+      const tenant = getTenantContext();
+      if (!tenant) return res.status(400).json({ success: false, error: { code: 'TENANT_CONTEXT_REQUIRED', message: 'Company context is required' } });
       const userId = Number(req.user?.userId);
       const user = await prisma.user.findUnique({ where: { id: userId } });
       
@@ -110,16 +121,33 @@ export class DashboardController {
         lowStockItems
       ] = await Promise.all([
         prisma.inventoryItem.count(),
-        prisma.inventoryItem.findMany({ select: { quantity: true, unitPrice: true } }),
+        prisma.inventoryItem.findMany({
+          select: {
+            unitPrice: true,
+            warehouseStock: {
+              where: tenant.branchId === null ? undefined : { branchId: tenant.branchId },
+              select: { quantity: true },
+            },
+          },
+        }),
         prisma.deliveryOrder.count({
           where: {
             status: 'DELIVERED',
             deliveredAt: { gte: today, lt: tomorrow }
           }
         }),
-        prisma.user.count({ where: { status: 'ACTIVE' } }),
+        prisma.companyMembership.count({ where: { active: true } }),
         prisma.vehicle.count(),
-        prisma.$queryRaw`SELECT COUNT(*)::int as count FROM inventory_items WHERE quantity < min_quantity`
+        prisma.$queryRaw`SELECT COUNT(*)::int AS count FROM (
+          SELECT i.id FROM inventory_items i
+          LEFT JOIN warehouse_stock ws ON ws.item_id = i.id
+          LEFT JOIN warehouses w ON w.id = ws.warehouse_id
+          WHERE i.company_id = ${tenant.companyId}
+            AND (w.id IS NULL OR w.company_id = ${tenant.companyId})
+            AND (${tenant.branchId}::int IS NULL OR w.branch_id = ${tenant.branchId} OR w.branch_id IS NULL)
+          GROUP BY i.id, i.min_quantity
+          HAVING COALESCE(SUM(ws.quantity), 0) < i.min_quantity
+        ) low_stock`
       ]);
 
       // Previous week data for comparison
@@ -141,9 +169,9 @@ export class DashboardController {
             deliveredAt: { gte: previousWeekStart, lt: previousWeekEnd }
           }
         }),
-        prisma.user.count({
+        prisma.companyMembership.count({
           where: {
-            status: 'ACTIVE',
+            active: true,
             createdAt: { lt: lastWeekEnd }
           }
         }),
@@ -152,7 +180,16 @@ export class DashboardController {
             createdAt: { lt: lastWeekEnd }
           }
         }),
-        prisma.$queryRaw`SELECT COUNT(*)::int as count FROM inventory_items WHERE quantity < min_quantity AND created_at < ${lastWeekEnd}`
+        prisma.$queryRaw`SELECT COUNT(*)::int AS count FROM (
+          SELECT i.id FROM inventory_items i
+          LEFT JOIN warehouse_stock ws ON ws.item_id = i.id
+          LEFT JOIN warehouses w ON w.id = ws.warehouse_id
+          WHERE i.company_id = ${tenant.companyId} AND i.created_at < ${lastWeekEnd}
+            AND (w.id IS NULL OR w.company_id = ${tenant.companyId})
+            AND (${tenant.branchId}::int IS NULL OR w.branch_id = ${tenant.branchId} OR w.branch_id IS NULL)
+          GROUP BY i.id, i.min_quantity
+          HAVING COALESCE(SUM(ws.quantity), 0) < i.min_quantity
+        ) low_stock`
       ]);
 
       // Calculate percentages
@@ -161,8 +198,8 @@ export class DashboardController {
         return Math.round(((current - previous) / previous) * 100);
       };
 
-      const inventoryValue = Array.isArray(totalInventoryValue) 
-        ? totalInventoryValue.reduce((sum, item) => sum + (item.quantity * Number(item.unitPrice)), 0)
+      const inventoryValue = Array.isArray(totalInventoryValue)
+        ? totalInventoryValue.reduce((sum, item) => sum + (item.warehouseStock.reduce((stock, row) => stock + row.quantity, 0) * Number(item.unitPrice)), 0)
         : 0;
 
       const lowStockCount = Array.isArray(lowStockItems) ? lowStockItems[0]?.count || 0 : 0;
@@ -312,8 +349,7 @@ export class DashboardController {
           },
           todayPriority: {
             urgentDeliveries: urgentOrders,
-            scheduledPickups,
-            routeOptimizations: Math.floor(Math.random() * 3) + 1 // Mock data for route optimizations
+            scheduledPickups
           }
         };
       } else if (user.role === 'DRIVER') {
@@ -362,22 +398,11 @@ export class DashboardController {
             })
           ]);
 
-          // Calculate total distance and earnings for today
-          const todayDistance = todaySchedule.reduce((total, dispatch) => {
-            return total + (Math.random() * 20 + 5); // Mock distance calculation
-          }, 0);
-
-          const todayEarnings = todaySchedule
-            .filter(d => d.status === 'DELIVERED')
-            .reduce((total, dispatch) => {
-              return total + (Number(dispatch.order.totalAmount) * 0.1); // 10% commission
-            }, 0);
-
           summary.driverStats = {
             completedToday: todayDeliveries,
             remaining: remainingDeliveries,
-            distance: Math.round(todayDistance),
-            earnings: Math.round(todayEarnings),
+            distance: null,
+            earnings: null,
             currentDelivery: currentDelivery ? {
               status: currentDelivery.status,
               orderNumber: currentDelivery.order.orderNumber,
@@ -627,8 +652,17 @@ export class DashboardController {
 
   static async getAlerts(req: Request, res: Response) {
     try {
+      const tenant = getTenantContext();
+      if (!tenant) return res.status(400).json({ success: false, error: { code: 'TENANT_CONTEXT_REQUIRED', message: 'Company context is required' } });
       const lowStockItems = await prisma.$queryRaw`
-        SELECT * FROM inventory_items WHERE quantity < min_quantity
+        SELECT i.*, COALESCE(SUM(ws.quantity), 0)::int AS quantity FROM inventory_items i
+          LEFT JOIN warehouse_stock ws ON ws.item_id = i.id
+          LEFT JOIN warehouses w ON w.id = ws.warehouse_id
+          WHERE i.company_id = ${tenant.companyId}
+            AND (w.id IS NULL OR w.company_id = ${tenant.companyId})
+            AND (${tenant.branchId}::int IS NULL OR w.branch_id = ${tenant.branchId} OR w.branch_id IS NULL)
+          GROUP BY i.id
+          HAVING COALESCE(SUM(ws.quantity), 0) < i.min_quantity
       `;
 
       const alerts = (lowStockItems as any[]).map((item: any) => ({

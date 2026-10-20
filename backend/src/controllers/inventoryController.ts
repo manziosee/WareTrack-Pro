@@ -6,6 +6,18 @@ import { QueueService } from '../services/queueService';
 
 const cache = CacheService.getInstance();
 
+function stockInclude(req: Request) {
+  return { warehouseStock: { where: {
+    companyId: req.user!.companyId,
+    ...(req.user!.branchId === null ? { branchId: null } : { OR: [{ branchId: req.user!.branchId }, { branchId: null }] }),
+  }, select: { quantity: true } } };
+}
+
+function presentBranchStock<T extends { warehouseStock?: { quantity: number }[] }>(item: T) {
+  const { warehouseStock = [], ...fields } = item;
+  return { ...fields, quantity: warehouseStock.reduce((sum, row) => sum + row.quantity, 0) };
+}
+
 export class InventoryController {
   static async getInventory(req: Request, res: Response) {
     try {
@@ -27,14 +39,14 @@ export class InventoryController {
             ]
           })
         },
-        include: { packagings: { orderBy: { unitsPerPack: 'asc' } } }
+        include: { ...stockInclude(req), packagings: { orderBy: { unitsPerPack: 'asc' } } }
       });
 
       const total = await prisma.inventoryItem.count();
 
       res.json({
         success: true,
-        data: items,
+        data: items.map(presentBranchStock),
         pagination: { page: Number(page), limit: pageSize, total, totalPages: Math.ceil(total / pageSize) }
       });
     } catch (error) {
@@ -48,18 +60,18 @@ export class InventoryController {
   /** Every category: the managed list plus any name already used by an item, with item counts. */
   static async getCategories(req: Request, res: Response) {
     try {
-      const [saved, used] = await Promise.all([
+      const [saved, items] = await Promise.all([
         prisma.inventoryCategory.findMany({ orderBy: { name: 'asc' } }),
-        prisma.inventoryItem.groupBy({ by: ['category'], _count: { _all: true }, _sum: { quantity: true } }),
+        prisma.inventoryItem.findMany({ select: { category: true, ...stockInclude(req) } }),
       ]);
       const byName = new Map<string, any>();
       for (const c of saved) byName.set(c.name.toLowerCase(), { id: c.id, name: c.name, description: c.description, color: c.color, items: 0, units: 0 });
-      for (const u of used) {
+      for (const u of items) {
         if (!u.category) continue;
         const key = u.category.toLowerCase();
         const row = byName.get(key) || { id: null, name: u.category, description: null, color: null, items: 0, units: 0 };
-        row.items += u._count._all;
-        row.units += u._sum.quantity || 0;
+        row.items += 1;
+        row.units += u.warehouseStock.reduce((sum, stock) => sum + stock.quantity, 0);
         byName.set(key, row);
       }
       const data = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -139,7 +151,7 @@ export class InventoryController {
 
   static async getLowStock(req: Request, res: Response) {
     try {
-      const items = await prisma.inventoryItem.findMany();
+      const items = (await prisma.inventoryItem.findMany({ include: stockInclude(req) })).map(presentBranchStock);
       const lowStockItems = items.filter(item => item.quantity < item.minQuantity);
       res.json({ success: true, data: lowStockItems });
     } catch (error) {
@@ -152,7 +164,7 @@ export class InventoryController {
 
   static async getStats(req: Request, res: Response) {
     try {
-      const items = await prisma.inventoryItem.findMany();
+      const items = (await prisma.inventoryItem.findMany({ include: stockInclude(req) })).map(presentBranchStock);
       const totalItems = items.length;
       const totalValue = items.reduce((sum, item) => sum + (item.quantity * Number(item.unitPrice)), 0);
       const outOfStock = items.filter(item => item.quantity === 0).length;
@@ -196,9 +208,10 @@ export class InventoryController {
   static async getInventoryById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const item = await prisma.inventoryItem.findUnique({
-        where: { id: Number(id) }
+      const rawItem = await prisma.inventoryItem.findUnique({
+        where: { id: Number(id) }, include: stockInclude(req),
       });
+      const item = rawItem && presentBranchStock(rawItem);
       
       if (!item) {
         return res.status(404).json({ 
@@ -219,13 +232,42 @@ export class InventoryController {
   static async getItemHistory(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      // Mock history - implement with actual history table
-      const history = [
-        { id: 1, itemId: Number(id), action: 'created', quantity: 100, date: new Date(), user: 'Admin' }
-      ];
-      res.json(history);
+      const itemId = Number(id);
+      if (!Number.isInteger(itemId) || itemId < 1) return res.status(400).json({ success: false, error: { code: 'INVALID_ITEM_ID', message: 'Item ID must be a positive integer' } });
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
+      const search = String(req.query.search || '').trim();
+      const action = String(req.query.action || '').trim();
+      const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+      const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+      if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_DATE', message: 'History dates must be valid ISO dates' } });
+      }
+      const where = {
+        itemId,
+        ...(action ? { action: { equals: action, mode: 'insensitive' as const } } : {}),
+        ...(search ? { OR: [
+          { action: { contains: search, mode: 'insensitive' as const } },
+          { notes: { contains: search, mode: 'insensitive' as const } },
+          { order: { orderNumber: { contains: search, mode: 'insensitive' as const } } },
+          { performedByUser: { name: { contains: search, mode: 'insensitive' as const } } },
+        ] } : {}),
+        ...(from || to ? { performedAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+      };
+      const [history, total] = await Promise.all([
+        prisma.inventoryHistory.findMany({
+          where, skip: (page - 1) * limit, take: limit, orderBy: [{ performedAt: 'desc' }, { id: 'desc' }],
+          include: {
+            performedByUser: { select: { id: true, name: true } },
+            order: { select: { id: true, orderNumber: true } },
+          },
+        }),
+        prisma.inventoryHistory.count({ where }),
+      ]);
+      res.json({ success: true, data: history, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      console.error('Inventory history error:', error);
+      res.status(500).json({ success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Could not load inventory history' } });
     }
   }
 
@@ -233,8 +275,8 @@ export class InventoryController {
     try {
       const { name, code, category, quantity, minQuantity, unit, unitCategory, location, barcode, unitPrice, supplier, description } = req.body;
 
-      const item = await prisma.inventoryItem.create({
-        data: {
+      const created = await prisma.$transaction(async (tx) => {
+        const item = await tx.inventoryItem.create({ data: {
           name,
           code,
           category,
@@ -248,25 +290,24 @@ export class InventoryController {
           supplier,
           description,
           status: 'ACTIVE'
-        }
-      });
-
-      // Create inventory history record
-      await prisma.inventoryHistory.create({
-        data: {
+        } });
+        const warehouse = await tx.warehouse.findFirst({ where: { active: true }, select: { id: true } });
+        if (warehouse) await tx.warehouseStock.create({ data: { warehouseId: warehouse.id, itemId: item.id, quantity: Number(quantity || 0) } });
+        await tx.inventoryHistory.create({ data: {
           itemId: item.id,
           action: 'stock_in',
-          quantity: Number(quantity),
+          quantity: Number(quantity || 0),
           previousQuantity: 0,
-          newQuantity: Number(quantity),
+          newQuantity: Number(quantity || 0),
           notes: 'Initial stock creation',
           performedBy: Number(req.user?.userId) || 1
-        }
+        } });
+        return item;
       });
 
       await cache.invalidateInventoryCache();
       
-      res.status(201).json({ success: true, data: item });
+      res.status(201).json({ success: true, data: created });
     } catch (error: any) {
       res.status(500).json({ 
         success: false,
@@ -279,8 +320,8 @@ export class InventoryController {
     try {
       const { items } = req.body;
       
-      const insertedItems = await prisma.inventoryItem.createMany({
-        data: items.map((item: any) => ({
+      const result = await prisma.$transaction(async (tx) => {
+        const insertedItems = await tx.inventoryItem.createMany({ data: items.map((item: any) => ({
           name: item.name,
           code: item.code,
           category: item.category,
@@ -294,13 +335,21 @@ export class InventoryController {
           supplier: item.supplier,
           description: item.description,
           status: 'ACTIVE'
-        }))
+        })) });
+        const created = await tx.inventoryItem.findMany({ where: { code: { in: items.map((item: any) => item.code) } }, select: { id: true, name: true, code: true, quantity: true } });
+        const warehouse = await tx.warehouse.findFirst({ where: { active: true }, select: { id: true } });
+        if (warehouse && created.length) await tx.warehouseStock.createMany({ data: created.map((item) => ({ warehouseId: warehouse.id, itemId: item.id, quantity: item.quantity })) });
+        if (created.length) await tx.inventoryHistory.createMany({ data: created.map((item) => ({
+          itemId: item.id, action: 'stock_in', quantity: item.quantity, previousQuantity: 0, newQuantity: item.quantity,
+          notes: `Initial stock import: ${item.code}`, performedBy: Number(req.user?.userId) || 1,
+        })) });
+        return insertedItems;
       });
       await cache.invalidateInventoryCache();
       
       res.status(201).json({ 
         success: true,
-        message: `${insertedItems.count} items imported successfully`
+        message: `${result.count} items imported successfully`
       });
     } catch (error: any) {
       res.status(500).json({ 
@@ -327,40 +376,68 @@ export class InventoryController {
         });
       }
 
-      const item = await prisma.inventoryItem.update({
-        where: { id: Number(id) },
-        data: {
+      const item = await prisma.$transaction(async (tx) => {
+        let quantityChange: any = undefined;
+        let branchQuantity = 0;
+        let adjustment = 0;
+        const stockRows = await tx.warehouseStock.findMany({ where: { itemId: Number(id) }, orderBy: { warehouseId: 'asc' } });
+        branchQuantity = stockRows.reduce((sum, stock) => sum + stock.quantity, 0);
+        if (quantity !== undefined) {
+          const target = Number(quantity);
+          if (!Number.isFinite(target) || target < 0) throw new Error('Stock quantity must be a non-negative number');
+          adjustment = target - branchQuantity;
+          if (adjustment > 0) {
+            const warehouse = await tx.warehouse.findFirst({ where: { active: true }, orderBy: { id: 'asc' }, select: { id: true } });
+            if (!warehouse) throw new Error('Create an active warehouse in this branch before adjusting stock');
+            await tx.warehouseStock.upsert({
+              where: { warehouseId_itemId: { warehouseId: warehouse.id, itemId: Number(id) } },
+              create: { warehouseId: warehouse.id, itemId: Number(id), quantity: adjustment },
+              update: { quantity: { increment: adjustment } },
+            });
+            quantityChange = { increment: adjustment };
+          } else if (adjustment < 0) {
+            let remaining = -adjustment;
+            for (const stock of stockRows) {
+              if (!remaining) break;
+              const take = Math.min(stock.quantity, remaining);
+              if (take) await tx.warehouseStock.update({ where: { id: stock.id }, data: { quantity: { decrement: take } } });
+              remaining -= take;
+            }
+            if (remaining) throw new Error('The branch stock changed while the adjustment was being saved');
+            quantityChange = { decrement: -adjustment };
+          }
+        }
+        const updated = await tx.inventoryItem.update({ where: { id: Number(id) }, data: {
           name,
           code,
           category,
-          quantity: Number(quantity),
-          minQuantity: Number(minQuantity),
+          quantity: quantityChange,
+          minQuantity: minQuantity !== undefined ? Number(minQuantity) : undefined,
           unit,
           unitCategory,
           location,
           barcode,
-          unitPrice: Number(unitPrice),
+          unitPrice: unitPrice !== undefined ? Number(unitPrice) : undefined,
           supplier,
           description,
           status: status as any
-        }
-      });
+        } });
 
       // Create inventory history if quantity changed
-      if (quantity !== undefined && currentItem.quantity !== Number(quantity)) {
-        const action = Number(quantity) > currentItem.quantity ? 'stock_in' : 'stock_out';
-        await prisma.inventoryHistory.create({
-          data: {
-            itemId: item.id,
+      if (quantity !== undefined && adjustment !== 0) {
+        const action = adjustment > 0 ? 'stock_in' : 'stock_out';
+        await tx.inventoryHistory.create({ data: {
+            itemId: updated.id,
             action,
-            quantity: Math.abs(Number(quantity) - currentItem.quantity),
-            previousQuantity: currentItem.quantity,
+            quantity: Math.abs(adjustment),
+            previousQuantity: branchQuantity,
             newQuantity: Number(quantity),
             notes: 'Stock adjustment via update',
             performedBy: Number(req.user?.userId) || 1
-          }
-        });
+        } });
       }
+      return { ...updated, quantity: quantity === undefined ? branchQuantity : Number(quantity) };
+      });
 
       // Check for low stock and send alert
       if (quantity !== undefined && minQuantity !== undefined && Number(quantity) <= Number(minQuantity)) {
@@ -391,14 +468,12 @@ export class InventoryController {
     try {
       const { id } = req.params;
       
-      await prisma.inventoryItem.delete({
-        where: { id: Number(id) }
-      });
+      await prisma.inventoryItem.update({ where: { id: Number(id) }, data: { status: 'DISCONTINUED' } });
       await cache.invalidateInventoryCache();
       
       res.json({ 
         success: true,
-        message: 'Item deleted successfully' 
+        message: 'Item archived. Stock and movement history have been preserved.'
       });
     } catch (error: any) {
       if (error.code === 'P2025') {

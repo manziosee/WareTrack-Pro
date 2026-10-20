@@ -11,8 +11,6 @@ const staff = [auth, authorizeRoles(...ROLES.orderManagers)];
 const bad = (res: Response, message: string, status = 400) =>
   res.status(status).json({ success: false, error: { code: status === 404 ? 'NOT_FOUND' : status === 503 ? 'NOT_CONFIGURED' : 'VALIDATION_ERROR', message } });
 
-const VAT = 0.18;
-
 async function markPaid(orderId: number, paymentId: number) {
   await prisma.payment.update({ where: { id: paymentId }, data: { status: 'SUCCESSFUL', completedAt: new Date() } });
   await refreshOrderPayment(orderId);
@@ -145,18 +143,26 @@ router.get('/invoices/order/:orderId', ...staff, async (req, res, next) => {
       include: { items: true, payments: { where: { status: 'SUCCESSFUL' }, orderBy: { completedAt: 'desc' } } },
     });
     if (!order) return bad(res, 'Order not found', 404);
+    const company = await prisma.company.findUnique({
+      where: { id: order.companyId },
+      select: { name: true, legalName: true, legalAddress: true, taxNumber: true, currency: true, taxRate: true, invoicePrefix: true },
+    });
+    if (!company) return bad(res, 'Company settings not found', 404);
+    let invoice = await prisma.invoice.findUnique({ where: { orderId } });
+    const configuredRate = Number(company.taxRate);
+    const historicalRate = invoice && Number(invoice.subtotal) > 0 ? Number(invoice.tax) / Number(invoice.subtotal) : configuredRate;
+    const vatRate = Number.isFinite(historicalRate) ? historicalRate : configuredRate;
     // Prices include VAT: the invoice total is the order total (what the customer pays)
     const total = Math.round(Number(order.totalAmount) * 100) / 100;
-    const subtotal = Math.round((total / (1 + VAT)) * 100) / 100;
+    const subtotal = Math.round((total / (1 + vatRate)) * 100) / 100;
     const tax = Math.round((total - subtotal) * 100) / 100;
     const account = order.accountId ? await prisma.customerAccount.findUnique({ where: { id: order.accountId } }) : null;
     const dueDate = new Date((order.deliveredAt || order.createdAt).getTime() + (account?.paymentTermsDays || 0) * 86400000);
     const status = order.paymentStatus === 'PAID' ? 'PAID' : order.paymentStatus === 'PARTIAL' ? 'PARTIAL' : 'UNPAID';
-    let invoice = await prisma.invoice.findUnique({ where: { orderId } });
     if (!invoice) {
       invoice = await prisma.invoice.create({
         data: {
-          invoiceNumber: `INV-${String(order.id).padStart(6, '0')}`, orderId, subtotal, tax, total, status, dueDate,
+          invoiceNumber: `${company.invoicePrefix}-${String(order.id).padStart(6, '0')}`, orderId, subtotal, tax, total, status, dueDate,
           paidAt: status === 'PAID' ? new Date() : null,
         },
       });
@@ -174,7 +180,9 @@ router.get('/invoices/order/:orderId', ...staff, async (req, res, next) => {
           items: order.items.map((i) => ({ name: i.itemName, quantity: i.quantity, unit: i.unit, unitPrice: Number(i.unitPrice), total: Number(i.totalPrice) })),
         },
         payments: order.payments,
-        vatRate: VAT,
+        company: { ...company, taxRate: vatRate },
+        taxLabel: company.taxNumber ? 'Tax' : 'VAT',
+        vatRate,
       },
     });
   } catch (error) {

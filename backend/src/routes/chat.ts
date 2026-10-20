@@ -14,7 +14,14 @@ router.get('/conversations', auth, async (req, res, next) => {
   try {
     const me = Number(req.user!.userId);
     const [people, messages] = await Promise.all([
-      prisma.user.findMany({ where: { status: 'ACTIVE', id: { not: me } }, select: { id: true, name: true, role: true }, orderBy: { name: 'asc' } }),
+      prisma.companyMembership.findMany({
+        where: {
+          companyId: req.user!.companyId, active: true, userId: { not: me }, user: { status: 'ACTIVE' },
+          ...(req.user!.branchId ? { branches: { some: { branchId: req.user!.branchId, active: true } } } : {}),
+        },
+        select: { role: true, branches: { where: { branchId: req.user!.branchId || -1, active: true }, select: { roleOverride: true } }, user: { select: { id: true, name: true } } },
+        orderBy: { user: { name: 'asc' } },
+      }),
       prisma.chatMessage.findMany({
         where: { OR: [{ senderId: me }, { receiverId: me }], receiverId: { not: null } },
         orderBy: { createdAt: 'desc' },
@@ -22,7 +29,8 @@ router.get('/conversations', auth, async (req, res, next) => {
         select: { senderId: true, receiverId: true, message: true, createdAt: true, read: true },
       }),
     ]);
-    const data = people.map((p) => {
+    const data = people.map((membership) => {
+      const p = { ...membership.user, role: membership.branches[0]?.roleOverride || membership.role };
       const thread = messages.filter((m) => (m.senderId === p.id && m.receiverId === me) || (m.senderId === me && m.receiverId === p.id));
       return {
         user: p,
@@ -62,6 +70,9 @@ router.post('/send', auth, async (req, res, next) => {
     const text = String(req.body?.message || '').trim();
     if (!to || !text) return bad(res, 'Recipient and message are required');
     if (text.length > 2000) return bad(res, 'Messages can be up to 2000 characters');
+    const recipientMembership = await prisma.companyMembership.findUnique({ where: { companyId_userId: { companyId: req.user!.companyId, userId: to } } });
+    if (!recipientMembership?.active) return bad(res, 'Recipient is not an active member of this company', 404);
+    if (req.user!.branchId && !await prisma.branchMembership.findFirst({ where: { companyMembershipId: recipientMembership.id, branchId: req.user!.branchId, active: true } })) return bad(res, 'Recipient is not assigned to this branch', 404);
     const recipient = await prisma.user.findUnique({ where: { id: to }, select: { id: true, status: true } });
     if (!recipient || recipient.status !== 'ACTIVE' || to === me) return bad(res, 'Recipient not found', 404);
     const message = await prisma.chatMessage.create({

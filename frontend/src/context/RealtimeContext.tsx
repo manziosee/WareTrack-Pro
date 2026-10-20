@@ -36,7 +36,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('token');
     if (!isAuthenticated || !token) return;
 
-    const s = io(apiBase, { auth: { token }, transports: ['websocket', 'polling'], reconnectionDelayMax: 15000 });
+    const companyId = localStorage.getItem('waretrack-company-id');
+    const branchId = localStorage.getItem('waretrack-branch-id');
+    const s = io(apiBase, { auth: { token, companyId, branchId }, transports: ['websocket', 'polling'], reconnectionDelayMax: 15000 });
     socketRef.current = s;
     setSocket(s);
 

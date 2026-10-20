@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, CameraOff, ScanLine } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { cameraErrorMessage, startQrScanner } from '@/utils/camera';
 
 interface ScanInputProps {
   onScan: (code: string) => void | Promise<void>;
@@ -34,21 +35,15 @@ export default function ScanInput({ onScan, placeholder = 'Scan or type a barcod
     let stopped = false;
     const scanner = new Html5Qrcode(viewId, { verbose: false });
     scannerRef.current = scanner;
-    scanner
-      .start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 240, height: 140 } },
-        (decoded) => {
+    startQrScanner(scanner, (decoded) => {
           const now = Date.now();
           if (last.current && last.current.code === decoded && now - last.current.at < 1500) return;
           last.current = { code: decoded, at: now };
           submit(decoded);
-        },
-        () => undefined
-      )
-      .catch(() => {
+        })
+      .catch((error) => {
         if (!stopped) {
-          toast.error('Could not open the camera. Allow camera access, or type the code.');
+          toast.error(cameraErrorMessage(error), { duration: 7000 });
           setCamera(false);
         }
       });

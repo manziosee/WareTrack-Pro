@@ -1,8 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, Users, Package, ShoppingCart, Truck, Car, MapPin, BarChart3, Bell, UserCheck, Settings,
+  LayoutDashboard, Users, Package, ShoppingCart, Truck, Car, MapPin, BarChart3, Bell, UserCheck, Settings, Activity,
   KanbanSquare, CalendarDays, Map, RotateCcw, ScanLine, Warehouse, FileText, TrendingUp, Award, FileBarChart,
-  Wallet, MessagesSquare, History, Route, Building2, Banknote, Receipt, BookOpen, PackageCheck, ClipboardCheck,
+  Wallet, MessagesSquare, History, Route, Building2, Banknote, Receipt, BookOpen, PackageCheck, ClipboardCheck, MessageSquare,
 } from 'lucide-react';
 import type { UserRole } from '@/types';
 
@@ -91,6 +91,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: 'Messages', href: '/messages', icon: MessagesSquare, roles: ALL, keywords: 'chat', badge: 'unreadMessages', mobileFor: ['DRIVER'] },
       { name: 'Notifications', href: '/notifications', icon: Bell, roles: ALL, keywords: 'alerts', badge: 'unreadNotifications', mobileFor: ['DRIVER'] },
+      { name: 'Feedback & issues', href: '/feedback', icon: MessageSquare, roles: ALL, keywords: 'complaints reports problems follow up' },
     ],
   },
   {
@@ -98,6 +99,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: 'Users', href: '/users', icon: Users, roles: ['ADMIN'], keywords: 'accounts approve team', badge: 'pendingUsers', mobileFor: ['ADMIN'] },
       { name: 'Audit Log', href: '/audit', icon: History, roles: ['ADMIN'], keywords: 'history changes who' },
+      { name: 'Product usage', href: '/usage-analytics', icon: Activity, roles: ['ADMIN'], keywords: 'workflow adoption activity errors analytics' },
       { name: 'Settings', href: '/settings', icon: Settings, roles: ALL, keywords: 'preferences profile security two-factor webhooks' },
     ],
   },
@@ -105,12 +107,14 @@ export const NAV_SECTIONS: NavSection[] = [
 
 export function navForRole(role?: UserRole): NavSection[] {
   if (!role) return [];
+  const isCustomRole = !ALL.includes(role);
   return NAV_SECTIONS
-    .map((section) => ({ ...section, items: section.items.filter((item) => item.roles.includes(role)) }))
+    .map((section) => ({ ...section, items: section.items.filter((item) => isCustomRole || item.roles.includes(role)) }))
     .filter((section) => section.items.length > 0);
 }
 
 export function mobileNavForRole(role?: UserRole): NavItem[] {
   if (!role) return [];
+  if (!ALL.includes(role)) return NAV_SECTIONS.flatMap((s) => s.items).slice(0, 4);
   return NAV_SECTIONS.flatMap((s) => s.items).filter((item) => item.mobileFor?.includes(role)).slice(0, 4);
 }

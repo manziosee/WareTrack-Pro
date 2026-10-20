@@ -188,6 +188,7 @@ export default function Returns() {
                 {viewing.notes && <DetailField label="Notes" className="sm:col-span-2">{viewing.notes}</DetailField>}
               </DetailGrid>
             </DetailSection>
+            {viewing.photoUrl && <DetailSection title="Delivery exception photo" icon={<AlertTriangle className="h-4 w-4" />}><img src={viewing.photoUrl} alt={`Evidence for ${viewing.returnNumber}`} className="max-h-96 w-full rounded-xl object-contain" /></DetailSection>}
             <ActivityTimeline entityType="ReturnRequest" entityId={viewing.id} />
           </div>
         )}

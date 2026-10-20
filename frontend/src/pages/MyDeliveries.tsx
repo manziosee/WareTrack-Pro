@@ -29,10 +29,13 @@ const slot = (o: any) => {
 const CACHE_KEY = 'waretrack-my-deliveries-cache';
 
 /** Actions waiting for a connection: { url, body, label } (older entries were { orderId, body }). */
-function readQueue(): { url: string; body: any; label?: string }[] {
+type QueuedAction = { id: string; url: string; body: any; label?: string; status?: 'CONFLICT'; error?: string; queuedAt?: string };
+function readQueue(): QueuedAction[] {
   try {
     const items = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
-    return items.map((i: any) => (i.url ? i : { url: `/my-deliveries/${i.orderId}/complete`, body: i.body, label: 'delivery' }));
+    return items.map((i: any) => (i.url
+      ? { ...i, id: i.id || `${Date.now()}-${Math.random()}` }
+      : { id: `${Date.now()}-${Math.random()}`, url: `/my-deliveries/${i.orderId}/complete`, body: i.body, label: 'delivery' }));
   } catch {
     return [];
   }
@@ -70,6 +73,8 @@ export default function MyDeliveries() {
   const [completing, setCompleting] = useState<any>(null);
   const [failing, setFailing] = useState<any>(null);
   const [failReason, setFailReason] = useState(FAIL_REASONS[0]);
+  const [failNotes, setFailNotes] = useState('');
+  const [failPhoto, setFailPhoto] = useState<string | null>(null);
   const [recipient, setRecipient] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
@@ -79,6 +84,8 @@ export default function MyDeliveries() {
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [queued, setQueued] = useState(readQueue().length);
+  const [queueItems, setQueueItems] = useState<QueuedAction[]>(readQueue);
+  const [showQueue, setShowQueue] = useState(false);
   const signatureRef = useRef<SignaturePadHandle>(null);
   const positionRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastSent = useRef(0);
@@ -121,19 +128,25 @@ export default function MyDeliveries() {
     const flush = async () => {
       const items = readQueue();
       if (!items.length || !navigator.onLine) return;
-      const remaining = [];
+      const remaining: QueuedAction[] = [];
       for (const item of items) {
-        const res = await api.post(item.url, item.body).catch(() => null);
-        // No real answer from the server (the API client turns network errors into a reply
-        // without a status): still offline, keep it. A server rejection can't succeed later.
+        if (item.status === 'CONFLICT') { remaining.push(item); continue; }
+        const res = await api.post(item.url, item.body, { headers: { 'Idempotency-Key': item.id } }).catch(() => null);
         if (!res?.status) remaining.push(item);
+        else if (res.data?.success === false || res.status >= 400) {
+          remaining.push({ ...item, status: 'CONFLICT', error: res.data?.error?.message || 'The server rejected this saved action. Review it before retrying.' });
+        }
       }
       writeQueue(remaining);
+      setQueueItems(remaining);
       setQueued(remaining.length);
-      if (items.length !== remaining.length) {
-        toast.success(`${items.length - remaining.length} saved update${items.length - remaining.length === 1 ? '' : 's'} sent`);
+      const sent = items.length - remaining.filter((i) => items.some((old) => old.id === i.id)).length;
+      if (sent > 0) {
+        toast.success(`${sent} saved update${sent === 1 ? '' : 's'} sent`);
         refresh();
       }
+      const blocked = remaining.filter((item) => item.status === 'CONFLICT').length;
+      if (blocked) toast.error(`${blocked} saved update${blocked === 1 ? '' : 's'} need review`, { duration: 7000 });
     };
     const up = () => { setOnline(true); flush(); };
     const down = () => setOnline(false);
@@ -191,15 +204,32 @@ export default function MyDeliveries() {
 
   /** No signal: remember the action, update the list on the phone, send it later. */
   const queueOffline = (url: string, body: any, label: string, update: (d: any) => any) => {
-    const ok = writeQueue([...readQueue(), { url, body, label }]);
+    const entry: QueuedAction = { id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`, url, body, label, queuedAt: new Date().toISOString() };
+    const nextQueue = [...readQueue(), entry];
+    const ok = writeQueue(nextQueue);
     if (!ok) { toast.error('Could not save on this phone. Try again when you have signal.'); return false; }
-    setQueued(readQueue().length);
+    setQueueItems(nextQueue);
+    setQueued(nextQueue.length);
     queryClient.setQueryData(['my-deliveries'], (d: any) => {
       const next = d ? update(d) : d;
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch { /* storage full */ }
       return next;
     });
     return true;
+  };
+
+  const discardQueued = (id: string) => {
+    const next = readQueue().filter((item) => item.id !== id);
+    writeQueue(next);
+    setQueueItems(next);
+    setQueued(next.length);
+  };
+
+  const retryQueued = () => {
+    const next = readQueue().map((item) => ({ ...item, status: undefined, error: undefined }));
+    writeQueue(next);
+    setQueueItems(next);
+    window.dispatchEvent(new Event('online'));
   };
 
   const start = async (o: any) => {
@@ -209,7 +239,13 @@ export default function MyDeliveries() {
       }
       return;
     }
-    const res = await api.post(`/my-deliveries/${o.id}/start`, {});
+    const res = await api.post(`/my-deliveries/${o.id}/start`, {}).catch(() => null);
+    if (!res?.status) {
+      if (queueOffline(`/my-deliveries/${o.id}/start`, {}, 'start', (d) => ({ ...d, open: d.open.map((x: any) => (x.id === o.id ? { ...x, status: 'IN_TRANSIT' } : x)) }))) {
+        toast('Connection lost. Start saved on this phone and will sync later.', { icon: '📶' });
+      }
+      return;
+    }
     if (res.data?.success) {
       toast.success(`On the way to ${o.customerName}`);
       if (!sharing) setSharing(true);
@@ -264,15 +300,24 @@ export default function MyDeliveries() {
   };
 
   const fail = async () => {
+    const body = { reason: failReason, notes: failNotes || undefined, photoData: failPhoto || undefined };
     if (!navigator.onLine) {
       const id = failing.id;
-      if (queueOffline(`/orders/${id}/fail`, { reason: failReason }, 'failed delivery', (d) => ({ ...d, open: d.open.filter((x: any) => x.id !== id) }))) {
+      if (queueOffline(`/orders/${id}/fail`, body, 'delivery exception', (d) => ({ ...d, open: d.open.filter((x: any) => x.id !== id) }))) {
         toast('No signal: saved, dispatch will be told when you reconnect.', { icon: '📶' });
         setFailing(null);
       }
       return;
     }
-    const res = await api.post(`/orders/${failing.id}/fail`, { reason: failReason });
+    const res = await api.post(`/orders/${failing.id}/fail`, body).catch(() => null);
+    if (!res?.status) {
+      const id = failing.id;
+      if (queueOffline(`/orders/${id}/fail`, body, 'delivery exception', (d) => ({ ...d, open: d.open.filter((x: any) => x.id !== id) }))) {
+        toast('Connection lost. Exception saved on this phone and will sync later.', { icon: '📶' });
+        setFailing(null);
+      }
+      return;
+    }
     if (res.data?.success) {
       toast(`${failing.orderNumber} marked as not delivered`, { icon: '📝' });
       setFailing(null);
@@ -309,6 +354,7 @@ export default function MyDeliveries() {
       {(!online || queued > 0) && (
         <div className="mb-4 flex items-center gap-2 rounded-2xl bg-warning-50 px-4 py-3 text-sm text-warning-800">
           <WifiOff className="h-4 w-4 shrink-0" /> {!online ? `You are offline. Keep working: starts, deliveries and problems are saved on this phone${queued ? ` (${queued} waiting)` : ''} and sent when you reconnect.` : `${queued} saved update${queued === 1 ? '' : 's'} waiting to send…`}
+          {queued > 0 && <button className="ml-auto shrink-0 font-semibold underline" onClick={() => setShowQueue(true)}>Review</button>}
         </div>
       )}
 
@@ -371,7 +417,7 @@ export default function MyDeliveries() {
                   ) : (
                     <button onClick={() => start(o)} className="flex flex-col items-center gap-1 border-l border-gray-100 bg-primary-500 py-3 text-white hover:bg-primary-600"><Play className="h-4 w-4" /> Start</button>
                   )}
-                  <button onClick={() => { setFailing(o); setFailReason(FAIL_REASONS[0]); }} className="flex flex-col items-center gap-1 border-l border-gray-100 py-3 text-error-600 hover:bg-error-50"><XCircle className="h-4 w-4" /> Can't deliver</button>
+                  <button onClick={() => { setFailing(o); setFailReason(FAIL_REASONS[0]); setFailNotes(''); setFailPhoto(null); }} className="flex flex-col items-center gap-1 border-l border-gray-100 py-3 text-error-600 hover:bg-error-50"><XCircle className="h-4 w-4" /> Can't deliver</button>
                 </div>
                 {collectsCash(o) && (
                   <p className="flex w-full items-center justify-center gap-1.5 border-t border-gray-100 bg-warning-50 py-2 text-xs font-semibold text-warning-800">
@@ -449,11 +495,25 @@ export default function MyDeliveries() {
               <input type="radio" checked={failReason === r} onChange={() => setFailReason(r)} className="text-error-500" /> {r}
             </label>
           ))}
+          <label className="block pt-2 text-sm"><span className="mb-1 block font-medium text-gray-700">Notes for dispatch</span><textarea value={failNotes} onChange={(e) => setFailNotes(e.target.value)} rows={2} maxLength={2000} className="w-full rounded-xl border border-gray-200 p-3" placeholder="What happened? What should dispatch follow up on?" /></label>
+          {failPhoto ? <div className="relative"><img src={failPhoto} alt="Delivery exception evidence" className="h-32 w-full rounded-xl object-cover" /><button onClick={() => setFailPhoto(null)} className="absolute right-2 top-2 rounded-lg bg-white/90 px-2 py-1 text-xs">Remove</button></div> : <label className="flex h-16 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 text-sm text-gray-600"><Camera className="h-4 w-4" /> Add a photo<input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setFailPhoto(await compressImage(f)); }} /></label>}
           <p className="pt-1 text-xs text-gray-500">Dispatch is notified and the delivery can be rescheduled.</p>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" size="sm" onClick={() => setFailing(null)}>Back</Button>
             <Button variant="error" size="sm" onClick={fail}>Confirm</Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showQueue} onClose={() => setShowQueue(false)} title="Saved updates" subtitle="These actions are stored on this device until the server accepts them." icon={<WifiOff className="h-5 w-5" />}>
+        <div className="space-y-3">
+          {queueItems.length === 0 ? <p className="text-sm text-gray-500">No saved updates are waiting.</p> : queueItems.map((item) => (
+            <div key={item.id} className="rounded-xl border border-gray-200 p-3">
+              <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold capitalize text-gray-800">{item.label || 'delivery update'}</p><p className="text-xs text-gray-500">{item.queuedAt ? new Date(item.queuedAt).toLocaleString() : 'Saved on this device'}</p></div><button onClick={() => discardQueued(item.id)} className="text-xs font-semibold text-error-600">Discard</button></div>
+              {item.error && <p className="mt-2 rounded-lg bg-error-50 p-2 text-xs text-error-700">Needs review: {item.error}</p>}
+            </div>
+          ))}
+          {queueItems.some((item) => item.status === 'CONFLICT') && <Button variant="primary" className="w-full" onClick={retryQueued}>Retry reviewed updates</Button>}
         </div>
       </Modal>
     </div>

@@ -363,7 +363,7 @@ Alternatively, create it from the [`render.yaml`](render.yaml) Blueprint. Secret
 |---|---|---|
 | `ci.yml` | Type-checks, tests and builds backend and frontend on every push and pull request | None |
 | `keep-alive.yml` | Pings `/health` every 10 minutes during working hours (06:00–21:00 Kigali, Monday–Saturday) so the free Render service stays awake | None |
-| `db-backup.yml` | Nightly `pg_dump` of the database, kept as a workflow artifact for 14 days | Add the repository secret `DATABASE_URL` |
+| `db-backup.yml` | Nightly `pg_dump`, restored into an isolated PostgreSQL service and checked for core tables and user records before the backup is kept as a workflow artifact for 14 days | Add the repository secret `DATABASE_URL`; restore verification runs automatically |
 
 ---
 

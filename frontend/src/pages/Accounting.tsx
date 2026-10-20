@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BookOpen, Download, FileSpreadsheet, Receipt, Wallet, Building2, Scale, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
@@ -22,6 +22,14 @@ export default function Accounting() {
     return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) };
   });
   const [busy, setBusy] = useState<string | null>(null);
+  const [taxSettings, setTaxSettings] = useState({ rate: 0.18, label: 'VAT', currency: 'RWF' });
+  useEffect(() => {
+    api.get('/tenancy/company').then((response) => {
+      const company = response.data?.data;
+      if (company) setTaxSettings({ rate: Number(company.taxRate), label: company.taxNumber ? 'Tax' : 'VAT', currency: company.currency || 'RWF' });
+    }).catch(() => undefined);
+  }, []);
+  const taxText = `${taxSettings.label} ${Math.round(taxSettings.rate * 10000) / 100}%`;
 
   const download = async (type: string) => {
     setBusy(type);
@@ -71,8 +79,8 @@ export default function Accounting() {
         {EXPORTS.map((x) => (
           <div key={x.type} className="flex flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-soft">
             <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600"><x.icon className="h-5 w-5" /></span>
-            <h3 className="font-semibold text-gray-900">{x.title}</h3>
-            <p className="mt-1 flex-1 text-sm text-gray-500">{x.text}</p>
+            <h3 className="font-semibold text-gray-900">{x.title.replace('VAT', taxSettings.label)}</h3>
+            <p className="mt-1 flex-1 text-sm text-gray-500">{x.text.replaceAll('VAT 18%', taxText)}</p>
             <button
               onClick={() => download(x.type)}
               disabled={busy !== null}
@@ -83,7 +91,7 @@ export default function Accounting() {
           </div>
         ))}
       </div>
-      <p className="mt-5 text-xs text-gray-500">Prices are treated as VAT-inclusive (VAT 18%). These files don't replace RRA EBM receipts.</p>
+      <p className="mt-5 text-xs text-gray-500">Prices are treated as tax-inclusive ({taxText}, {taxSettings.currency}). These exports do not replace official electronic fiscal receipts.</p>
     </div>
   );
 }

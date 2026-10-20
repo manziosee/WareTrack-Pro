@@ -265,7 +265,7 @@ const CreateOrderForm = ({ onClose, onSave }: CreateOrderFormProps) => {
         </section>
 
         <div className="flex items-center justify-between rounded-xl bg-gray-50 p-4">
-          <span className="text-base font-semibold text-gray-900">Total (VAT included)</span>
+          <span className="text-base font-semibold text-gray-900">Total (tax included)</span>
           <span className="text-xl font-bold text-primary-600">{rwf(total)}</span>
         </div>
 

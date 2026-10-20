@@ -30,6 +30,11 @@ import financeRoutes from './routes/finance';
 import warehouseOpsRoutes from './routes/warehouseOps';
 import intakeRoutes from './routes/intake';
 import chatRoutes from './routes/chat';
+import tenancyRoutes from './routes/tenancy';
+import feedbackRoutes from './routes/feedback';
+import usageEventRoutes from './routes/usageEvents';
+import { getJobHealth } from './services/jobHealth';
+import { EmailService } from './services/emailService';
 import swaggerUi from 'swagger-ui-express';
 import rateLimit from 'express-rate-limit';
 import { swaggerSpec, addUndocumentedRoutes } from './config/swagger';
@@ -75,7 +80,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Branch-Id'],
   maxAge: 86400,
 }));
 
@@ -141,6 +146,13 @@ app.get('/health', async (req, res) => {
   res.json({
     status: database === 'up' ? 'ok' : 'degraded',
     database,
+    api: 'up',
+    email: { status: EmailService.provider() === 'none' ? 'not_configured' : 'configured', provider: EmailService.provider() },
+    payments: {
+      mobileMoney: process.env.MOMO_API_KEY && process.env.MOMO_API_USER ? 'configured' : 'not_configured',
+      airtelMoney: process.env.AIRTEL_CLIENT_ID && process.env.AIRTEL_CLIENT_SECRET ? 'configured' : 'not_configured',
+    },
+    jobs: getJobHealth(),
     version: API_VERSION,
     uptime: Math.round(process.uptime()),
     timestamp: new Date().toISOString()
@@ -161,7 +173,7 @@ app.get('/api', (req, res) => {
       '/api/payments', '/api/invoices', '/api/webhooks', '/api/report-builder', '/api/saved-reports', '/api/auth/2fa',
       '/api/public/track/:orderNumber', '/api/accounts', '/api/cash', '/api/expenses', '/api/accounting/export',
       '/api/stock-counts', '/api/packing', '/api/orders/import', '/api/push', '/api/api-keys', '/api/intake/orders',
-      '/api/public/catalog', '/api/public/orders'
+      '/api/public/catalog', '/api/public/orders', '/api/tenancy'
     ]
   });
 });
@@ -194,6 +206,9 @@ addUndocumentedRoutes(swaggerSpec, [
   ['/api', 'Customer Accounts, Cash & Expenses', financeRoutes],
   ['/api', 'Stock Counts, Packing & Import', warehouseOpsRoutes],
   ['/api', 'Push, API Keys & Online Ordering', intakeRoutes],
+  ['/api/tenancy', 'Tenancy and Permissions', tenancyRoutes],
+  ['/api/feedback', 'Feedback', feedbackRoutes],
+  ['/api/usage-events', 'Product Analytics', usageEventRoutes],
 ] as any);
 
 app.get('/api-docs.json', (req, res) => {
@@ -229,6 +244,9 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/saved-filters', savedFilterRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/tenancy', tenancyRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/usage-events', usageEventRoutes);
 app.use('/api', warehousingRoutes);
 app.use('/api', operationsRoutes);
 app.use('/api', commerceRoutes);

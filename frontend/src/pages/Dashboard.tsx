@@ -3,6 +3,7 @@ import AdminDashboard from './dashboards/AdminDashboard';
 import WarehouseStaffDashboard from './dashboards/WarehouseStaffDashboard';
 import DispatchOfficerDashboard from './dashboards/DispatchOfficerDashboard';
 import DriverDashboard from './dashboards/DriverDashboard';
+import GuidedSetup from '@/components/onboarding/GuidedSetup';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -16,16 +17,22 @@ export default function Dashboard() {
   }
 
   // Route to appropriate dashboard based on user role
+  let dashboard;
   switch (user.role) {
     case 'ADMIN':
-      return <AdminDashboard />;
+      dashboard = <AdminDashboard />;
+      break;
     case 'WAREHOUSE_STAFF':
-      return <WarehouseStaffDashboard />;
+      dashboard = <WarehouseStaffDashboard />;
+      break;
     case 'DISPATCH_OFFICER':
-      return <DispatchOfficerDashboard />;
+      dashboard = <DispatchOfficerDashboard />;
+      break;
     case 'DRIVER':
-      return <DriverDashboard />;
+      dashboard = <DriverDashboard />;
+      break;
     default:
-      return <WarehouseStaffDashboard />;
+      dashboard = <WarehouseStaffDashboard />;
   }
+  return <><GuidedSetup />{dashboard}</>;
 }

@@ -60,8 +60,7 @@ quick-*.js
 *.sqlite
 *.db
 
-# Prisma
-migrations/
+# Prisma migration history is source code and must be committed with schema changes.
 
 # Production data
 data/

@@ -23,7 +23,9 @@ export default function RoleGuard({ children, allowedRoles, redirectTo = '/dashb
     return <Navigate to="/login" replace />;
   }
 
-  if (!allowedRoles.includes(user.role)) {
+  const builtinRoles = ['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'];
+  // Custom roles are authorized by the API's action/location permission policy.
+  if (builtinRoles.includes(user.role) && !allowedRoles.includes(user.role)) {
     return <Navigate to={redirectTo} replace />;
   }
 

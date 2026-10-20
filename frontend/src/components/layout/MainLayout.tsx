@@ -54,7 +54,10 @@ export default function MainLayout({ children }: MainLayoutProps) {
   }, []);
 
   // Close the phone menu after navigating
-  useEffect(() => setMobileNavOpen(false), [location.pathname]);
+  useEffect(() => {
+    setMobileNavOpen(false);
+    document.getElementById('main-content')?.focus();
+  }, [location.pathname]);
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
 
@@ -73,6 +76,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="flex h-screen bg-gray-50">
+      <a href="#main-content" className="sr-only z-[100] rounded bg-white px-4 py-3 text-primary-900 shadow focus:not-sr-only focus:fixed focus:left-3 focus:top-3">
+        Skip to main content
+      </a>
       {/* Desktop sidebar */}
       <aside className="hidden shrink-0 md:block">
         <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} onOpenSearch={openPalette} />
@@ -80,8 +86,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
       {/* Phone slide-out menu */}
       {mobileNavOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-primary-900/40 backdrop-blur-sm animate-fade-in" onClick={() => setMobileNavOpen(false)} />
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
+          <button type="button" className="absolute inset-0 h-full w-full cursor-default bg-primary-900/40 backdrop-blur-sm animate-fade-in" aria-label="Close navigation menu" onClick={() => setMobileNavOpen(false)} />
           <div className="absolute inset-y-0 left-0 animate-[slide-in-left_0.25s_ease-out]">
             <Sidebar collapsed={false} onToggle={() => setMobileNavOpen(false)} onOpenSearch={() => { setMobileNavOpen(false); openPalette(); }} />
           </div>
@@ -90,7 +96,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header onOpenSearch={openPalette} onOpenMobileNav={() => setMobileNavOpen(true)} />
-        <main className="flex-1 overflow-y-auto">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto focus:outline-none">
           <div key={location.pathname} className="mx-auto w-full max-w-[1600px] p-4 pb-24 animate-page-in md:p-6 md:pb-8">
             {children}
           </div>

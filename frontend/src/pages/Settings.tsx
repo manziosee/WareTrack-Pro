@@ -16,6 +16,8 @@ import WebhookSettings from '@/components/settings/WebhookSettings';
 import IntegrationSettings from '@/components/settings/IntegrationSettings';
 import PushSettings from '@/components/settings/PushSettings';
 import OrderingSettings from '@/components/settings/OrderingSettings';
+import PermissionMatrix from '@/components/settings/PermissionMatrix';
+import CompanyBranches from '@/components/settings/CompanyBranches';
 
 type Tab = { id: string; label: string; icon: typeof User; roles?: string[] };
 
@@ -29,6 +31,8 @@ const TABS: Tab[] = [
   { id: 'system', label: 'System', icon: Database, roles: ['ADMIN'] },
   { id: 'integrations', label: 'Integrations', icon: Plug, roles: ['ADMIN'] },
   { id: 'ordering', label: 'Online ordering & API', icon: Globe, roles: ['ADMIN'] },
+  { id: 'permissions', label: 'Roles & permissions', icon: Shield, roles: ['ADMIN'] },
+  { id: 'company', label: 'Company & branches', icon: Globe, roles: ['ADMIN'] },
   { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['ADMIN'] },
 ];
 
@@ -43,6 +47,8 @@ const TITLES: Record<string, [string, string]> = {
   integrations: ['Integrations', 'Email, SMS, WhatsApp, Mobile Money and monitoring'],
   webhooks: ['Webhooks', 'Send events to other systems'],
   ordering: ['Online ordering & API', 'An order page for customers, and keys for other systems'],
+  permissions: ['Roles & permissions', 'Set role access by action and branch'],
+  company: ['Company & branches', 'Manage company membership and branch access'],
 };
 
 export default function Settings() {
@@ -98,6 +104,8 @@ export default function Settings() {
           {activeTab === 'integrations' && <IntegrationSettings />}
           {activeTab === 'webhooks' && <WebhookSettings />}
           {activeTab === 'ordering' && <OrderingSettings />}
+          {activeTab === 'permissions' && <PermissionMatrix />}
+          {activeTab === 'company' && <CompanyBranches />}
         </section>
       </div>
 

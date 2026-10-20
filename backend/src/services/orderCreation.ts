@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { emitEvent } from './events';
 import { creditCheck, nextNumber } from './finance';
@@ -7,6 +8,51 @@ export class OrderInputError extends Error {
   constructor(message: string, public status = 400, public code = 'VALIDATION_ERROR', public details?: unknown) {
     super(message);
   }
+}
+
+/** Release an un-dispatched order's stock once, including legacy orders without reservation rows. */
+export async function releasePendingOrderStock(tx: Prisma.TransactionClient, orderId: number, userId: number) {
+  const order = await tx.deliveryOrder.findUnique({ where: { id: orderId }, include: { items: true } });
+  if (!order) throw new OrderInputError('Order not found', 404, 'ORDER_NOT_FOUND');
+  if (order.status !== 'PENDING') throw new OrderInputError('Only orders that have not been dispatched can release allocated stock. Create a return for delivered goods.', 409, 'ORDER_ALREADY_DISPATCHED');
+  const reservations = await tx.stockReservation.findMany({ where: { orderId, status: 'RESERVED' } });
+  const byItem = new Map<number, number>();
+  for (const allocation of reservations.length ? reservations : order.items) byItem.set(allocation.itemId, (byItem.get(allocation.itemId) || 0) + allocation.quantity);
+  const legacyWarehouse = (!reservations.length || reservations.some((reservation) => !reservation.warehouseId))
+    ? await tx.warehouse.findFirst({ where: { active: true }, orderBy: { id: 'asc' }, select: { id: true } })
+    : null;
+  for (const reservation of reservations) {
+    if (reservation.warehouseId) await tx.warehouseStock.update({
+      where: { warehouseId_itemId: { warehouseId: reservation.warehouseId, itemId: reservation.itemId } },
+      data: { quantity: { increment: reservation.quantity } },
+    });
+    else if (legacyWarehouse) await tx.warehouseStock.upsert({
+      where: { warehouseId_itemId: { warehouseId: legacyWarehouse.id, itemId: reservation.itemId } },
+      create: { warehouseId: legacyWarehouse.id, itemId: reservation.itemId, quantity: reservation.quantity },
+      update: { quantity: { increment: reservation.quantity } },
+    });
+  }
+  for (const [itemId, quantity] of byItem) {
+    const item = await tx.inventoryItem.update({ where: { id: itemId }, data: { quantity: { increment: quantity }, lastUpdated: new Date() } });
+    if (!reservations.length && legacyWarehouse) await tx.warehouseStock.upsert({
+      where: { warehouseId_itemId: { warehouseId: legacyWarehouse.id, itemId } },
+      create: { warehouseId: legacyWarehouse.id, itemId, quantity },
+      update: { quantity: { increment: quantity } },
+    });
+    await tx.inventoryHistory.create({
+      data: {
+        itemId: item.id, action: 'reservation_release', quantity,
+        previousQuantity: item.quantity - quantity, newQuantity: item.quantity,
+        orderId, notes: `Released allocation for ${order.orderNumber}`, performedBy: userId,
+      },
+    });
+  }
+  if (reservations.length) {
+    await tx.stockReservation.updateMany({
+      where: { orderId, status: 'RESERVED' }, data: { status: 'RELEASED', releasedAt: new Date() },
+    });
+  }
+  return order;
 }
 
 export interface NewOrderItem {
@@ -23,6 +69,8 @@ export interface NewOrderItem {
 }
 
 export interface NewOrderInput {
+  /** Existing customer portal customer record, when the caller is a customer. */
+  customerId?: number | string;
   customerName?: string;
   contactNumber?: string;
   customerPhone?: string;
@@ -80,6 +128,7 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
   const lines: { itemId: number; itemName: string; quantity: number; unit: string; unitPrice: number; totalPrice: number; stockUnits: number; packagingId: number | null; packQuantity: number | null }[] = [];
   const shortages: string[] = [];
   const need = new Map<number, number>();
+  const itemNames = new Map<number, { name: string; unit: string }>();
   for (const raw of input.items) {
     const id = Number(raw.itemId || raw.inventoryId) || null;
     const code = raw.code ? String(raw.code).trim() : '';
@@ -102,7 +151,7 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
     const unitPrice = options.trustPrices && Number.isFinite(given) && given >= 0 ? given : listPrice;
 
     need.set(item.id, (need.get(item.id) || 0) + stockUnits);
-    if ((need.get(item.id) || 0) > item.quantity) shortages.push(`${item.name} (${item.quantity} ${item.unit} in stock)`);
+    itemNames.set(item.id, { name: item.name, unit: item.unit });
     lines.push({
       itemId: item.id,
       itemName: pack ? `${item.name} (${pack.name} × ${pack.unitsPerPack})` : item.name,
@@ -114,6 +163,24 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
       packagingId: pack?.id ?? null,
       packQuantity: pack ? quantity : null,
     });
+  }
+  const allocations = new Map<number, { warehouseId: number; quantity: number }[]>();
+  for (const [itemId, required] of need) {
+    const stocks = await prisma.warehouseStock.findMany({ where: { itemId, quantity: { gt: 0 } }, orderBy: { warehouseId: 'asc' } });
+    let remaining = required;
+    const itemAllocations: { warehouseId: number; quantity: number }[] = [];
+    for (const stock of stocks) {
+      if (!remaining) break;
+      const allocated = Math.min(stock.quantity, remaining);
+      if (allocated > 0) itemAllocations.push({ warehouseId: stock.warehouseId, quantity: allocated });
+      remaining -= allocated;
+    }
+    if (remaining) {
+      const available = required - remaining;
+      const item = itemNames.get(itemId)!;
+      shortages.push(`${item.name} (${available} ${item.unit} in this branch)`);
+    }
+    allocations.set(itemId, itemAllocations);
   }
   if (shortages.length) {
     throw new OrderInputError(`Not enough stock: ${[...new Set(shortages)].join(', ')}`, 409, 'INSUFFICIENT_STOCK');
@@ -135,7 +202,7 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
     const created = await tx.deliveryOrder.create({
       data: {
         orderNumber: await nextOrderNumber(),
-        customerId: 1,
+        customerId: Number(input.customerId) || 1,
         customerName,
         customerEmail: input.customerEmail || account?.email || null,
         deliveryAddress,
@@ -164,7 +231,29 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
       include: { items: { include: { item: true } }, driver: true, vehicle: true, account: true },
     });
     for (const [itemId, units] of need) {
-      await tx.inventoryItem.update({ where: { id: itemId }, data: { quantity: { decrement: units } } });
+      const before = await tx.inventoryItem.findUnique({ where: { id: itemId }, select: { quantity: true, name: true } });
+      const changed = await tx.inventoryItem.updateMany({
+        where: { id: itemId, quantity: { gte: units } },
+        data: { quantity: { decrement: units }, lastUpdated: new Date() },
+      });
+      if (!before || changed.count !== 1) {
+        throw new OrderInputError(`${before?.name || 'An item'} no longer has enough stock. Refresh inventory and try again.`, 409, 'INSUFFICIENT_STOCK');
+      }
+      for (const allocation of allocations.get(itemId) || []) {
+        const stock = await tx.warehouseStock.updateMany({
+          where: { warehouseId: allocation.warehouseId, itemId, quantity: { gte: allocation.quantity } },
+          data: { quantity: { decrement: allocation.quantity } },
+        });
+        if (stock.count !== 1) throw new OrderInputError(`${itemNames.get(itemId)?.name || 'An item'} stock changed in this branch. Refresh and try again.`, 409, 'INSUFFICIENT_STOCK');
+        await tx.stockReservation.create({ data: { orderId: created.id, itemId, warehouseId: allocation.warehouseId, quantity: allocation.quantity, createdById: options.createdBy } });
+      }
+      await tx.inventoryHistory.create({
+        data: {
+          itemId, action: 'order_allocation', quantity: units, previousQuantity: before.quantity,
+          newQuantity: before.quantity - units, orderId: created.id, notes: `Allocated to ${created.orderNumber}`,
+          performedBy: options.createdBy,
+        },
+      });
     }
     return created;
   });

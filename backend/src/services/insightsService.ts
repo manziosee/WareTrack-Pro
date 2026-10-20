@@ -297,8 +297,8 @@ export async function adminDashboard() {
   const [inventory, fleet, pendingUsers, activeUsers, activity] = await Promise.all([
     inventoryMetrics(),
     fleetMetrics(),
-    prisma.user.count({ where: { status: 'PENDING' } }),
-    prisma.user.count({ where: { status: 'ACTIVE' } }),
+    prisma.companyMembership.count({ where: { active: true, user: { status: 'PENDING' } } }),
+    prisma.companyMembership.count({ where: { active: true, user: { status: 'ACTIVE' } } }),
     recentActivity(),
   ]);
   const revenue30 = m.revenue(m.last30);

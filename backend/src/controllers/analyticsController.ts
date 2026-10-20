@@ -1,5 +1,11 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { getTenantContext } from '../lib/tenantContext';
+
+const deliveredAttemptRate = (orders: Array<{ deliveryAttempts?: number }>) => {
+  const attempts = orders.reduce((sum, order) => sum + Math.max(Number(order.deliveryAttempts) || 1, 1), 0);
+  return attempts ? Math.round((orders.length / attempts) * 1000) / 10 : 0;
+};
 
 export class AnalyticsController {
   // Inventory Analytics
@@ -37,14 +43,25 @@ export class AnalyticsController {
 
   static async getCategoryDistribution(req: Request, res: Response) {
     try {
-      const items = await prisma.inventoryItem.findMany();
+      const tenant = getTenantContext();
+      const items = await prisma.inventoryItem.findMany({
+        select: {
+          category: true, unitPrice: true,
+          warehouseStock: {
+            where: tenant?.branchId == null ? undefined : { branchId: tenant.branchId },
+            select: { quantity: true },
+          },
+        },
+      });
       
       const distribution = items.reduce((acc: any, item) => {
         if (!acc[item.category]) {
           acc[item.category] = { category: item.category, count: 0, value: 0 };
         }
         acc[item.category].count += 1;
-        acc[item.category].value += item.quantity * Number(item.unitPrice);
+        const branchQuantity = item.warehouseStock.reduce((sum, stock) => sum + stock.quantity, 0);
+        acc[item.category].value += branchQuantity * Number(item.unitPrice);
+        acc[item.category].units = (acc[item.category].units || 0) + branchQuantity;
         return acc;
       }, {});
 
@@ -91,7 +108,10 @@ export class AnalyticsController {
           month: monthLabel,
           deliveries: totalDeliveries,
           revenue: totalRevenue,
-          successRate: totalDeliveries > 0 ? 95 + Math.random() * 5 : 0
+          successRate: deliveredAttemptRate(drivers.flatMap((driver) => driver.orders.filter((o) => {
+            const deliveredAt = o.deliveredAt ? new Date(o.deliveredAt) : null;
+            return deliveredAt && deliveredAt >= monthDate && deliveredAt <= monthEnd;
+          })))
         });
       }
 
@@ -100,7 +120,8 @@ export class AnalyticsController {
         driverName: driver.name,
         deliveries: driver.orders.length,
         revenue: driver.orders.reduce((sum, o) => sum + Number(o.totalAmount), 0),
-        rating: Number(driver.rating || 0)
+        rating: Number(driver.rating || 0),
+        successRate: deliveredAttemptRate(driver.orders),
       }));
 
       res.json({ success: true, data: monthlyData, driverSummaries });
@@ -148,7 +169,7 @@ export class AnalyticsController {
             period: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
             deliveries: dayOrders.length,
             revenue: dayOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0),
-            successRate: dayOrders.length > 0 ? 95 + Math.random() * 5 : 0
+            successRate: deliveredAttemptRate(dayOrders)
           });
         }
       } else if (period === 'weekly') {
@@ -168,7 +189,7 @@ export class AnalyticsController {
             period: `Week ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
             deliveries: weekOrders.length,
             revenue: weekOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0),
-            successRate: weekOrders.length > 0 ? 95 + Math.random() * 5 : 0
+            successRate: deliveredAttemptRate(weekOrders)
           });
         }
       } else {
@@ -184,7 +205,7 @@ export class AnalyticsController {
             period: monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
             deliveries: monthOrders.length,
             revenue: monthOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0),
-            successRate: monthOrders.length > 0 ? 95 + Math.random() * 5 : 0
+            successRate: deliveredAttemptRate(monthOrders)
           });
         }
       }
@@ -202,7 +223,7 @@ export class AnalyticsController {
             totalDeliveries: completedOrders.length,
             totalRevenue,
             averageOrderValue: totalRevenue / completedOrders.length || 0,
-            successRate: completedOrders.length > 0 ? 95 + Math.random() * 5 : 0
+            successRate: deliveredAttemptRate(completedOrders)
           },
           performanceData
         }

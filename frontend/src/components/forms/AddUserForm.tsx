@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import api from '@/services/api';
 
 interface AddUserFormProps {
   onClose: () => void;
@@ -15,6 +16,16 @@ const AddUserForm = ({ onClose, onSave }: AddUserFormProps) => {
     role: 'WAREHOUSE_STAFF'
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [roles, setRoles] = useState<{ value: string; label: string }[]>([
+    { value: 'WAREHOUSE_STAFF', label: 'Warehouse Staff' }, { value: 'DISPATCH_OFFICER', label: 'Dispatch Officer' },
+    { value: 'DRIVER', label: 'Driver' }, { value: 'ADMIN', label: 'Admin' },
+  ]);
+
+  useEffect(() => {
+    api.get('/users/roles').then((response) => {
+      if (Array.isArray(response.data?.data)) setRoles(response.data.data);
+    }).catch(() => undefined);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,10 +102,7 @@ const AddUserForm = ({ onClose, onSave }: AddUserFormProps) => {
           onChange={(e) => setFormData({ ...formData, role: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
         >
-          <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
-          <option value="DISPATCH_OFFICER">Dispatch Officer</option>
-          <option value="DRIVER">Driver</option>
-          <option value="ADMIN">Admin</option>
+          {roles.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
         </select>
       </div>
 

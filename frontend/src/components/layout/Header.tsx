@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Search, Settings, LogOut, CheckCheck, Menu, User as UserIcon, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { notificationService, type Notification } from '@/services/notificationService';
+import api from '@/services/api';
 import { LogoMark } from '../ui/Logo';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useI18n } from '@/i18n/I18nContext';
@@ -47,11 +48,44 @@ export default function Header({ onOpenSearch, onOpenMobileNav }: HeaderProps) {
   const queryClient = useQueryClient();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState(() => localStorage.getItem('waretrack-company-id') || '');
+  const [selectedBranch, setSelectedBranch] = useState(() => localStorage.getItem('waretrack-branch-id') || '');
   const notifRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
 
   useClickOutside(notifRef, () => setShowNotifications(false));
   useClickOutside(userRef, () => setShowUserMenu(false));
+
+  const { data: tenantContext } = useQuery({
+    queryKey: ['tenancy-context'],
+    queryFn: async () => (await api.get('/tenancy/context')).data?.data || [],
+    enabled: Boolean(user),
+    staleTime: 60_000,
+  });
+  const companies: any[] = tenantContext || [];
+  const currentCompanyId = selectedCompany || String(companies.find((m) => m.selected)?.company.id || companies[0]?.company.id || '');
+  const activeMembership = companies.find((m) => String(m.company.id) === currentCompanyId);
+  const branches: any[] = activeMembership?.branches || [];
+
+  useEffect(() => {
+    if (!currentCompanyId) return;
+    if (!localStorage.getItem('waretrack-company-id')) localStorage.setItem('waretrack-company-id', currentCompanyId);
+    const storedBranch = localStorage.getItem('waretrack-branch-id');
+    if (branches.length && (!storedBranch || !branches.some((branch) => String(branch.id) === storedBranch))) {
+      localStorage.setItem('waretrack-branch-id', String(branches[0].id));
+      setSelectedBranch(String(branches[0].id));
+    }
+  }, [currentCompanyId, branches]);
+
+  const switchTenant = (companyId: string, branchId: string) => {
+    localStorage.setItem('waretrack-company-id', companyId);
+    if (branchId) localStorage.setItem('waretrack-branch-id', branchId);
+    else localStorage.removeItem('waretrack-branch-id');
+    setSelectedCompany(companyId);
+    setSelectedBranch(branchId);
+    queryClient.clear();
+    window.location.reload();
+  };
 
   const { data: recent = [] } = useQuery({
     queryKey: ['notifications', 'recent-unread'],
@@ -127,6 +161,21 @@ export default function Header({ onOpenSearch, onOpenMobileNav }: HeaderProps) {
         </button>
 
         <LanguageSwitcher />
+
+        {companies.length > 0 && (
+          <div className="hidden items-center gap-1.5 sm:flex">
+            {companies.length > 1 && <select aria-label="Active company" value={currentCompanyId} onChange={(event) => {
+              const membership = companies.find((m) => String(m.company.id) === event.target.value);
+              const nextBranch = membership?.branches?.[0]?.id ? String(membership.branches[0].id) : '';
+              switchTenant(event.target.value, nextBranch);
+            }} className="h-9 max-w-40 rounded-lg border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700">
+              {companies.map((membership) => <option key={membership.company.id} value={membership.company.id}>{membership.company.name}</option>)}
+            </select>}
+            {branches.length > 1 && <select aria-label="Active branch" value={selectedBranch || String(branches[0].id)} onChange={(event) => switchTenant(currentCompanyId, event.target.value)} className="h-9 max-w-36 rounded-lg border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700">
+              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>}
+          </div>
+        )}
 
 
         {/* Notifications */}

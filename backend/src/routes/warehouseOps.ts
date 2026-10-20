@@ -230,23 +230,31 @@ router.post('/stock-counts/:id/approve', auth, authorizeRoles(...ROLES.admin), a
     if (count.status !== 'SUBMITTED') return bad(res, 'Only submitted counts can be approved', 409);
     let adjusted = 0;
     await prisma.$transaction(async (tx) => {
+      const warehouse = count.warehouseId
+        ? { id: count.warehouseId }
+        : await tx.warehouse.findFirst({ where: { active: true }, orderBy: { id: 'asc' }, select: { id: true } });
       for (const line of count.lines) {
         if (line.counted === null || line.counted === line.expected) continue;
         const delta = line.counted - line.expected;
         const item = await tx.inventoryItem.findUnique({ where: { id: line.itemId } });
         if (!item) continue;
-        const newQuantity = Math.max(0, item.quantity + delta);
-        await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: newQuantity, lastUpdated: new Date() } });
-        if (count.warehouseId) {
-          await tx.warehouseStock.upsert({
-            where: { warehouseId_itemId: { warehouseId: count.warehouseId, itemId: item.id } },
-            update: { quantity: { increment: delta } },
-            create: { warehouseId: count.warehouseId, itemId: item.id, quantity: Math.max(0, line.counted) },
-          });
-        }
+        if (!warehouse) throw new Error('An active branch warehouse is required to approve this count');
+        const currentStock = await tx.warehouseStock.findUnique({ where: { warehouseId_itemId: { warehouseId: warehouse.id, itemId: item.id } } });
+        const previousBranchQuantity = currentStock?.quantity || 0;
+        if (delta < 0) {
+          const stockChanged = await tx.warehouseStock.updateMany({ where: { warehouseId: warehouse.id, itemId: item.id, quantity: { gte: -delta } }, data: { quantity: { decrement: -delta } } });
+          if (stockChanged.count !== 1) throw new Error(`Branch stock changed while approving ${count.countNumber}`);
+        } else await tx.warehouseStock.upsert({
+          where: { warehouseId_itemId: { warehouseId: warehouse.id, itemId: item.id } },
+          update: { quantity: { increment: delta } },
+          create: { warehouseId: warehouse.id, itemId: item.id, quantity: delta },
+        });
+        const itemChanged = await tx.inventoryItem.updateMany({ where: { id: item.id, ...(delta < 0 ? { quantity: { gte: -delta } } : {}) }, data: { quantity: { increment: delta }, lastUpdated: new Date() } });
+        if (itemChanged.count !== 1) throw new Error(`Total stock changed while approving ${count.countNumber}`);
+        const newBranchQuantity = previousBranchQuantity + delta;
         await tx.inventoryHistory.create({
           data: {
-            itemId: item.id, action: 'adjustment', quantity: Math.abs(delta), previousQuantity: item.quantity, newQuantity,
+            itemId: item.id, action: 'adjustment', quantity: Math.abs(delta), previousQuantity: previousBranchQuantity, newQuantity: newBranchQuantity,
             notes: `Stock count ${count.countNumber}: counted ${line.counted}, expected ${line.expected}${line.note ? ` (${line.note})` : ''}`,
             performedBy: userId(req),
           },

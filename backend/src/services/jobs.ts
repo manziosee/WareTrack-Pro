@@ -7,6 +7,9 @@ import { generateRestockOrders } from './restockService';
 import { purgeExpiredOtps } from './otpStore';
 import { runReport, METRICS, type ReportConfig } from './reportBuilder';
 import { EmailService } from './emailService';
+import { getTenantContext, runWithTenant } from '../lib/tenantContext';
+import { captureError } from '../config/monitoring';
+import { recordJobFailure, recordJobStart, recordJobSuccess } from './jobHealth';
 
 /**
  * Background jobs. Everything is idempotent and de-duplicated, so restarts and
@@ -15,6 +18,17 @@ import { EmailService } from './emailService';
 
 const MINUTE = 60000;
 const DAY = 86400000;
+
+/** Execute scheduled work under each active company/branch filter. */
+async function forEachTenant(run: () => Promise<unknown>) {
+  const companies = await prisma.company.findMany({ where: { active: true }, include: { branches: { where: { active: true }, select: { id: true } } } });
+  for (const company of companies) {
+    // Company-wide records (branch_id IS NULL) are handled once before the
+    // branch passes. Branch passes then include their own rows plus shared reads.
+    await runWithTenant({ companyId: company.id, branchId: null }, run);
+    for (const branch of company.branches) await runWithTenant({ companyId: company.id, branchId: branch.id }, run);
+  }
+}
 
 /** Create a notification unless the same title was raised in the last `withinMs`. */
 async function notifyOnce(title: string, message: string, type: any, severity: any, withinMs = DAY) {
@@ -50,8 +64,10 @@ async function checkAnomalies() {
 }
 
 async function runScheduledReports() {
+  const tenant = getTenantContext();
+  if (!tenant) return;
   const now = new Date();
-  const reports = await prisma.savedReport.findMany({ where: { schedule: { not: 'NONE' } }, include: { user: { select: { email: true, name: true } } } });
+  const reports = await prisma.savedReport.findMany({ where: { schedule: { not: 'NONE' }, branchId: tenant.branchId }, include: { user: { select: { email: true, name: true } } } });
   for (const r of reports) {
     const last = r.lastSentAt?.getTime() || 0;
     const due =
@@ -81,15 +97,17 @@ async function runScheduledReports() {
  * alert logic created thousands), keeping the newest of each.
  */
 async function dedupeNotifications() {
+  const tenant = getTenantContext();
+  if (!tenant) return;
   const dupes: { title: string; message: string; keep: number; count: bigint }[] = await prisma.$queryRaw`
     SELECT title, message, MAX(id) AS keep, COUNT(*) AS count
     FROM notifications
-    WHERE read = false
+    WHERE company_id = ${tenant.companyId} AND branch_id IS NOT DISTINCT FROM ${tenant.branchId}::int AND read = false
     GROUP BY title, message, user_id
     HAVING COUNT(*) > 1`;
   let removed = 0;
   for (const d of dupes) {
-    const result = await prisma.notification.deleteMany({ where: { title: d.title, message: d.message, read: false, id: { not: Number(d.keep) } } });
+    const result = await prisma.notification.deleteMany({ where: { title: d.title, message: d.message, read: false, branchId: tenant.branchId, id: { not: Number(d.keep) } } });
     removed += result.count;
   }
   // Read notifications older than 90 days aren't useful
@@ -98,7 +116,17 @@ async function dedupeNotifications() {
 }
 
 function safe(name: string, fn: () => Promise<unknown>) {
-  return () => fn().catch((error) => console.error(`Job "${name}" failed:`, error?.message || error));
+  return async () => {
+    recordJobStart(name);
+    try {
+      await fn();
+      recordJobSuccess(name);
+    } catch (error: any) {
+      recordJobFailure(name);
+      console.error(`Job "${name}" failed:`, error?.message || error);
+      captureError(error, { job: name });
+    }
+  };
 }
 
 let started = false;
@@ -108,10 +136,12 @@ export function startJobs() {
   started = true;
 
   const frequent = async () => {
-    await safe('sla', checkSlaRisk)();
-    await safe('anomalies', checkAnomalies)();
-    await safe('otp-purge', purgeExpiredOtps)();
-    await safe('fleet-status', reconcileFleet)();
+    await safe('tenant jobs', () => forEachTenant(async () => {
+      await checkSlaRisk();
+      await checkAnomalies();
+      await purgeExpiredOtps();
+      await reconcileFleet();
+    }))();
   };
 
   // Daily jobs run once per day around 06:00 Kigali time (UTC+2)
@@ -121,23 +151,23 @@ export function startJobs() {
     const key = kigali.toISOString().slice(0, 10);
     if (lastDaily === key || kigali.getUTCHours() < 6) return;
     lastDaily = key;
-    if (process.env.AUTO_RESTOCK !== 'false') await safe('auto-restock', () => generateRestockOrders())();
+    if (process.env.AUTO_RESTOCK !== 'false') await safe('auto-restock', () => forEachTenant(() => generateRestockOrders()))();
   };
 
-  setTimeout(safe('dedupe-notifications', dedupeNotifications), 20 * 1000);
+  setTimeout(safe('dedupe-notifications', () => forEachTenant(dedupeNotifications)), 20 * 1000);
   // First run after customer accounts were added: build them from existing orders
-  setTimeout(safe('customer-accounts', async () => {
+  setTimeout(safe('customer-accounts', async () => forEachTenant(async () => {
     if (await prisma.customerAccount.count()) return;
     const { created, linked } = await linkOrdersToAccounts();
     if (created) console.log(`🏢 Customer accounts created from orders: ${created} accounts, ${linked} orders linked`);
-  }), 15 * 1000);
-  setTimeout(safe('fleet-status', async () => {
+  })), 15 * 1000);
+  setTimeout(safe('fleet-status', async () => forEachTenant(async () => {
     const { closedDispatches } = await reconcileFleet();
     if (closedDispatches) console.log(`🚚 Fleet status repaired: ${closedDispatches} stale dispatches closed`);
-  }), 10 * 1000);
+  })), 10 * 1000);
   setTimeout(frequent, 60 * 1000);
   setInterval(frequent, 15 * MINUTE);
   setInterval(daily, 15 * MINUTE);
-  setInterval(safe('scheduled-reports', runScheduledReports), 60 * MINUTE);
+  setInterval(safe('scheduled-reports', () => forEachTenant(runScheduledReports)), 60 * MINUTE);
   console.log('⏱️  Background jobs scheduled (SLA risk, anomalies, fleet status, restock, reports)');
 }

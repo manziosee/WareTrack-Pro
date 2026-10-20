@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import api from '@/services/api';
 
 interface EditUserFormProps {
   user: any;
@@ -16,6 +17,13 @@ export default function EditUserForm({ user, onClose, onSave }: EditUserFormProp
     role: 'WAREHOUSE_STAFF',
     status: 'ACTIVE'
   });
+  const [roles, setRoles] = useState<{ value: string; label: string }[]>([]);
+
+  useEffect(() => {
+    api.get('/users/roles').then((response) => {
+      if (Array.isArray(response.data?.data)) setRoles(response.data.data);
+    }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -79,10 +87,10 @@ export default function EditUserForm({ user, onClose, onSave }: EditUserFormProp
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             required
           >
-            <option value="ADMIN">Admin</option>
-            <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
-            <option value="DISPATCH_OFFICER">Dispatch Officer</option>
-            <option value="DRIVER">Driver</option>
+            {(roles.length ? roles : [
+              { value: 'ADMIN', label: 'Admin' }, { value: 'WAREHOUSE_STAFF', label: 'Warehouse Staff' },
+              { value: 'DISPATCH_OFFICER', label: 'Dispatch Officer' }, { value: 'DRIVER', label: 'Driver' },
+            ]).map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
           </select>
         </div>
         <div>

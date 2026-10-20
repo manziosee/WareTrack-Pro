@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Eye, Edit, Trash2, Users as UsersIcon, UserCheck, UserPlus, UserX, ShieldCheck, Check, X, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
@@ -23,8 +23,6 @@ import { formatDate, initials } from '@/utils/formatters';
 import { statusLabel } from '@/utils/status';
 import { useQueryClient } from '@tanstack/react-query';
 
-const ROLES = ['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'];
-
 export default function Users() {
   const queryClient = useQueryClient();
   const { rows, loading, setRows, refresh } = useList<any>('users', '/users', { limit: 200 });
@@ -35,6 +33,16 @@ export default function Users() {
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewId, setViewId] = useState<number | null>(null);
+  const [roles, setRoles] = useState<{ value: string; label: string }[]>([
+    { value: 'ADMIN', label: 'Admin' }, { value: 'WAREHOUSE_STAFF', label: 'Warehouse Staff' },
+    { value: 'DISPATCH_OFFICER', label: 'Dispatch Officer' }, { value: 'DRIVER', label: 'Driver' },
+  ]);
+
+  useEffect(() => {
+    api.get('/users/roles').then((response) => {
+      if (Array.isArray(response.data?.data)) setRoles(response.data.data);
+    }).catch(() => undefined);
+  }, []);
 
   const pending = rows.filter((u) => u.status === 'PENDING');
   const filtered = useMemo(
@@ -154,7 +162,7 @@ export default function Users() {
         onRowClick={(u) => setViewId(u.id)}
         filters={
           <>
-            <FilterChip label="Role" value={role} onChange={setRole} options={ROLES.map((r) => ({ value: r, label: statusLabel(r) }))} />
+            <FilterChip label="Role" value={role} onChange={setRole} options={roles.map((r) => ({ value: r.value, label: r.label }))} />
             <FilterChip label="Status" value={status} onChange={setStatus} options={['ACTIVE', 'PENDING', 'INACTIVE'].map((s) => ({ value: s, label: statusLabel(s) }))} />
           </>
         }

@@ -19,6 +19,7 @@ import EditInventoryForm from '@/components/forms/EditInventoryForm';
 import ViewInventoryModal from '@/components/forms/ViewInventoryModal';
 import { CategoryManager, useCategories } from '@/components/inventory/Categories';
 import PackSizes from '@/components/inventory/PackSizes';
+import InventoryMovementHistory from '@/components/inventory/InventoryMovementHistory';
 import { inventoryService } from '@/services/inventoryService';
 import { useList } from '@/hooks/useList';
 import { undoableAction } from '@/utils/undoableAction';
@@ -37,7 +38,7 @@ export default function Inventory() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [level, setLevel] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState('ACTIVE');
   const [showAdd, setShowAdd] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -72,7 +73,7 @@ export default function Inventory() {
     const ids = new Set(targets.map((i) => i.id));
     const snapshot = rows;
     undoableAction({
-      message: targets.length === 1 ? `${targets[0].name} deleted` : `${targets.length} items deleted`,
+      message: targets.length === 1 ? `${targets[0].name} archived` : `${targets.length} items archived`,
       apply: () => {
         setRows((list) => list.filter((i) => !ids.has(i.id)));
         if (viewId && ids.has(viewId)) setViewId(null);
@@ -248,6 +249,7 @@ export default function Inventory() {
           <div className="space-y-5">
             <ViewInventoryModal item={viewing} />
             <PackSizes item={viewing} canEdit={canEdit} onChanged={refresh} />
+            <InventoryMovementHistory itemId={viewing.id} />
             <ActivityTimeline entityType="InventoryItem" entityId={viewing.id} />
           </div>
         )}

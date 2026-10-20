@@ -1,7 +1,7 @@
 import { emitEvent } from '../services/events';
 import { ORDER_STATUSES, onOrderStatusChanged } from '../services/orderLifecycle';
 import { syncDriverStatus, syncVehicleStatus } from '../services/fleetStatus';
-import { accountForCustomer, createOrderRecord, OrderInputError } from '../services/orderCreation';
+import { accountForCustomer, createOrderRecord, OrderInputError, releasePendingOrderStock } from '../services/orderCreation';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { QueueService } from '../services/queueService';
@@ -147,15 +147,11 @@ export class OrdersController {
 
       // Update order
       const order = await prisma.$transaction(async (tx) => {
+        if (status === 'CANCELLED' && items?.length) throw new OrderInputError('Cancel the order separately from changing its items', 409, 'CONFLICTING_ORDER_UPDATE');
         // If items are being updated, delete old items and create new ones
         if (items && items.length > 0) {
-          // Restore inventory for old items
-          for (const oldItem of existingOrder.items) {
-            await tx.inventoryItem.update({
-              where: { id: oldItem.itemId },
-              data: { quantity: { increment: oldItem.quantity } }
-            });
-          }
+          if (existingOrder.status !== 'PENDING') throw new OrderInputError('Items can only be changed before dispatch', 409, 'ORDER_ALREADY_DISPATCHED');
+          await releasePendingOrderStock(tx, Number(id), Number(req.user?.userId));
 
           // Delete old items
           await tx.orderItem.deleteMany({
@@ -164,6 +160,7 @@ export class OrdersController {
 
           // Process new items
           const processedItems = [];
+          const newAllocations = new Map<number, { quantity: number; previousQuantity: number; name: string }>();
           for (const item of items) {
             const inventoryItem = await tx.inventoryItem.findUnique({
               where: { id: Number(item.itemId || item.inventoryId) }
@@ -182,12 +179,35 @@ export class OrdersController {
                 totalPrice: quantity * unitPrice
               });
 
-              // Deduct from inventory
-              await tx.inventoryItem.update({
-                where: { id: inventoryItem.id },
-                data: { quantity: { decrement: quantity } }
-              });
+              const allocation = newAllocations.get(inventoryItem.id) || { quantity: 0, previousQuantity: inventoryItem.quantity, name: inventoryItem.name };
+              allocation.quantity += quantity;
+              newAllocations.set(inventoryItem.id, allocation);
             }
+          }
+
+          for (const [itemId, allocation] of newAllocations) {
+            const changed = await tx.inventoryItem.updateMany({ where: { id: itemId, quantity: { gte: allocation.quantity } }, data: { quantity: { decrement: allocation.quantity }, lastUpdated: new Date() } });
+            if (changed.count !== 1) throw new OrderInputError(`${allocation.name} no longer has enough total stock`, 409, 'INSUFFICIENT_STOCK');
+            let remaining = allocation.quantity;
+            const stocks = await tx.warehouseStock.findMany({ where: { itemId, quantity: { gt: 0 } }, orderBy: { warehouseId: 'asc' } });
+            for (const stock of stocks) {
+              if (!remaining) break;
+              const allocated = Math.min(stock.quantity, remaining);
+              const stockChanged = await tx.warehouseStock.updateMany({ where: { id: stock.id, quantity: { gte: allocated } }, data: { quantity: { decrement: allocated } } });
+              if (stockChanged.count !== 1) throw new OrderInputError(`${allocation.name} stock changed in this branch`, 409, 'INSUFFICIENT_STOCK');
+              await tx.stockReservation.upsert({
+                where: { orderId_itemId_warehouseId: { orderId: Number(id), itemId, warehouseId: stock.warehouseId } },
+                update: { quantity: allocated, status: 'RESERVED', releasedAt: null, createdById: Number(req.user?.userId) },
+                create: { orderId: Number(id), itemId, warehouseId: stock.warehouseId, quantity: allocated, createdById: Number(req.user?.userId) },
+              });
+              remaining -= allocated;
+            }
+            if (remaining) throw new OrderInputError(`${allocation.name} has only ${allocation.quantity - remaining} units in this branch`, 409, 'INSUFFICIENT_STOCK');
+            await tx.inventoryHistory.create({ data: {
+              itemId, action: 'order_allocation', quantity: allocation.quantity, previousQuantity: allocation.previousQuantity,
+              newQuantity: allocation.previousQuantity - allocation.quantity, orderId: Number(id), notes: `Reallocated to ${existingOrder.orderNumber}`,
+              performedBy: Number(req.user?.userId),
+            } });
           }
 
           // Create new items
@@ -195,6 +215,9 @@ export class OrdersController {
             data: processedItems.map(item => ({ ...item, orderId: Number(id) }))
           });
         }
+
+        if (status === 'CANCELLED' && existingOrder.status !== 'CANCELLED') await releasePendingOrderStock(tx, Number(id), Number(req.user?.userId));
+        if (status === 'DISPATCHED') await tx.stockReservation.updateMany({ where: { orderId: Number(id), status: 'RESERVED' }, data: { status: 'CONSUMED' } });
 
         // Update order details
         return await tx.deliveryOrder.update({
@@ -223,6 +246,7 @@ export class OrdersController {
       res.json({ success: true, data: order });
     } catch (error: any) {
       console.error('Update order error:', error);
+      if (error instanceof OrderInputError) return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
       if (error.code === 'P2025') {
         return res.status(404).json({ 
           success: false,
@@ -249,6 +273,9 @@ export class OrdersController {
       }
 
       const previous = await prisma.deliveryOrder.findUnique({ where: { id: Number(id) }, select: { status: true, driverId: true } });
+      if (previous?.status === 'CANCELLED' && status !== 'CANCELLED') {
+        return res.status(409).json({ success: false, error: { code: 'ORDER_CANCELLED', message: 'Cancelled orders cannot be reopened. Create a new order.' } });
+      }
       if (previous && !previous.driverId && ['DISPATCHED', 'IN_TRANSIT', 'DELIVERED'].includes(status)) {
         return res.status(400).json({
           success: false,
@@ -261,19 +288,19 @@ export class OrdersController {
         updateData.deliveryAttempts = { increment: 1 };
       }
 
-      const order = await prisma.deliveryOrder.update({
-        where: { id: Number(id) },
-        data: updateData,
-        include: {
-          items: { include: { item: true } },
-          driver: true,
-          vehicle: true
-        }
+      const order = await prisma.$transaction(async (tx) => {
+        if (status === 'CANCELLED' && previous?.status !== 'CANCELLED') await releasePendingOrderStock(tx, Number(id), Number(req.user?.userId));
+        if (status === 'DISPATCHED') await tx.stockReservation.updateMany({ where: { orderId: Number(id), status: 'RESERVED' }, data: { status: 'CONSUMED' } });
+        return tx.deliveryOrder.update({
+          where: { id: Number(id) }, data: updateData,
+          include: { items: { include: { item: true } }, driver: true, vehicle: true }
+        });
       });
 
       await onOrderStatusChanged(order.id, previous?.status);
       res.json({ success: true, data: order });
     } catch (error: any) {
+      if (error instanceof OrderInputError) return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
       if (error.code === 'P2025') {
         return res.status(404).json({ 
           success: false,
@@ -306,13 +333,8 @@ export class OrdersController {
 
       // Delete order and restore inventory in transaction
       await prisma.$transaction(async (tx) => {
-        // Restore inventory for each item
-        for (const item of order.items) {
-          await tx.inventoryItem.update({
-            where: { id: item.itemId },
-            data: { quantity: { increment: item.quantity } }
-          });
-        }
+        if (order.status === 'PENDING') await releasePendingOrderStock(tx, order.id, Number(req.user?.userId));
+        else if (order.status !== 'CANCELLED') throw new OrderInputError('Only pending or cancelled orders can be deleted. Keep completed orders for audit history.', 409, 'ORDER_NOT_DELETABLE');
 
         // Delete order (cascades to items)
         await tx.deliveryOrder.delete({
@@ -329,6 +351,7 @@ export class OrdersController {
       });
     } catch (error: any) {
       console.error('Delete order error:', error);
+      if (error instanceof OrderInputError) return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
       if (error.code === 'P2025') {
         return res.status(404).json({ 
           success: false,

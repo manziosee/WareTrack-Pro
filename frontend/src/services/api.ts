@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { cache } from '@/utils/cache';
+import { trackUsage } from './usageTelemetry';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://waretrack-pro.onrender.com/api';
 
@@ -20,6 +21,10 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const companyId = localStorage.getItem('waretrack-company-id');
+  const branchId = localStorage.getItem('waretrack-branch-id');
+  if (companyId) config.headers['X-Company-Id'] = companyId;
+  if (branchId) config.headers['X-Branch-Id'] = branchId;
   
   // Check cache for GET requests
   if (config.method === 'get') {
@@ -38,6 +43,11 @@ api.interceptors.response.use(
   (response) => {
     const method = (response.config.method || 'get').toLowerCase();
     const ok = response.status >= 200 && response.status < 300;
+    const endpoint = response.config.url || '';
+    const trackable = !endpoint.includes('/usage-events') && !endpoint.includes('/auth/') && !endpoint.includes('/customer/');
+    const route = endpoint.replace(/\b\d+\b/g, ':id').split('?')[0];
+    if (trackable && response.status >= 400) trackUsage('API_ERROR', route, { method: method.toUpperCase(), status: response.status });
+    else if (trackable && ok && method !== 'get') trackUsage('ACTION', route, { method: method.toUpperCase(), status: response.status });
 
     // Any successful change makes cached lists stale
     if (method !== 'get' && ok) {

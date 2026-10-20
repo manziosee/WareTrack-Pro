@@ -412,6 +412,41 @@ async function main() {
     }
   }
 
+  // Seed tenant memberships after the migration has created the default tenant.
+  const company = await prisma.company.upsert({
+    where: { id: 1 }, update: {}, create: { id: 1, name: 'WareTrack', slug: 'waretrack-default' },
+  })
+  const mainBranch = await prisma.branch.upsert({
+    where: { companyId_code: { companyId: company.id, code: 'MAIN' } },
+    update: {}, create: { companyId: company.id, name: 'Main Branch', code: 'MAIN' },
+  })
+  const seededUsers = [driverUser1, driverUser2, driverUser3, adminUser, warehouseStaffUser, dispatchOfficerUser]
+  for (const seededUser of seededUsers) {
+    const membership = await prisma.companyMembership.upsert({
+      where: { companyId_userId: { companyId: company.id, userId: seededUser.id } },
+      update: { role: seededUser.role, active: seededUser.status === 'ACTIVE' },
+      create: { companyId: company.id, userId: seededUser.id, role: seededUser.role, active: seededUser.status === 'ACTIVE' },
+    })
+    await prisma.branchMembership.upsert({
+      where: { companyMembershipId_branchId: { companyMembershipId: membership.id, branchId: mainBranch.id } },
+      update: { active: true }, create: { companyMembershipId: membership.id, branchId: mainBranch.id },
+    })
+  }
+
+  // Seeded operational records are located at the default branch. Shared master
+  // catalogs (items, suppliers and customer accounts) remain company-wide.
+  const branchTables = [
+    prisma.vehicle, prisma.driver, prisma.deliveryOrder, prisma.orderItem, prisma.stockReservation,
+    prisma.dispatch, prisma.maintenanceRecord, prisma.inventoryHistory, prisma.notification,
+    prisma.chatMessage, prisma.driverAchievement, prisma.inventoryForecast, prisma.smartAlert,
+    prisma.customerRating, prisma.vehicleHealth, prisma.barcodeLog, prisma.warehouse,
+    prisma.warehouseStock, prisma.stockTransfer, prisma.purchaseOrder, prisma.purchaseOrderItem,
+    prisma.inventoryBatch, prisma.returnRequest, prisma.payment, prisma.invoice, prisma.auditLog,
+    prisma.savedFilter, prisma.savedReport, prisma.cashHandover, prisma.expense, prisma.stockCount,
+    prisma.stockCountLine, prisma.apiKey, prisma.pushSubscription, prisma.deliveryProof,
+  ] as any[]
+  for (const table of branchTables) await table.updateMany({ where: { companyId: company.id, branchId: null }, data: { branchId: mainBranch.id } })
+
   console.log('\n🎉 Database seeded successfully!')
   console.log('\n📋 Login Credentials:')
   console.log('  Admin:    admin@waretrack.com / admin123')

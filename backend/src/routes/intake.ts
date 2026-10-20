@@ -7,6 +7,8 @@ import { publicKey, pushToUsers, saveSubscription } from '../services/push';
 import { getSetting, setSetting, ONLINE_ORDERING_DEFAULTS, type OnlineOrdering } from '../services/appSettings';
 import { accountForCustomer, createOrderRecord, OrderInputError } from '../services/orderCreation';
 import { NotificationService } from '../services/notificationService';
+import { publicTenant } from '../middleware/publicTenant';
+import { runWithTenant } from '../lib/tenantContext';
 
 /**
  * Ways in: push notifications, API keys + order API for clients' systems,
@@ -103,9 +105,11 @@ async function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   if (!key) return bad(res, 'Send your API key in the X-API-Key header', 401);
   const row = await prisma.apiKey.findUnique({ where: { keyHash: hash(key) } });
   if (!row || row.revokedAt) return bad(res, 'Invalid or revoked API key', 401);
-  prisma.apiKey.update({ where: { id: row.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined);
   (req as any).apiKey = row;
-  next();
+  runWithTenant({ companyId: row.companyId, branchId: row.branchId }, () => {
+    prisma.apiKey.update({ where: { id: row.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined);
+    next();
+  });
 }
 
 /** Products and prices a connected system can order. */
@@ -178,7 +182,7 @@ router.put('/settings/online-ordering', ...admin, async (req, res, next) => {
 });
 
 /** What customers see on /order (only when online ordering is switched on). */
-router.get('/public/catalog', async (_req, res, next) => {
+router.get('/public/catalog', publicTenant, async (_req, res, next) => {
   try {
     const settings = await getSetting<OnlineOrdering>('onlineOrdering', ONLINE_ORDERING_DEFAULTS);
     if (!settings.enabled) return bad(res, 'Online ordering is not open right now', 404, 'ORDERING_CLOSED');
@@ -202,7 +206,7 @@ router.get('/public/catalog', async (_req, res, next) => {
 const publicOrderLimit = rateLimit({ windowMs: 60 * 60_000, max: 5, standardHeaders: true, legacyHeaders: false, message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many orders from this connection. Please call us instead.' } } });
 
 /** A customer places an order from the public page. Staff are told straight away. */
-router.post('/public/orders', publicOrderLimit, async (req, res, next) => {
+router.post('/public/orders', publicTenant, publicOrderLimit, async (req, res, next) => {
   try {
     const settings = await getSetting<OnlineOrdering>('onlineOrdering', ONLINE_ORDERING_DEFAULTS);
     if (!settings.enabled) return bad(res, 'Online ordering is not open right now', 404, 'ORDERING_CLOSED');
@@ -213,7 +217,7 @@ router.post('/public/orders', publicOrderLimit, async (req, res, next) => {
     if (!String(b.customerName || '').trim() || !String(b.deliveryAddress || '').trim()) return bad(res, 'Name and delivery address are required');
     const items = (Array.isArray(b.items) ? b.items : []).slice(0, 50).map((i: any) => ({ itemId: i.itemId, quantity: Math.min(1000, Number(i.quantity)), packagingId: i.packagingId || undefined }));
     const account = await accountForCustomer(String(b.customerName).slice(0, 120), { phone, address: String(b.deliveryAddress).slice(0, 240), email: b.customerEmail || null });
-    const admin = await prisma.user.findFirst({ where: { role: 'ADMIN', status: 'ACTIVE' }, select: { id: true } });
+    const admin = await prisma.companyMembership.findFirst({ where: { role: 'ADMIN', active: true, user: { status: 'ACTIVE' } }, select: { userId: true } });
     const order = await createOrderRecord(
       {
         customerName: String(b.customerName).slice(0, 120), contactNumber: phone, deliveryAddress: String(b.deliveryAddress).slice(0, 240),
@@ -221,16 +225,16 @@ router.post('/public/orders', publicOrderLimit, async (req, res, next) => {
         paymentMethod: ['CASH', 'MTN_MOMO', 'AIRTEL_MONEY'].includes(b.paymentMethod) ? b.paymentMethod : 'CASH',
         accountId: account?.id, items,
       },
-      { createdBy: admin?.id || 1, source: 'ONLINE' }
+      { createdBy: admin?.userId || 1, source: 'ONLINE' }
     );
     if (settings.minimumOrder && Number(order.totalAmount) < settings.minimumOrder) {
       // Too small: keep it but flag it for staff
       await prisma.deliveryOrder.update({ where: { id: order.id }, data: { deliveryInstructions: `${order.deliveryInstructions || ''} [below minimum order]`.trim() } });
     }
-    const staff = await prisma.user.findMany({ where: { role: { in: ['ADMIN', 'DISPATCH_OFFICER', 'WAREHOUSE_STAFF'] }, status: 'ACTIVE' }, select: { id: true } });
+    const staff = await prisma.companyMembership.findMany({ where: { role: { in: ['ADMIN', 'DISPATCH_OFFICER', 'WAREHOUSE_STAFF'] }, active: true, user: { status: 'ACTIVE' } }, select: { userId: true } });
     for (const u of staff) {
       NotificationService.createNotification({
-        userId: u.id, type: 'ORDER_UPDATE', severity: 'INFO', title: `New online order ${order.orderNumber}`,
+        userId: u.userId, type: 'ORDER_UPDATE', severity: 'INFO', title: `New online order ${order.orderNumber}`,
         message: `${order.customerName} ordered RWF ${Number(order.totalAmount).toLocaleString()} online (${order.deliveryAddress}).`,
       }).catch(() => undefined);
     }

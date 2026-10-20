@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
@@ -9,6 +9,8 @@ import MainLayout from './components/layout/MainLayout';
 import RoleGuard from './components/ui/RoleGuard';
 import { PageSkeleton } from './components/ui/Skeleton';
 import type { UserRole } from './types';
+import { useEffect } from 'react';
+import { trackUsage } from './services/usageTelemetry';
 
 // Public pages
 import Landing from './pages/Landing';
@@ -56,6 +58,17 @@ const Profile = lazy(() => import('./pages/Profile'));
 const MyDeliveries = lazy(() => import('./pages/MyDeliveries'));
 const TrackOrder = lazy(() => import('./pages/TrackOrder'));
 const OrderOnline = lazy(() => import('./pages/OrderOnline'));
+const CustomerPortal = lazy(() => import('./pages/CustomerPortal'));
+const Feedback = lazy(() => import('./pages/Feedback'));
+const UsageAnalytics = lazy(() => import('./pages/UsageAnalytics'));
+
+function UsagePageTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    trackUsage('PAGE_VIEW', `${location.pathname}${location.search ? '?filtered' : ''}`);
+  }, [location.pathname, location.search]);
+  return null;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -89,6 +102,7 @@ function App() {
         <AuthProvider>
           <RealtimeProvider>
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <UsagePageTracker />
               <Routes>
                 {/* Public */}
                 <Route path="/" element={<Landing />} />
@@ -99,6 +113,7 @@ function App() {
                 <Route path="/track" element={<Suspense fallback={null}><TrackOrder /></Suspense>} />
                 <Route path="/order" element={<Suspense fallback={null}><OrderOnline /></Suspense>} />
                 <Route path="/track/:orderNumber" element={<Suspense fallback={null}><TrackOrder /></Suspense>} />
+                <Route path="/portal" element={<Suspense fallback={null}><CustomerPortal /></Suspense>} />
 
                 {/* Everyone signed in */}
                 <Route path="/dashboard" element={<AppPage><Dashboard /></AppPage>} />
@@ -106,6 +121,7 @@ function App() {
                 <Route path="/notifications" element={<AppPage><Notifications /></AppPage>} />
                 <Route path="/settings" element={<AppPage><Settings /></AppPage>} />
                 <Route path="/profile" element={<AppPage><Profile /></AppPage>} />
+                <Route path="/feedback" element={<AppPage><Feedback /></AppPage>} />
 
                 {/* Drivers */}
                 <Route path="/my-deliveries" element={<AppPage roles={['DRIVER']}><MyDeliveries /></AppPage>} />
@@ -148,6 +164,7 @@ function App() {
                 {/* Administration */}
                 <Route path="/users" element={<AppPage roles={['ADMIN']}><Users /></AppPage>} />
                 <Route path="/audit" element={<AppPage roles={['ADMIN']}><AuditLog /></AppPage>} />
+                <Route path="/usage-analytics" element={<AppPage roles={['ADMIN']}><UsageAnalytics /></AppPage>} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

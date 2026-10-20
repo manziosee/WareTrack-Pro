@@ -8,7 +8,7 @@ const options = {
     info: {
       title: 'WareTrack-Pro API',
       version: '2.4.0',
-      description: 'Comprehensive Warehouse Delivery & Dispatch Tracking System API with Real-time Notifications, Advanced Analytics, and Role-Based Access Control',
+      description: 'Warehouse and delivery operations API with company and branch isolation. Authenticated requests may select a membership using X-Company-Id and X-Branch-Id; omitted values use the account default and first assigned branch. Includes action-based permissions, inventory reservations, and auditable stock movements.',
       contact: {
         name: 'WareTrack-Pro Support',
         email: 'support@waretrackpro.com'
@@ -40,11 +40,7 @@ const options = {
             name: { type: 'string' },
             email: { type: 'string', format: 'email' },
             phone: { type: 'string' },
-            role: { 
-              type: 'string',
-              enum: ['ADMIN', 'WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'DRIVER'],
-              description: 'User role with specific permissions'
-            },
+            role: { type: 'string', description: 'Company or branch role. Built-in roles are ADMIN, WAREHOUSE_STAFF, DISPATCH_OFFICER, and DRIVER; companies may define custom roles.' },
             status: {
               type: 'string',
               enum: ['ACTIVE', 'INACTIVE'],
@@ -396,6 +392,11 @@ export function addUndocumentedRoutes(spec: any, mounts: Array<[string, string, 
   spec.tags = spec.tags || [];
   spec.components = spec.components || {};
   spec.components.securitySchemes = { ...(spec.components.securitySchemes || {}), apiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' } };
+  spec.components.parameters = {
+    ...(spec.components.parameters || {}),
+    companyIdHeader: { name: 'X-Company-Id', in: 'header', required: false, description: 'Company membership to use; defaults to the account company.', schema: { type: 'integer', minimum: 1 } },
+    branchIdHeader: { name: 'X-Branch-Id', in: 'header', required: false, description: 'Assigned branch to use; defaults to the first active branch membership.', schema: { type: 'integer', minimum: 1 } },
+  };
   const knownTags = new Set(spec.tags.map((t: any) => t.name));
 
   for (const [prefix, tag, router] of mounts) {
@@ -433,6 +434,19 @@ export function addUndocumentedRoutes(spec: any, mounts: Array<[string, string, 
           entry.description = 'Send the key from Settings → Online ordering & API in the X-API-Key header.';
         } else if (!PUBLIC_PATHS.has(openApiPath)) entry.security = [{ bearerAuth: [] }];
         spec.paths[openApiPath][method] = entry;
+      }
+    }
+  }
+
+  // Add tenant selection controls to documented and generated authenticated
+  // routes so the Swagger UI exercises the same isolation headers as the app.
+  for (const [routePath, pathItem] of Object.entries(spec.paths) as Array<[string, any]>) {
+    if (!routePath.startsWith('/api/')) continue;
+    for (const [method, operation] of Object.entries(pathItem) as Array<[string, any]>) {
+      if (!['get', 'post', 'put', 'patch', 'delete'].includes(method) || !operation || PUBLIC_PATHS.has(routePath)) continue;
+      operation.parameters = operation.parameters || [];
+      for (const ref of ['#/components/parameters/companyIdHeader', '#/components/parameters/branchIdHeader']) {
+        if (!operation.parameters.some((parameter: any) => parameter.$ref === ref)) operation.parameters.push({ $ref: ref });
       }
     }
   }

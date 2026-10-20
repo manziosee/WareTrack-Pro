@@ -7,6 +7,7 @@ import { onOrderStatusChanged } from '../services/orderLifecycle';
 import { refreshOrderPayment } from '../services/finance';
 import { emitEvent } from '../services/events';
 import { emitToRoles } from '../services/realtime';
+import { publicTenant } from '../middleware/publicTenant';
 
 /** Routing, auto-dispatch, driver workflow, returns and failed deliveries. Mounted at /api. */
 const router = Router();
@@ -161,6 +162,7 @@ router.post('/auto-dispatch/:orderId', ...fleet, async (req, res, next) => {
         include: { driver: { select: { name: true, userId: true } }, vehicle: { select: { plateNumber: true } } },
       });
       await tx.deliveryOrder.update({ where: { id: orderId }, data: { status: 'DISPATCHED', driverId: driverId!, vehicleId: vehicleId! } });
+      await tx.stockReservation.updateMany({ where: { orderId, status: 'RESERVED' }, data: { status: 'CONSUMED' } });
       return d;
     });
     emitEvent('dispatch.created', { id: dispatch.id, orderId, orderNumber: order.orderNumber, driver: dispatch.driver.name, auto: true });
@@ -214,11 +216,27 @@ router.get('/my-deliveries', auth, authorizeRoles('DRIVER'), async (req, res, ne
 });
 
 /** Driver starts a delivery (DISPATCHED → IN_TRANSIT). */
+/** @openapi
+ * /api/my-deliveries/{orderId}/start:
+ *   post:
+ *     summary: Start an assigned delivery (safe to retry after a lost response)
+ *     tags: [Driver]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200: { description: Delivery is in transit or was already started }
+ *       404: { description: Delivery not assigned to this driver }
+ */
 router.post('/my-deliveries/:orderId/start', auth, authorizeRoles('DRIVER'), async (req, res, next) => {
   try {
     const driver = await ownDriver(req);
     const order = await prisma.deliveryOrder.findUnique({ where: { id: Number(req.params.orderId) } });
     if (!driver || !order || order.driverId !== driver.id) return bad(res, 'Delivery not found', 404);
+    if (order.status === 'IN_TRANSIT') return res.json({ success: true, data: { alreadyStarted: true } });
     if (!['DISPATCHED', 'PENDING'].includes(order.status)) return bad(res, `This delivery is already ${order.status.replace('_', ' ').toLowerCase()}`);
     await prisma.$transaction([
       prisma.deliveryOrder.update({ where: { id: order.id }, data: { status: 'IN_TRANSIT' } }),
@@ -233,7 +251,7 @@ router.post('/my-deliveries/:orderId/start', auth, authorizeRoles('DRIVER'), asy
 
 /**
  * Complete a delivery with proof: recipient name, signature (data URL),
- * optional photo (data URL, max ~1.5 MB) and location.
+ * optional photo (data URL, max ~1.5 MB) and location. Replays return the original confirmation code.
  */
 router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), async (req, res, next) => {
   try {
@@ -246,19 +264,32 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
     const driver = await ownDriver(req);
     const order = await prisma.deliveryOrder.findUnique({ where: { id: Number(req.params.orderId) }, include: { dispatches: { orderBy: { createdAt: 'desc' }, take: 1 } } });
     if (!driver || !order || order.driverId !== driver.id) return bad(res, 'Delivery not found', 404);
-    if (order.status === 'DELIVERED') return bad(res, 'This delivery is already completed');
     const dispatch = order.dispatches[0];
     if (!dispatch) return bad(res, 'No dispatch record for this order');
+    if (order.status === 'DELIVERED') {
+      const proof = await prisma.deliveryProof.findUnique({ where: { dispatchId: dispatch.id }, select: { confirmationCode: true } });
+      if (proof) return res.json({ success: true, data: { confirmationCode: proof.confirmationCode, alreadyCompleted: true } });
+      return bad(res, 'This delivery is already completed');
+    }
 
-    const confirmationCode = crypto.randomBytes(4).toString('hex').toUpperCase();
     const now = new Date();
-    await prisma.$transaction(async (tx) => {
+    const confirmationCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+    const completion = await prisma.$transaction(async (tx) => {
+      // Claim the transition before creating proof or cash records. If two retries
+      // arrive together, only one may create the payment.
+      const claimed = await tx.deliveryOrder.updateMany({
+        where: { id: order.id, status: order.status },
+        data: { status: 'DELIVERED', deliveredAt: now, deliveryAttempts: { increment: 1 } },
+      });
+      if (!claimed.count) {
+        const existing = await tx.deliveryProof.findUnique({ where: { dispatchId: dispatch.id }, select: { confirmationCode: true } });
+        return existing ? { confirmationCode: existing.confirmationCode, alreadyCompleted: true } : null;
+      }
       await tx.deliveryProof.upsert({
         where: { dispatchId: dispatch.id },
         update: { recipientName, signatureData, photoUrl: photoData || null, notes, latitude, longitude, confirmationCode },
         create: { dispatchId: dispatch.id, orderId: order.id, recipientName, signatureData, photoUrl: photoData || null, notes, latitude, longitude, confirmationCode },
       });
-      await tx.deliveryOrder.update({ where: { id: order.id }, data: { status: 'DELIVERED', deliveredAt: now, deliveryAttempts: { increment: 1 } } });
       await tx.dispatch.update({ where: { id: dispatch.id }, data: { status: 'DELIVERED', actualDelivery: now } });
       // Cash on delivery: the driver holds it until they hand it in (Cash page)
       if (cash > 0) {
@@ -270,20 +301,51 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
           },
         });
       }
+      return { confirmationCode, alreadyCompleted: false };
     });
+    if (!completion) return bad(res, 'Delivery changed while this update was being saved. Refresh and review it.', 409);
+    if (completion.alreadyCompleted) return res.json({ success: true, data: { confirmationCode: completion.confirmationCode, alreadyCompleted: true } });
     if (cash > 0) await refreshOrderPayment(order.id);
     await onOrderStatusChanged(order.id, order.status);
-    res.json({ success: true, data: { confirmationCode } });
+    res.json({ success: true, data: { confirmationCode: completion.confirmationCode } });
   } catch (error) {
     next(error);
   }
 });
 
 /** Driver can't deliver: record the reason; a failed-delivery return is opened for rescheduling. */
+/** @openapi
+ * /api/orders/{orderId}/fail:
+ *   post:
+ *     summary: Record a delivery exception with reason, notes, and optional photo
+ *     tags: [Orders, Driver]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               reason: { type: string, example: Customer unavailable }
+ *               notes: { type: string }
+ *               photoData: { type: string, description: Optional image data URL, max 2 MB }
+ *     responses:
+ *       200: { description: Exception recorded or replayed }
+ *       400: { description: Invalid reason or order state }
+ *       404: { description: Order not found }
+ */
 router.post('/orders/:orderId/fail', auth, async (req, res, next) => {
   try {
-    const { reason, notes } = req.body || {};
+    const { reason, notes, photoData } = req.body || {};
     if (!reason) return bad(res, 'A reason is required');
+    if (photoData && String(photoData).length > 2_000_000) return bad(res, 'Exception photo is too large');
     const order = await prisma.deliveryOrder.findUnique({ where: { id: Number(req.params.orderId) } });
     if (!order) return bad(res, 'Order not found', 404);
     if (req.user!.role === 'DRIVER') {
@@ -292,6 +354,10 @@ router.post('/orders/:orderId/fail', auth, async (req, res, next) => {
     } else if (!(ROLES.orderManagers as string[]).includes(req.user!.role)) {
       return bad(res, 'Not allowed', 403);
     }
+    if (order.status === 'FAILED') {
+      const existing = await prisma.returnRequest.findFirst({ where: { orderId: order.id, type: 'FAILED_DELIVERY' }, orderBy: { createdAt: 'desc' } });
+      if (existing) return res.json({ success: true, data: existing, alreadyRecorded: true });
+    }
     if (!(OPEN as readonly string[]).includes(order.status)) return bad(res, 'Only open orders can be marked as failed');
 
     const ret = await prisma.$transaction(async (tx) => {
@@ -299,7 +365,7 @@ router.post('/orders/:orderId/fail', auth, async (req, res, next) => {
       await tx.dispatch.updateMany({ where: { orderId: order.id, status: { in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT'] } }, data: { status: 'CANCELLED', notes: `Failed: ${reason}` } });
       const count = await tx.returnRequest.count();
       return tx.returnRequest.create({
-        data: { returnNumber: `RET-${String(count + 1).padStart(6, '0')}`, orderId: order.id, type: 'FAILED_DELIVERY', reason: String(reason).slice(0, 200), notes, createdBy: Number(req.user!.userId) },
+        data: { returnNumber: `RET-${String(count + 1).padStart(6, '0')}`, orderId: order.id, type: 'FAILED_DELIVERY', reason: String(reason).slice(0, 200), notes: notes ? String(notes).slice(0, 2000) : null, photoUrl: photoData || null, createdBy: Number(req.user!.userId) },
       });
     });
     await onOrderStatusChanged(order.id, order.status);
@@ -447,10 +513,16 @@ router.post('/returns/:id/status', ...orderStaff, async (req, res, next) => {
         });
       }
       if (status === 'RECEIVED' && ret.type === 'RETURN') {
+        const warehouse = await tx.warehouse.findFirst({ where: { active: true }, orderBy: { id: 'asc' }, select: { id: true } });
         for (const line of ret.order.items) {
           const item = await tx.inventoryItem.update({ where: { id: line.itemId }, data: { quantity: { increment: line.quantity } } });
+          if (warehouse) await tx.warehouseStock.upsert({
+            where: { warehouseId_itemId: { warehouseId: warehouse.id, itemId: line.itemId } },
+            create: { warehouseId: warehouse.id, itemId: line.itemId, quantity: line.quantity },
+            update: { quantity: { increment: line.quantity } },
+          });
           await tx.inventoryHistory.create({
-            data: { itemId: line.itemId, action: 'stock_in', quantity: line.quantity, previousQuantity: item.quantity - line.quantity, newQuantity: item.quantity, notes: `Returned via ${ret.returnNumber}`, performedBy: userId },
+            data: { itemId: line.itemId, orderId: ret.orderId, action: 'stock_in', quantity: line.quantity, previousQuantity: item.quantity - line.quantity, newQuantity: item.quantity, notes: `Returned via ${ret.returnNumber}`, performedBy: userId },
           });
         }
         await tx.deliveryOrder.update({ where: { id: ret.orderId }, data: { status: 'RETURNED' } });
@@ -480,7 +552,7 @@ router.post('/returns/:id/status', ...orderStaff, async (req, res, next) => {
 // Public order tracking (no login)
 // ---------------------------------------------------------------------------
 
-router.get('/public/track/:orderNumber', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/public/track/:orderNumber', publicTenant, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const order = await prisma.deliveryOrder.findUnique({
       where: { orderNumber: String(req.params.orderNumber).toUpperCase() },
