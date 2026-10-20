@@ -1,278 +1,66 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
-import Card from '@/components/ui/Card';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, ShoppingCart } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
+import PageHeader from '@/components/ui/PageHeader';
+import EditOrderForm from '@/components/forms/EditOrderForm';
 import { ordersService } from '@/services/ordersService';
-import { inventoryService } from '@/services/inventoryService';
 import { formatOrderNumber } from '@/utils/formatters';
 
 export default function EditOrder() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<any>(null);
-  const [inventory, setInventory] = useState<any[]>([]);
-  const [formData, setFormData] = useState({
-    customerName: '',
-    contactNumber: '',
-    deliveryAddress: '',
-    priority: 'medium',
-    scheduledDate: '',
-    deliveryInstructions: '',
-    items: [] as any[]
-  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        if (id) {
-          const [orderData, inventoryData] = await Promise.all([
-            ordersService.getOrderById(Number(id)),
-            inventoryService.getInventory()
-          ]);
-          
-          setOrder(orderData);
-          setInventory(inventoryData.data || []);
-          setFormData({
-            customerName: orderData.customerName,
-            contactNumber: orderData.contactNumber,
-            deliveryAddress: orderData.deliveryAddress,
-            priority: orderData.priority,
-            scheduledDate: orderData.scheduledDate ? new Date(orderData.scheduledDate).toISOString().split('T')[0] : '',
-            deliveryInstructions: orderData.deliveryInstructions || '',
-            items: orderData.items || []
-          });
-        }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-      }
-    };
-    fetchData();
+    let active = true;
+    setLoading(true);
+    ordersService.getOrderById(Number(id))
+      .then((data) => { if (active) setOrder(data); })
+      .catch((e: any) => { if (active) setError(e?.response?.data?.error?.message || e?.message || 'Could not load this order.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [id]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Updating order:', formData);
-    navigate('/orders');
+  const save = async (data: any) => {
+    setSaving(true);
+    try {
+      const items = (data.items || []).map((item: any) => ({ itemId: Number(item.inventoryId), quantity: Number(item.quantity), unit: item.unit, unitPrice: Number(item.price) }));
+      const originalItems = (order.items || []).map((item: any) => ({ itemId: Number(item.itemId), quantity: Number(item.quantity), unitPrice: Number(item.unitPrice) }));
+      const changedItems = JSON.stringify(items.map(({ itemId, quantity, unitPrice }: any) => ({ itemId, quantity, unitPrice }))) !== JSON.stringify(originalItems);
+      const payload: any = {
+        customerName: data.customerName,
+        customerEmail: data.customerEmail || order.customerEmail || undefined,
+        contactNumber: data.contactNumber,
+        deliveryAddress: data.deliveryAddress,
+        priority: String(data.priority).toUpperCase(),
+        scheduledDate: data.scheduledDate || undefined,
+        deliveryInstructions: data.deliveryInstructions || '',
+        orderType: data.orderType,
+        paymentMethod: data.paymentMethod,
+      };
+      if (changedItems) payload.items = items;
+      const result = await ordersService.updateOrder(Number(id), payload);
+      if (result?.success === false) throw new Error(result?.error?.message || 'Could not update this order');
+      toast.success('Order updated');
+      navigate(`/orders/${id}`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || e?.message || 'Could not update this order');
+      throw e;
+    } finally { setSaving(false); }
   };
-
-  const addItem = () => {
-    setFormData({
-      ...formData,
-      items: [...formData.items, { inventoryId: '', quantity: 1, name: '', code: '', unit: '' }]
-    });
-  };
-
-  const removeItem = (index: number) => {
-    setFormData({
-      ...formData,
-      items: formData.items.filter((_, i) => i !== index)
-    });
-  };
-
-  const updateItem = (index: number, field: string, value: any) => {
-    const updatedItems = [...formData.items];
-    updatedItems[index] = { ...updatedItems[index], [field]: value };
-    
-    if (field === 'inventoryId') {
-      const selectedItem = inventory.find((item: any) => item.id === value);
-      if (selectedItem) {
-        updatedItems[index] = {
-          ...updatedItems[index],
-          name: selectedItem.name,
-          code: selectedItem.code,
-          unit: selectedItem.unit
-        };
-      }
-    }
-    
-    setFormData({ ...formData, items: updatedItems });
-  };
-
-  if (!order) {
-    return (
-      <div className="space-y-6">
-        <div className="text-center py-12">
-          <p className="text-gray-500">Order not found</p>
-          <Button variant="secondary" onClick={() => navigate('/orders')} className="mt-4">
-            Back to Orders
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => navigate('/orders')}>
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div>
-          <h1 className="font-heading text-3xl font-bold text-gray-900">
-            Edit Order {formatOrderNumber(order.id)}
-          </h1>
-          <p className="text-gray-600 mt-1">Update order details and items</p>
-        </div>
-      </div>
-
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Customer Information */}
-        <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name</label>
-              <input
-                type="text"
-                value={formData.customerName}
-                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Contact Number</label>
-              <input
-                type="tel"
-                value={formData.contactNumber}
-                onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Address</label>
-              <textarea
-                value={formData.deliveryAddress}
-                onChange={(e) => setFormData({ ...formData, deliveryAddress: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
-              />
-            </div>
-          </div>
-        </Card>
-
-        {/* Order Details */}
-        <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
-              <select
-                value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Scheduled Date</label>
-              <input
-                type="date"
-                value={formData.scheduledDate}
-                onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Instructions</label>
-              <textarea
-                value={formData.deliveryInstructions}
-                onChange={(e) => setFormData({ ...formData, deliveryInstructions: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="Optional delivery instructions..."
-              />
-            </div>
-          </div>
-        </Card>
-
-        {/* Order Items */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Order Items</h3>
-            <Button type="button" variant="secondary" onClick={addItem}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Item
-            </Button>
-          </div>
-          <div className="space-y-4">
-            {formData.items.map((item, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 border border-gray-200 rounded-lg">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Item</label>
-                  <select
-                    value={item.inventoryId || ''}
-                    onChange={(e) => updateItem(index, 'inventoryId', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    required
-                  >
-                    <option value="">Select Item</option>
-                    {inventory.map((invItem: any) => (
-                      <option key={invItem.id} value={invItem.id}>
-                        {invItem.name} ({invItem.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(index, 'quantity', Math.max(1, parseInt(e.target.value, 10) || 1))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Unit</label>
-                  <input
-                    type="text"
-                    value={item.unit}
-                    readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
-                  />
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => removeItem(index)}
-                    className="text-error-600 hover:bg-error-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {formData.items.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                No items added. Click "Add Item" to get started.
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-4">
-          <Button variant="secondary" type="button" onClick={() => navigate('/orders')}>
-            Cancel
-          </Button>
-          <Button variant="primary" type="submit">
-            <Save className="w-4 h-4 mr-2" />
-            Save Changes
-          </Button>
-        </div>
-      </form>
+    <div className="space-y-5">
+      <PageHeader title={order ? `Edit order ${order.orderNumber || formatOrderNumber(order.id)}` : 'Edit order'} subtitle="Your existing customer and item details are loaded below. Changes are saved to the order." breadcrumbs={[{ label: 'Operations' }, { label: 'Orders' }]} icon={<ShoppingCart className="h-5 w-5" />} actions={<Button variant="secondary" size="sm" onClick={() => navigate(order ? `/orders/${id}` : '/orders')}><ArrowLeft className="mr-1.5 h-4 w-4" /> Back</Button>} />
+      <Card className="p-5">
+        {loading ? <div className="animate-pulse space-y-3"><div className="h-10 rounded-lg bg-gray-100" /><div className="h-10 rounded-lg bg-gray-100" /><div className="h-28 rounded-lg bg-gray-100" /></div> : error ? <div className="py-8 text-center"><p className="text-sm text-error-700">{error}</p><Button className="mt-4" variant="secondary" onClick={() => navigate('/orders')}>Return to orders</Button></div> : order ? <EditOrderForm order={order} saving={saving} onClose={() => navigate(`/orders/${id}`)} onSave={save} /> : <p className="py-8 text-center text-sm text-gray-500">Order not found.</p>}
+      </Card>
     </div>
   );
 }

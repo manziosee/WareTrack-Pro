@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Package, User, MapPin, Clock, Truck, Copy, Loader2 } from 'lucide-react';
+import { ArrowLeft, Package, User, MapPin, Clock, Truck, Copy, Loader2, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { ordersService } from '@/services/ordersService';
 import api from '@/services/api';
+import { printInvoice } from '@/utils/invoice';
 import { formatOrderNumber, formatDate } from '@/utils/formatters';
 
 export default function ViewOrder() {
@@ -278,12 +279,12 @@ export default function ViewOrder() {
           <Card>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
             <div className="space-y-3">
-              <Button variant="success" className="w-full" disabled={repeating || items.length === 0} onClick={() => void repeatOrder()}>
+              <Button variant="success" size="lg" className="min-h-[52px] w-full" disabled={repeating || items.length === 0} onClick={() => void repeatOrder()}>
                 {repeating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Copy className="mr-2 h-4 w-4" />}
                 {repeating ? 'Checking stock…' : 'Repeat order'}
               </Button>
               <p className="text-xs text-gray-500">Creates a new pending order using today’s item prices. Stock is checked before anything is saved.</p>
-              <Button variant="primary" className="w-full" onClick={() => navigate(`/orders/${order.id}/edit`)}>
+              <Button variant="primary" size="lg" className="min-h-[52px] w-full" onClick={() => navigate(`/orders/${order.id}/edit`)}>
                 Edit Order
               </Button>
               {status === 'pending' && (
@@ -292,8 +293,8 @@ export default function ViewOrder() {
                   Assign to Dispatch
                 </Button>
               )}
-              <Button variant="outline" className="w-full">
-                Print Order
+              <Button variant="outline" size="lg" className="min-h-[52px] w-full" onClick={() => void printInvoice(Number(order.id))}>
+                <Printer className="mr-2 h-5 w-5" /> Print order PDF
               </Button>
             </div>
           </Card>

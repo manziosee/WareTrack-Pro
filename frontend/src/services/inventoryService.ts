@@ -34,7 +34,8 @@ export const inventoryService = {
 
   async getInventoryById(id: number) {
     const response = await api.get(`/inventory/${id}`);
-    return response.data;
+    if (response.data?.success === false) throw new Error(response.data?.error?.message || 'Could not load inventory item');
+    return response.data?.data ?? response.data;
   },
 
   async createInventoryItem(data: CreateInventoryItem) {

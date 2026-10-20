@@ -16,12 +16,9 @@ export async function printInvoice(orderId: number) {
     return;
   }
   win.document.write('<p style="font-family:sans-serif;padding:24px">Preparing invoice…</p>');
+  try {
   const res = await api.get(`/invoices/order/${orderId}`, { params: { t: Date.now() } });
-  if (!res.data?.success) {
-    win.close();
-    toast.error(res.data?.error?.message || 'Could not load the invoice');
-    return;
-  }
+  if (!res.data?.success || !res.data?.data?.invoice || !res.data?.data?.order) throw new Error(res.data?.error?.message || 'Could not load the invoice');
   const { invoice, order, payments, vatRate, company, taxLabel = 'VAT' } = res.data.data;
   const currency = company?.currency || 'RWF';
   const paid = invoice.status === 'PAID';
@@ -73,4 +70,8 @@ ${order.items.map((it: any, i: number) => `<tr><td>${i + 1}</td><td>${esc(it.nam
 <script>window.onload=function(){(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(function(){window.print()})}</script>
 </body></html>`);
   win.document.close();
+  } catch (error: any) {
+    win.close();
+    toast.error(error?.response?.data?.error?.message || error?.message || 'Could not open the order PDF');
+  }
 }

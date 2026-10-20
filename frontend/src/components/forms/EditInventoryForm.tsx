@@ -3,6 +3,7 @@ import { Save } from 'lucide-react';
 import Button from '../ui/Button';
 import { CategorySelect } from '@/components/inventory/Categories';
 import { unitCategories } from '../../utils/units';
+import toast from 'react-hot-toast';
 
 interface EditInventoryFormProps {
   item: any;
@@ -74,6 +75,7 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
       // Don't call onClose() here - let the parent handle it after successful save
     } catch (error) {
       console.error('Failed to save item:', error);
+      toast.error(error instanceof Error ? error.message : 'Could not save inventory item');
     } finally {
       setLoading(false);
     }

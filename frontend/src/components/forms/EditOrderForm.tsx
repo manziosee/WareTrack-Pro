@@ -7,10 +7,11 @@ import { inventoryService } from '@/services/inventoryService';
 interface EditOrderFormProps {
   order: any;
   onClose: () => void;
-  onSave?: (orderData: any) => void;
+  onSave?: (orderData: any) => Promise<void> | void;
+  saving?: boolean;
 }
 
-export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormProps) {
+export default function EditOrderForm({ order, onClose, onSave, saving = false }: EditOrderFormProps) {
   const [formData, setFormData] = useState({
     customerName: '',
     contactNumber: '',
@@ -68,20 +69,20 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
         priority: order.priority?.toUpperCase() || 'MEDIUM',
         scheduledDate: order.scheduledDate ? new Date(order.scheduledDate).toISOString().split('T')[0] : '',
         deliveryInstructions: order.deliveryInstructions || '',
-        orderType: order.orderType || 'delivery',
-        paymentMethod: order.paymentMethod || 'cash',
+        orderType: String(order.orderType || 'delivery').toLowerCase(),
+        paymentMethod: String(order.paymentMethod || 'CASH').toUpperCase(),
         items: mappedItems
       });
     }
   }, [order, inventory]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Updating order:', formData);
-    if (onSave) {
-      onSave(formData);
+    try {
+      await onSave?.(formData);
+    } catch {
+      // The page reports the save error; keep the editor open so the user can retry.
     }
-    onClose();
   };
 
   const addItem = () => {
@@ -202,10 +203,11 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
                 onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value="cash">Cash</option>
-                <option value="card">Card</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="mobile_money">Mobile Money</option>
+                <option value="CASH">Cash on delivery</option>
+                <option value="MTN_MOMO">MTN MoMo</option>
+                <option value="AIRTEL_MONEY">Airtel Money</option>
+                <option value="BANK_TRANSFER">Bank transfer</option>
+                <option value="CREDIT">On account (credit)</option>
               </select>
             </div>
             <div className="md:col-span-2">
@@ -311,9 +313,9 @@ export default function EditOrderForm({ order, onClose, onSave }: EditOrderFormP
           <Button variant="secondary" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" type="submit">
+          <Button variant="primary" type="submit" disabled={saving}>
             <Save className="w-4 h-4 mr-2" />
-            Save Changes
+            {saving ? 'Saving…' : 'Save Changes'}
           </Button>
         </div>
       </form>
