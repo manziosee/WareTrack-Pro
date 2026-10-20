@@ -57,6 +57,7 @@ prisma.$connect()
     // guard while deployments use the existing Docker startup (which does not
     // automatically run Prisma migrations).
     return prisma.$executeRaw`ALTER TABLE "delivery_proofs" ADD COLUMN IF NOT EXISTS "delivered_items" JSONB`
+      .then(() => prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "inventory_items_company_id_barcode_key" ON "inventory_items"("company_id", "barcode")`)
       .then(() => start())
       .catch((error) => {
         console.error('❌ Could not prepare delivery scan storage:', error);

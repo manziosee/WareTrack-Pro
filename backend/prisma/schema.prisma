@@ -176,6 +176,7 @@ model InventoryItem {
 
   @@index([companyId, branchId])
   @@unique([companyId, code])
+  @@unique([companyId, barcode])
   @@map("inventory_items")
 }
 
