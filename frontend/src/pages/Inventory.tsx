@@ -43,6 +43,7 @@ export default function Inventory() {
   const [showCategories, setShowCategories] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewId, setViewId] = useState<number | null>(null);
+  const [generatingBarcodes, setGeneratingBarcodes] = useState(false);
 
   useEffect(() => {
     if (params.get('new') === '1') setShowAdd(true);
@@ -99,6 +100,21 @@ export default function Inventory() {
     setEditing(null);
     setShowAdd(false);
     refresh();
+  };
+
+  const generateMissingBarcodes = async () => {
+    setGeneratingBarcodes(true);
+    try {
+      const result = await inventoryService.generateMissingBarcodes();
+      const count = result?.data?.count ?? 0;
+      toast.success(count ? `Created category barcodes for ${count} products` : 'All products already have barcodes');
+      if (result?.data?.remaining) toast('More than 1,000 products need barcodes. Run this again to continue.', { icon: 'ℹ️' });
+      refresh();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error?.message || 'Could not generate product barcodes');
+    } finally {
+      setGeneratingBarcodes(false);
+    }
   };
 
   const columns: Column<any>[] = [
@@ -158,6 +174,7 @@ export default function Inventory() {
               <RefreshCw className="h-4 w-4" />
             </button>
             {canEdit && <Button size="sm" variant="secondary" onClick={() => setShowCategories(true)}><Tags className="mr-1.5 h-4 w-4" /> Categories</Button>}
+            {canEdit && <Button size="sm" variant="secondary" disabled={generatingBarcodes} onClick={generateMissingBarcodes}><Tags className="mr-1.5 h-4 w-4" /> {generatingBarcodes ? 'Generating…' : 'Generate missing barcodes'}</Button>}
             {canEdit && <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="mr-1.5 h-4 w-4" /> Add item</Button>}
           </>
         }

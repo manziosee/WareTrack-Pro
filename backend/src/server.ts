@@ -53,7 +53,15 @@ function start() {
 prisma.$connect()
   .then(() => {
     console.log('✅ Database connected successfully');
-    start();
+    // Additive, backward-compatible delivery scan detail storage. Keep this
+    // guard while deployments use the existing Docker startup (which does not
+    // automatically run Prisma migrations).
+    return prisma.$executeRaw`ALTER TABLE "delivery_proofs" ADD COLUMN IF NOT EXISTS "delivered_items" JSONB`
+      .then(() => start())
+      .catch((error) => {
+        console.error('❌ Could not prepare delivery scan storage:', error);
+        start();
+      });
   })
   .catch((error) => {
     console.error('❌ Database connection failed:', error);

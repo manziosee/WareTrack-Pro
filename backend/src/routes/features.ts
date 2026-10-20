@@ -46,6 +46,17 @@ router.put('/smart-alerts/:alertId/resolve', authenticateToken, SmartAlertsContr
 // Barcode
 router.post('/barcode/generate/:itemId', authenticateToken, authorizeRoles(...ROLES.inventoryManagers), BarcodeController.generateForItem);
 router.post('/barcode/batch-generate', authenticateToken, authorizeRoles(...ROLES.inventoryManagers), BarcodeController.batchGenerate);
+/** @openapi
+ * /api/features/barcode/backfill:
+ *   post:
+ *     summary: Generate category-coded barcodes for products that do not have one
+ *     tags: [Inventory]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Generated barcode records (up to 1000 products per call) }
+ *       403: { description: Inventory manager permission required }
+ */
+router.post('/barcode/backfill', authenticateToken, authorizeRoles(...ROLES.inventoryManagers), BarcodeController.backfillMissing);
 router.get('/barcode/lookup/:barcode', authenticateToken, BarcodeController.lookupByBarcode);
 
 // Customer Portal

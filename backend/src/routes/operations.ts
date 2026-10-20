@@ -191,7 +191,7 @@ router.get('/my-deliveries', auth, authorizeRoles('DRIVER'), async (req, res, ne
       where: { driverId: driver.id, OR: [{ status: { in: [...OPEN] } }, { updatedAt: { gte: since } }] },
       orderBy: [{ timeSlotStart: 'asc' }, { createdAt: 'asc' }],
       include: {
-        items: { select: { itemName: true, quantity: true, unit: true } },
+        items: { select: { itemId: true, itemName: true, quantity: true, unit: true, item: { select: { barcode: true, code: true } } } },
         vehicle: { select: { plateNumber: true } },
         proofs: { select: { confirmationCode: true, recipientName: true, createdAt: true } },
         dispatches: { select: { id: true, status: true }, orderBy: { createdAt: 'desc' }, take: 1 },
@@ -249,20 +249,62 @@ router.post('/my-deliveries/:orderId/start', auth, authorizeRoles('DRIVER'), asy
   }
 });
 
-/**
- * Complete a delivery with proof: recipient name, signature (data URL),
- * optional photo (data URL, max ~1.5 MB) and location. Replays return the original confirmation code.
+/** @openapi
+ * /api/my-deliveries/{orderId}/complete:
+ *   post:
+ *     summary: Complete an assigned delivery with scanned quantities, GPS, proof, and cash collected
+ *     tags: [Driver]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema: { type: integer }
+ *       - in: header
+ *         name: Idempotency-Key
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [recipientName, signatureData, deliveredItems]
+ *             properties:
+ *               recipientName: { type: string }
+ *               signatureData: { type: string, description: Signature data URL }
+ *               photoData: { type: string, description: Optional delivery photo data URL }
+ *               latitude: { type: number, minimum: -90, maximum: 90 }
+ *               longitude: { type: number, minimum: -180, maximum: 180 }
+ *               cashCollected: { type: number, minimum: 0 }
+ *               notes: { type: string }
+ *               deliveredItems:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [itemId, scannedQuantity, deliveredQuantity, verified]
+ *                   properties:
+ *                     itemId: { type: integer }
+ *                     scannedQuantity: { type: integer, minimum: 0 }
+ *                     deliveredQuantity: { type: integer, minimum: 0 }
+ *                     scannedCode: { type: string }
+ *                     verified: { type: boolean, enum: [true] }
+ *     responses:
+ *       200: { description: Delivery quantities, coordinates, proof, and collected cash recorded }
+ *       400: { description: Invalid delivery proof or item quantities }
+ *       404: { description: Delivery is not assigned to the signed-in driver }
+ *       409: { description: Delivery changed while completion was being saved }
  */
 router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), async (req, res, next) => {
   try {
-    const { recipientName, signatureData, photoData, notes, latitude, longitude, cashCollected } = req.body || {};
+    const { recipientName, signatureData, photoData, notes, latitude, longitude, cashCollected, deliveredItems } = req.body || {};
     const cash = Math.round(Number(cashCollected || 0) * 100) / 100;
     if (!Number.isFinite(cash) || cash < 0) return bad(res, 'Cash collected must be a positive amount');
     if (!recipientName || !signatureData) return bad(res, 'Recipient name and signature are required');
     if (String(signatureData).length > 400_000 || (photoData && String(photoData).length > 2_000_000)) return bad(res, 'Signature or photo is too large');
 
     const driver = await ownDriver(req);
-    const order = await prisma.deliveryOrder.findUnique({ where: { id: Number(req.params.orderId) }, include: { dispatches: { orderBy: { createdAt: 'desc' }, take: 1 } } });
+    const order = await prisma.deliveryOrder.findUnique({ where: { id: Number(req.params.orderId) }, include: { items: { select: { itemId: true, quantity: true, item: { select: { barcode: true, code: true } } } }, dispatches: { orderBy: { createdAt: 'desc' }, take: 1 } } });
     if (!driver || !order || order.driverId !== driver.id) return bad(res, 'Delivery not found', 404);
     const dispatch = order.dispatches[0];
     if (!dispatch) return bad(res, 'No dispatch record for this order');
@@ -270,6 +312,20 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
       const proof = await prisma.deliveryProof.findUnique({ where: { dispatchId: dispatch.id }, select: { confirmationCode: true } });
       if (proof) return res.json({ success: true, data: { confirmationCode: proof.confirmationCode, alreadyCompleted: true } });
       return bad(res, 'This delivery is already completed');
+    }
+    if (!Array.isArray(deliveredItems) || deliveredItems.length !== order.items.length) return bad(res, 'Scan and confirm every ordered product before completing delivery');
+    const normalizedDeliveredItems = [];
+    for (const line of order.items) {
+      const scanned = deliveredItems.find((entry: any) => Number(entry.itemId) === line.itemId);
+      const deliveredQuantity = Number(scanned?.deliveredQuantity);
+      const scannedQuantity = Number(scanned?.scannedQuantity);
+      if (!scanned || scanned.verified !== true || !Number.isInteger(deliveredQuantity) || deliveredQuantity < 0 || deliveredQuantity > line.quantity || !Number.isInteger(scannedQuantity) || scannedQuantity < 0 || scannedQuantity > line.quantity) {
+        return bad(res, `Confirm a valid delivered quantity for each product (maximum ${line.quantity})`);
+      }
+      if (deliveredQuantity > scannedQuantity) return bad(res, 'Delivered quantity cannot exceed the number of products scanned');
+      const scannedCode = String(scanned.scannedCode || '');
+      if (scannedQuantity && ![line.item.barcode, line.item.code].some((code) => code?.toLowerCase() === scannedCode.toLowerCase())) return bad(res, 'A scanned product barcode does not match the order');
+      normalizedDeliveredItems.push({ itemId: line.itemId, scannedQuantity, deliveredQuantity, orderedQuantity: line.quantity, scannedCode: (scannedCode || line.item.barcode || line.item.code).slice(0, 128) });
     }
 
     const now = new Date();
@@ -290,6 +346,7 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
         update: { recipientName, signatureData, photoUrl: photoData || null, notes, latitude, longitude, confirmationCode },
         create: { dispatchId: dispatch.id, orderId: order.id, recipientName, signatureData, photoUrl: photoData || null, notes, latitude, longitude, confirmationCode },
       });
+      await tx.$executeRaw`UPDATE delivery_proofs SET delivered_items = ${JSON.stringify(normalizedDeliveredItems)}::jsonb WHERE dispatch_id = ${dispatch.id}`;
       await tx.dispatch.update({ where: { id: dispatch.id }, data: { status: 'DELIVERED', actualDelivery: now } });
       // Cash on delivery: the driver holds it until they hand it in (Cash page)
       if (cash > 0) {

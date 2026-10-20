@@ -612,6 +612,7 @@ model DeliveryProof {
   notes            String?
   latitude         Decimal? @db.Decimal(10, 8)
   longitude        Decimal? @db.Decimal(11, 8)
+  deliveredItems   Json?    @map("delivered_items")
   createdAt        DateTime @default(now()) @map("created_at")
 
   dispatch Dispatch      @relation(fields: [dispatchId], references: [id], onDelete: Cascade)

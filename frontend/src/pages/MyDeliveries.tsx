@@ -16,6 +16,7 @@ import { useRealtime } from '@/context/RealtimeContext';
 import { compressImage } from '@/utils/image';
 import ExpenseForm from '@/components/finance/ExpenseForm';
 import PushSettings from '@/components/settings/PushSettings';
+import ScanInput from '@/components/ui/ScanInput';
 
 const QUEUE_KEY = 'waretrack-pod-queue';
 const FAIL_REASONS = ['Customer not available', 'Wrong address', 'Customer refused delivery', 'Business closed', 'Road closed', 'Vehicle problem'];
@@ -79,6 +80,7 @@ export default function MyDeliveries() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [cash, setCash] = useState('');
+  const [deliveredItems, setDeliveredItems] = useState<any[]>([]);
   const [addingExpense, setAddingExpense] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -270,16 +272,38 @@ export default function MyDeliveries() {
     setNotes('');
     setCash(collectsCash(o) ? String(Math.round(Number(o.amountDue ?? o.totalAmount))) : '');
     setHasSignature(false);
+    setDeliveredItems((o.items || []).map((item: any) => ({ itemId: item.itemId, itemName: item.itemName, orderedQuantity: item.quantity, unit: item.unit, barcode: item.item?.barcode, code: item.item?.code, scannedQuantity: 0, deliveredQuantity: 0, scannedCode: '', verified: false })));
     navigator.geolocation?.getCurrentPosition((pos) => { positionRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }; }, () => undefined, { timeout: 8000 });
+  };
+
+  const scanDeliveryItem = (code: string) => {
+    const line = deliveredItems.find((item) => item.barcode?.toLowerCase() === code.toLowerCase() || item.code?.toLowerCase() === code.toLowerCase());
+    if (!line) { toast.error('This barcode is not part of this order'); return; }
+    if (line.scannedQuantity >= line.orderedQuantity) { toast.error(`${line.itemName}: the ordered quantity has already been scanned`); return; }
+    setDeliveredItems((items) => items.map((item) => item.itemId === line.itemId
+      ? { ...item, scannedQuantity: item.scannedQuantity + 1, deliveredQuantity: item.deliveredQuantity + 1, scannedCode: code, verified: true }
+      : item));
+    toast.success(`${line.itemName} scanned`);
   };
 
   const complete = async () => {
     const signatureData = signatureRef.current?.toDataURL();
     if (!recipient.trim() || !signatureData) return toast.error('Add the recipient name and a signature');
+    const unverified = deliveredItems.find((item) => !item.verified);
+    if (unverified) return toast.error(`Scan or confirm ${unverified.itemName} before completing delivery`);
+    let arrivalPosition = positionRef.current;
+    if (navigator.geolocation) {
+      arrivalPosition = await new Promise((resolve) => navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(positionRef.current), { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
+      ));
+      if (arrivalPosition) positionRef.current = arrivalPosition;
+    }
     const body = {
       recipientName: recipient.trim(), signatureData, photoData: photo || undefined, notes: notes || undefined,
-      latitude: positionRef.current?.lat, longitude: positionRef.current?.lng,
+      latitude: arrivalPosition?.lat, longitude: arrivalPosition?.lng,
       cashCollected: cash ? Number(cash) : undefined,
+      deliveredItems: deliveredItems.map(({ itemId, scannedQuantity, deliveredQuantity, scannedCode, verified }) => ({ itemId, scannedQuantity, deliveredQuantity, scannedCode, verified })),
     };
     setBusy(true);
     const saveForLater = () => {
@@ -458,6 +482,19 @@ export default function MyDeliveries() {
 
       <Modal isOpen={Boolean(completing)} onClose={() => setCompleting(null)} title="Proof of delivery" subtitle={completing ? `${completing.orderNumber} · ${completing.customerName}` : ''} icon={<CheckCircle2 className="h-5 w-5" />}>
         <div className="space-y-4">
+          <section className="space-y-3 rounded-xl border border-gray-200 p-3">
+            <div><p className="text-sm font-semibold text-gray-800">Scan delivered products</p><p className="text-xs text-gray-500">Scan each unit. Adjust delivered quantity for shortages before confirming.</p></div>
+            <ScanInput onScan={scanDeliveryItem} placeholder="Scan product barcode or QR code" disabled={busy} />
+            <div className="space-y-2">
+              {deliveredItems.map((item) => (
+                <div key={item.itemId} className="flex items-center gap-2 rounded-lg bg-gray-50 p-2">
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-gray-800">{item.itemName}</p><p className="text-xs text-gray-500">Scanned {item.scannedQuantity} · ordered {item.orderedQuantity} {item.unit}</p></div>
+                  <label className="text-xs text-gray-600">Delivered <input type="number" min={0} max={item.scannedQuantity} value={item.deliveredQuantity} disabled={busy || !item.verified} onChange={(e) => setDeliveredItems((items) => items.map((row) => row.itemId === item.itemId ? { ...row, deliveredQuantity: Math.min(item.scannedQuantity, Math.max(0, Number(e.target.value) || 0)) } : row))} className="ml-1 h-9 w-16 rounded-lg border border-gray-200 bg-white px-2 text-sm" /></label>
+                  {!item.verified && <button type="button" disabled={busy} onClick={() => setDeliveredItems((items) => items.map((row) => row.itemId === item.itemId ? { ...row, verified: true } : row))} className="text-xs font-medium text-primary-700">Confirm 0</button>}
+                </div>
+              ))}
+            </div>
+          </section>
           <label className="block text-sm"><span className="mb-1 block font-medium text-gray-700">Received by</span>
             <input value={recipient} onChange={(e) => setRecipient(e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 px-3 text-base" placeholder="Name of the person receiving" />
           </label>

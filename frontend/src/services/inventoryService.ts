@@ -27,6 +27,9 @@ export interface CreateInventoryItem {
 }
 
 export const inventoryService = {
+  async generateMissingBarcodes() {
+    return (await api.post('/features/barcode/backfill')).data;
+  },
   async getInventory(params?: { page?: number; limit?: number; search?: string; category?: string; status?: string }) {
     const response = await api.get('/inventory', { params });
     return response.data;

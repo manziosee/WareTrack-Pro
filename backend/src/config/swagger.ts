@@ -102,7 +102,7 @@ const options = {
             location: { type: 'string', description: 'Warehouse location' },
             supplier: { type: 'string' },
             description: { type: 'string' },
-            barcode: { type: 'string' },
+            barcode: { type: 'string', description: 'Category-prefixed unique product identifier, generated automatically when the product is created. QR labels encode this value.' },
             weight: { type: 'number', format: 'decimal' },
             dimensions: { type: 'string' },
             createdAt: { type: 'string', format: 'date-time' },

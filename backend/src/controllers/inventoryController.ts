@@ -273,7 +273,7 @@ export class InventoryController {
 
   static async createInventoryItem(req: Request, res: Response) {
     try {
-      const { name, code, category, quantity, minQuantity, unit, unitCategory, location, barcode, unitPrice, supplier, description } = req.body;
+      const { name, code, category, quantity, minQuantity, unit, unitCategory, location, unitPrice, supplier, description } = req.body;
 
       const created = await prisma.$transaction(async (tx) => {
         const item = await tx.inventoryItem.create({ data: {
@@ -285,12 +285,17 @@ export class InventoryController {
           unit,
           unitCategory,
           location,
-          barcode,
+          barcode: null,
           unitPrice: unitPrice !== undefined ? Number(unitPrice) : undefined,
           supplier,
           description,
           status: 'ACTIVE'
         } });
+        if (!item.barcode) {
+          const { BarcodeController } = await import('./barcodeController');
+          await tx.inventoryItem.update({ where: { id: item.id }, data: { barcode: BarcodeController.productBarcode(item.category, item.id) } });
+          item.barcode = BarcodeController.productBarcode(item.category, item.id);
+        }
         const warehouse = await tx.warehouse.findFirst({ where: { active: true }, select: { id: true } });
         if (warehouse) await tx.warehouseStock.create({ data: { warehouseId: warehouse.id, itemId: item.id, quantity: Number(quantity || 0) } });
         await tx.inventoryHistory.create({ data: {
@@ -330,13 +335,15 @@ export class InventoryController {
           unit: item.unit,
           unitCategory: item.unitCategory,
           location: item.location,
-          barcode: item.barcode,
+          barcode: null,
           unitPrice: item.unitPrice,
           supplier: item.supplier,
           description: item.description,
           status: 'ACTIVE'
         })) });
-        const created = await tx.inventoryItem.findMany({ where: { code: { in: items.map((item: any) => item.code) } }, select: { id: true, name: true, code: true, quantity: true } });
+        const created = await tx.inventoryItem.findMany({ where: { code: { in: items.map((item: any) => item.code) } }, select: { id: true, name: true, code: true, category: true, quantity: true, barcode: true } });
+        const { BarcodeController } = await import('./barcodeController');
+        for (const item of created.filter((row) => !row.barcode)) await tx.inventoryItem.update({ where: { id: item.id }, data: { barcode: BarcodeController.productBarcode(item.category, item.id) } });
         const warehouse = await tx.warehouse.findFirst({ where: { active: true }, select: { id: true } });
         if (warehouse && created.length) await tx.warehouseStock.createMany({ data: created.map((item) => ({ warehouseId: warehouse.id, itemId: item.id, quantity: item.quantity })) });
         if (created.length) await tx.inventoryHistory.createMany({ data: created.map((item) => ({
