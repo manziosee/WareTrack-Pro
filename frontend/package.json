@@ -23,6 +23,7 @@
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
     "html5-qrcode": "^2.3.8",
+    "jsbarcode": "^3.12.3",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.294.0",
     "qrcode": "^1.5.4",

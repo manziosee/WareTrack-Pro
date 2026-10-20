@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
+import { barcodeSvgDataUrl } from '../../utils/barcode';
 import { Package, MapPin, Tag, Wallet, Boxes, Info, CalendarClock, AlertTriangle } from 'lucide-react';
 import Badge from '../ui/Badge';
 import { DetailHero, DetailSection, DetailField, DetailGrid, DetailStat } from '../ui/Detail';
@@ -11,10 +12,13 @@ interface ViewInventoryModalProps {
 
 export default function ViewInventoryModal({ item }: ViewInventoryModalProps) {
   const [qrImage, setQrImage] = useState('');
+  const [barcodeImage, setBarcodeImage] = useState('');
   useEffect(() => {
     let active = true;
-    if (item.barcode) QRCode.toDataURL(item.barcode, { margin: 1, width: 180, color: { dark: '#172B3C', light: '#FFFFFF' } }).then((url) => { if (active) setQrImage(url); }).catch(() => setQrImage(''));
-    else setQrImage('');
+    if (item.barcode) {
+      setBarcodeImage(barcodeSvgDataUrl(item.barcode));
+      QRCode.toDataURL(item.barcode, { margin: 1, width: 180, color: { dark: '#172B3C', light: '#FFFFFF' } }).then((url) => { if (active) setQrImage(url); }).catch(() => setQrImage(''));
+    } else { setQrImage(''); setBarcodeImage(''); }
     return () => { active = false; };
   }, [item.barcode]);
   const getStatusBadgeVariant = (status: string) => {
@@ -97,7 +101,7 @@ export default function ViewInventoryModal({ item }: ViewInventoryModalProps) {
           <DetailField label="Unit Category">{item.unitCategory || 'Not specified'}</DetailField>
           <DetailField label="Supplier">{item.supplier || 'Not specified'}</DetailField>
           <DetailField label="Barcode"><span className="font-mono">{item.barcode || 'Not specified'}</span></DetailField>
-          {qrImage && <div className="flex items-center gap-3 rounded-xl border border-gray-100 p-3 sm:col-span-2"><img src={qrImage} alt={`QR code for ${item.name}`} className="h-24 w-24" /><div><p className="text-sm font-semibold text-gray-800">Product QR code</p><p className="mt-1 font-mono text-xs text-gray-500">Scans to {item.barcode}</p></div></div>}
+          {qrImage && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-100 p-3 sm:col-span-2"><img src={qrImage} alt={`QR code for ${item.name}`} className="h-24 w-24" /><div><p className="text-sm font-semibold text-gray-800">Product QR code</p><p className="mt-1 font-mono text-xs text-gray-500">Scans to {item.barcode}</p></div>{barcodeImage && <img src={barcodeImage} alt={`Code 128 barcode for ${item.name}`} className="ml-auto h-14 w-48" />}</div>}
           <DetailField label="Description" className="sm:col-span-2">
             <span className="font-normal text-gray-700">{item.description || 'No description provided'}</span>
           </DetailField>
