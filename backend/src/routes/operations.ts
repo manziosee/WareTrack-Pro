@@ -43,7 +43,7 @@ router.get('/routes/driver/:driverId', auth, async (req, res, next) => {
     }
     const driver = await prisma.driver.findUnique({ where: { id: driverId }, select: { id: true, name: true, currentLat: true, currentLng: true } });
     if (!driver) return bad(res, 'Driver not found', 404);
-    const orders = await prisma.deliveryOrder.findMany({
+    const orders: any[] = await prisma.deliveryOrder.findMany({
       where: { driverId, status: { in: ['DISPATCHED', 'IN_TRANSIT'] }, latitude: { not: null }, longitude: { not: null } },
       select: { id: true, orderNumber: true, customerName: true, deliveryAddress: true, contactNumber: true, priority: true, status: true, latitude: true, longitude: true, slaDeadline: true, timeSlotStart: true, timeSlotEnd: true, warehouseId: true },
     });
@@ -191,7 +191,7 @@ router.get('/my-deliveries', auth, authorizeRoles('DRIVER'), async (req, res, ne
       where: { driverId: driver.id, OR: [{ status: { in: [...OPEN] } }, { updatedAt: { gte: since } }] },
       orderBy: [{ timeSlotStart: 'asc' }, { createdAt: 'asc' }],
       include: {
-        items: { select: { itemId: true, itemName: true, quantity: true, unit: true, item: { select: { barcode: true, code: true } } } },
+        items: { select: { itemId: true, itemName: true, quantity: true, unit: true, item: { select: { barcode: true, code: true, legacyBarcodes: true } as any } } as any },
         vehicle: { select: { plateNumber: true } },
         proofs: { select: { confirmationCode: true, recipientName: true, createdAt: true } },
         dispatches: { select: { id: true, status: true }, orderBy: { createdAt: 'desc' }, take: 1 },
@@ -304,7 +304,7 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
     if (String(signatureData).length > 400_000 || (photoData && String(photoData).length > 2_000_000)) return bad(res, 'Signature or photo is too large');
 
     const driver = await ownDriver(req);
-    const order = await prisma.deliveryOrder.findUnique({ where: { id: Number(req.params.orderId) }, include: { items: { select: { itemId: true, quantity: true, item: { select: { barcode: true, code: true } } } }, dispatches: { orderBy: { createdAt: 'desc' }, take: 1 } } });
+    const order: any = await prisma.deliveryOrder.findUnique({ where: { id: Number(req.params.orderId) }, include: { items: { select: { itemId: true, quantity: true, item: { select: { barcode: true, code: true, legacyBarcodes: true } as any } } as any }, dispatches: { orderBy: { createdAt: 'desc' }, take: 1 } } });
     if (!driver || !order || order.driverId !== driver.id) return bad(res, 'Delivery not found', 404);
     const dispatch = order.dispatches[0];
     if (!dispatch) return bad(res, 'No dispatch record for this order');
@@ -324,7 +324,7 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
       }
       if (deliveredQuantity > scannedQuantity) return bad(res, 'Delivered quantity cannot exceed the number of products scanned');
       const scannedCode = String(scanned.scannedCode || '');
-      if (scannedQuantity && ![line.item.barcode, line.item.code].some((code) => code?.toLowerCase() === scannedCode.toLowerCase())) return bad(res, 'A scanned product barcode does not match the order');
+      if (scannedQuantity && ![line.item.barcode, line.item.code, ...line.item.legacyBarcodes].some((code) => code?.toLowerCase() === scannedCode.toLowerCase())) return bad(res, 'A scanned product barcode does not match the order');
       normalizedDeliveredItems.push({ itemId: line.itemId, scannedQuantity, deliveredQuantity, orderedQuantity: line.quantity, scannedCode: (scannedCode || line.item.barcode || line.item.code).slice(0, 128) });
     }
 

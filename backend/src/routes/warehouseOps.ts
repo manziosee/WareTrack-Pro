@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { barcodeLookupOr } from '../lib/barcodeLookup';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { NotificationService } from '../services/notificationService';
 import { accountForCustomer, createOrderRecord, OrderInputError } from '../services/orderCreation';
@@ -183,7 +184,7 @@ router.post('/stock-counts/:id/scan', ...stock, async (req, res, next) => {
     await openCount(id);
     const code = String(req.body?.code || '').trim();
     let units = Math.max(1, Math.round(Number(req.body?.quantity) || 1));
-    let item = await prisma.inventoryItem.findFirst({ where: { OR: [{ barcode: code }, { code: { equals: code, mode: 'insensitive' } }] }, select: { id: true, name: true } });
+    let item = await prisma.inventoryItem.findFirst({ where: { OR: barcodeLookupOr(code) }, select: { id: true, name: true } });
     if (!item) {
       const pack = await prisma.itemPackaging.findUnique({ where: { barcode: code } });
       if (pack) {
@@ -299,7 +300,7 @@ const packingInclude = {
   items: {
     orderBy: { id: 'asc' as const },
     include: {
-      item: { select: { id: true, name: true, code: true, barcode: true, location: true, unit: true } },
+      item: { select: { id: true, name: true, code: true, barcode: true, legacyBarcodes: true, location: true, unit: true } as any },
       packaging: { select: { id: true, name: true, unitsPerPack: true, barcode: true } },
     },
   },
@@ -384,7 +385,7 @@ router.post('/orders/:id/packing/scan', ...staff, async (req, res, next) => {
     let line = order.items.find((l) => l.packaging?.barcode?.toLowerCase() === code);
     if (line) units *= line.packaging!.unitsPerPack;
     else {
-      const matches = order.items.filter((l) => l.item.barcode?.toLowerCase() === code || l.item.code.toLowerCase() === code);
+      const matches = (order.items as any[]).filter((l) => l.item.barcode?.toLowerCase() === code || l.item.code.toLowerCase() === code || l.item.legacyBarcodes.some((value: string) => value.toLowerCase() === code));
       line = matches.find((l) => l.packedQuantity < l.quantity) || matches[0];
       if (!line) {
         const pack = await prisma.itemPackaging.findUnique({ where: { barcode: String(req.body.code).trim() } });

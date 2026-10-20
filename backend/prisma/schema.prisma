@@ -153,6 +153,7 @@ model InventoryItem {
   unitCategory String          @map("unit_category")
   location     String
   barcode      String?
+  legacyBarcodes String[]         @default([]) @map("legacy_barcodes")
   unitPrice    Decimal         @default(0) @map("unit_price")
   status       InventoryStatus @default(ACTIVE)
   supplier     String?

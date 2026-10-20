@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { getTenantContext } from '../lib/tenantContext';
+import { barcodeLookupOr } from '../lib/barcodeLookup';
 
 export class BarcodeController {
   static productBarcode(category: string, id: number): string {
-    const categoryCode = (category || 'GENERAL').normalize('NFKD').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8) || 'GENERAL';
+    const categoryCode = (category || 'GENERAL').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8) || 'GENERAL';
     return `WTP-${categoryCode}-${id.toString().padStart(8, '0')}`;
   }
 
@@ -101,9 +102,7 @@ export class BarcodeController {
     try {
       const { barcode } = req.params;
       
-      const item = await prisma.inventoryItem.findFirst({
-        where: { barcode }
-      });
+      const item = await prisma.inventoryItem.findFirst({ where: { OR: barcodeLookupOr(barcode) } });
       
       if (!item) {
         return res.status(404).json({ success: false, error: { message: 'Item not found' } });

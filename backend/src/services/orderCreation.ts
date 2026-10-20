@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { emitEvent } from './events';
 import { creditCheck, nextNumber } from './finance';
+import { barcodeLookupOr } from '../lib/barcodeLookup';
 
 /** A problem with the order the caller should show to the user (400/409). */
 export class OrderInputError extends Error {
@@ -134,7 +135,7 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
     const code = raw.code ? String(raw.code).trim() : '';
     const item = id
       ? await prisma.inventoryItem.findUnique({ where: { id } })
-      : code ? await prisma.inventoryItem.findFirst({ where: { OR: [{ code: { equals: code, mode: 'insensitive' } }, { barcode: code }] } }) : null;
+      : code ? await prisma.inventoryItem.findFirst({ where: { OR: barcodeLookupOr(code) } }) : null;
     if (!item) throw new OrderInputError(`Item ${id || code || '(missing)'} was not found`, 400, 'ITEM_NOT_FOUND');
     if (item.status !== 'ACTIVE') throw new OrderInputError(`${item.name} is not active and can't be ordered`, 400, 'ITEM_INACTIVE');
     const quantity = Number(raw.quantity);

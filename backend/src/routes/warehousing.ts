@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
+import { barcodeLookupOr } from '../lib/barcodeLookup';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { emitEvent } from '../services/events';
 
@@ -405,7 +406,7 @@ router.get('/inventory-lookup/:code', auth, async (req, res, next) => {
     const code = String(req.params.code).trim();
     const include = { warehouseStock: { include: { warehouse: { select: { id: true, name: true, code: true } } } }, packagings: true };
     let item = await prisma.inventoryItem.findFirst({
-      where: { OR: [{ barcode: code }, { code: { equals: code, mode: 'insensitive' } }] },
+      where: { OR: barcodeLookupOr(code) },
       include,
     });
     // A pack barcode (e.g. a crate) finds its item, and says which pack was scanned

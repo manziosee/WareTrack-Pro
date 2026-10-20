@@ -272,12 +272,12 @@ export default function MyDeliveries() {
     setNotes('');
     setCash(collectsCash(o) ? String(Math.round(Number(o.amountDue ?? o.totalAmount))) : '');
     setHasSignature(false);
-    setDeliveredItems((o.items || []).map((item: any) => ({ itemId: item.itemId, itemName: item.itemName, orderedQuantity: item.quantity, unit: item.unit, barcode: item.item?.barcode, code: item.item?.code, scannedQuantity: 0, deliveredQuantity: 0, scannedCode: '', verified: false })));
+    setDeliveredItems((o.items || []).map((item: any) => ({ itemId: item.itemId, itemName: item.itemName, orderedQuantity: item.quantity, unit: item.unit, barcode: item.item?.barcode, code: item.item?.code, legacyBarcodes: item.item?.legacyBarcodes || [], scannedQuantity: 0, deliveredQuantity: 0, scannedCode: '', verified: false })));
     navigator.geolocation?.getCurrentPosition((pos) => { positionRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }; }, () => undefined, { timeout: 8000 });
   };
 
   const scanDeliveryItem = (code: string) => {
-    const line = deliveredItems.find((item) => item.barcode?.toLowerCase() === code.toLowerCase() || item.code?.toLowerCase() === code.toLowerCase());
+    const line = deliveredItems.find((item) => item.barcode?.toLowerCase() === code.toLowerCase() || item.code?.toLowerCase() === code.toLowerCase() || item.legacyBarcodes.some((value: string) => value.toLowerCase() === code.toLowerCase()));
     if (!line) { toast.error('This barcode is not part of this order'); return; }
     if (line.scannedQuantity >= line.orderedQuantity) { toast.error(`${line.itemName}: the ordered quantity has already been scanned`); return; }
     setDeliveredItems((items) => items.map((item) => item.itemId === line.itemId
