@@ -383,7 +383,9 @@ export class AuthController {
           title: 'Welcome to WareTrack-Pro 🎉',
           name: user.name || user.firstName || 'User',
           message: `Welcome to WareTrack-Pro, ${user.name || user.firstName || 'User'}! You have successfully logged in for the first time.`,
-          template: 'welcome'
+          template: 'welcome',
+          actionPath: '/dashboard',
+          actionLabel: 'Open Dashboard'
         });
       }
 

@@ -11,16 +11,24 @@ export default function ViewOrder() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchOrder = async () => {
       try {
         if (id) {
           const orderData = await ordersService.getOrderById(Number(id));
+          if (!orderData || typeof orderData !== 'object' || Array.isArray(orderData)) {
+            throw new Error('The order response was incomplete. Please refresh and try again.');
+          }
           setOrder(orderData);
         }
       } catch (error) {
         console.error('Failed to fetch order:', error);
+        setError(error instanceof Error ? error.message : 'Could not load this order.');
+      } finally {
+        setLoading(false);
       }
     };
     fetchOrder();
@@ -46,11 +54,11 @@ export default function ViewOrder() {
     }
   };
 
-  if (!order) {
+  if (loading || !order) {
     return (
       <div className="space-y-6">
         <div className="text-center py-12">
-          <p className="text-gray-500">Order not found</p>
+          <p className="text-gray-500">{loading ? 'Loading order…' : error || 'Order not found'}</p>
           <Button variant="secondary" onClick={() => navigate('/orders')} className="mt-4">
             Back to Orders
           </Button>
@@ -58,6 +66,9 @@ export default function ViewOrder() {
       </div>
     );
   }
+
+  const status = String(order.status || 'PENDING').toLowerCase();
+  const items = Array.isArray(order.items) ? order.items : [];
 
   return (
     <div className="space-y-6">
@@ -69,14 +80,14 @@ export default function ViewOrder() {
           </Button>
           <div>
             <h1 className="font-heading text-3xl font-bold text-gray-900">
-              Order {formatOrderNumber(order.id)}
+              Order {order.orderNumber || formatOrderNumber(order.id)}
             </h1>
             <p className="text-gray-600 mt-1">View order details and tracking information</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant={getStatusBadgeVariant(order.status)} size="lg">
-            {order.status ? order.status.replace('_', ' ').toUpperCase() : 'PENDING'}
+          <Badge variant={getStatusBadgeVariant(status)} size="lg">
+            {status.replace('_', ' ').toUpperCase()}
           </Badge>
           <Badge variant={getPriorityBadgeVariant(order.priority)}>
             {order.priority ? `${order.priority.toUpperCase()} priority` : 'MEDIUM priority'}
@@ -116,15 +127,15 @@ export default function ViewOrder() {
               <h3 className="text-lg font-semibold text-gray-900">Order Items</h3>
             </div>
             <div className="space-y-3">
-              {order.items.map((item: any, index: number) => (
+            {items.map((item: any, index: number) => (
                 <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900">{item.name}</p>
-                    <p className="text-sm text-gray-600">Code: {item.code}</p>
+                    <p className="font-medium text-gray-900">{item.itemName || item.item?.name || item.name || 'Item'}</p>
+                    <p className="text-sm text-gray-600">Code: {item.item?.code || item.code || '—'}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-medium text-gray-900">{item.quantity} {item.unit}</p>
-                    <p className="text-sm text-gray-600">RWF {item.price?.toLocaleString() || 'N/A'}</p>
+                    <p className="text-sm text-gray-600">RWF {Number(item.totalPrice ?? item.unitPrice ?? item.price) ? Number(item.totalPrice ?? item.unitPrice ?? item.price).toLocaleString() : 'N/A'}</p>
                   </div>
                 </div>
               ))}
@@ -151,7 +162,7 @@ export default function ViewOrder() {
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-600">Order Number</span>
-                <code className="text-sm bg-gray-100 px-2 py-1 rounded">{formatOrderNumber(order.id)}</code>
+                <code className="text-sm bg-gray-100 px-2 py-1 rounded">{order.orderNumber || formatOrderNumber(order.id)}</code>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Created</span>
@@ -165,7 +176,7 @@ export default function ViewOrder() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Items</span>
-                <span className="text-gray-900">{order.items.length} item{order.items.length > 1 ? 's' : ''}</span>
+                <span className="text-gray-900">{items.length} item{items.length === 1 ? '' : 's'}</span>
               </div>
             </div>
           </Card>
@@ -184,7 +195,7 @@ export default function ViewOrder() {
                   <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
                 </div>
               </div>
-              {order.status !== 'pending' && (
+              {status !== 'pending' && (
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-warning-500 rounded-full mt-2"></div>
                   <div>
@@ -193,7 +204,7 @@ export default function ViewOrder() {
                   </div>
                 </div>
               )}
-              {(order.status === 'in_transit' || order.status === 'delivered') && (
+              {(status === 'in_transit' || status === 'delivered') && (
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-accent-500 rounded-full mt-2"></div>
                   <div>
@@ -202,7 +213,7 @@ export default function ViewOrder() {
                   </div>
                 </div>
               )}
-              {order.status === 'delivered' && (
+              {status === 'delivered' && (
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-success-500 rounded-full mt-2"></div>
                   <div>
@@ -221,7 +232,7 @@ export default function ViewOrder() {
               <Button variant="primary" className="w-full" onClick={() => navigate(`/orders/${order.id}/edit`)}>
                 Edit Order
               </Button>
-              {order.status === 'pending' && (
+              {status === 'pending' && (
                 <Button variant="secondary" className="w-full">
                   <Truck className="w-4 h-4 mr-2" />
                   Assign to Dispatch

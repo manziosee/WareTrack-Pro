@@ -48,14 +48,14 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
         name: item.name,
         code: item.code,
         category: item.category,
-        quantity: item.quantity,
-        minQuantity: item.minQuantity,
+        quantity: Number.isFinite(Number(item.quantity)) ? Number(item.quantity) : 0,
+        minQuantity: Number.isFinite(Number(item.minQuantity)) ? Number(item.minQuantity) : 0,
         unit: item.unit,
         unitCategory: foundCategory,
         location: item.location,
         description: item.description || '',
         status: String(item.status || 'active').toLowerCase(),
-        unitPrice: item.unitPrice || 0,
+        unitPrice: Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : 0,
         supplier: item.supplier || '',
         barcode: item.barcode || ''
       });
@@ -121,7 +121,7 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
           <input
             type="number"
             value={formData.quantity}
-            onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, quantity: Number.parseInt(e.target.value, 10) || 0 })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             required
           />
@@ -131,7 +131,7 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
           <input
             type="number"
             value={formData.minQuantity}
-            onChange={(e) => setFormData({ ...formData, minQuantity: parseInt(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, minQuantity: Number.parseInt(e.target.value, 10) || 0 })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             required
           />
@@ -186,7 +186,7 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
             type="number"
             step="0.01"
             value={formData.unitPrice}
-            onChange={(e) => setFormData({ ...formData, unitPrice: parseFloat(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, unitPrice: Number.parseFloat(e.target.value) || 0 })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>

@@ -18,6 +18,8 @@ services:
         value: "5000"
       - key: FRONTEND_URL
         value: https://ware-track-pro.vercel.app
+      - key: PUBLIC_APP_URL
+        value: https://ware-track-pro.vercel.app
       - key: JWT_EXPIRE
         value: 7d
       - key: API_RATE_LIMIT_PER_15_MIN

@@ -131,7 +131,7 @@ export default function EditInventory() {
               <input
                 type="number"
                 value={formData.quantity}
-                onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, quantity: Number.parseInt(e.target.value, 10) || 0 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
               />
@@ -141,7 +141,7 @@ export default function EditInventory() {
               <input
                 type="number"
                 value={formData.minQuantity}
-                onChange={(e) => setFormData({ ...formData, minQuantity: parseInt(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, minQuantity: Number.parseInt(e.target.value, 10) || 0 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
               />

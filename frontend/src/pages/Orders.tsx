@@ -102,12 +102,19 @@ export default function Orders() {
   };
 
   const changeStatus = async (targets: any[], next: string) => {
-    const ids = new Set(targets.map((o) => o.id));
+    const needsAssignment = ['DISPATCHED', 'IN_TRANSIT', 'DELIVERED'].includes(next);
+    const blocked = needsAssignment ? targets.filter((o) => !o.driverId && !o.driver) : [];
+    const eligible = targets.filter((o) => !blocked.includes(o));
+    if (blocked.length) {
+      toast(`${blocked.length} order${blocked.length === 1 ? ' needs' : 's need'} a driver first; dispatch those from Dispatch.`, { icon: '⚠️', duration: 6000 });
+    }
+    if (!eligible.length) return;
+    const ids = new Set(eligible.map((o) => o.id));
     setRows((list) => list.map((o) => (ids.has(o.id) ? { ...o, status: next } : o)));
-    const results = await Promise.all(targets.map((o) => ordersService.updateOrderStatus(o.id, { status: next }).catch(() => ({ success: false }))));
+    const results = await Promise.all(eligible.map((o) => ordersService.updateOrderStatus(o.id, { status: next }).catch(() => ({ success: false }))));
     const failed = results.filter((r: any) => r?.success === false).length;
     if (failed) toast.error(`${failed} order${failed === 1 ? '' : 's'} could not be updated`);
-    else toast.success(`${targets.length} order${targets.length === 1 ? '' : 's'} marked ${statusLabel(next).toLowerCase()}`);
+    else if (!blocked.length) toast.success(`${eligible.length} order${eligible.length === 1 ? '' : 's'} marked ${statusLabel(next).toLowerCase()}`);
     refresh();
   };
 

@@ -8,6 +8,8 @@ export interface EmailJobData {
   name: string;
   message: string;
   template: string;
+  actionPath?: string;
+  actionLabel?: string;
 }
 
 export interface ReportJobData {
@@ -45,7 +47,9 @@ export class QueueService {
         email: data.email,
         title: data.title,
         name: data.name,
-        message: data.message
+        message: data.message,
+        actionPath: data.actionPath,
+        actionLabel: data.actionLabel
       });
       console.log(`✅ Email ${success ? 'sent successfully' : 'failed'} to: ${data.email}`);
       return { success, sentAt: new Date() };

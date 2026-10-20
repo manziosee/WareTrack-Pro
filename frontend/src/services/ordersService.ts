@@ -42,7 +42,10 @@ export const ordersService = {
 
   async getOrderById(id: number) {
     const response = await api.get(`/orders/${id}`);
-    return response.data;
+    if (response.data?.success === false) {
+      throw new Error(response.data?.error?.message || 'Could not load this order');
+    }
+    return response.data?.data ?? response.data;
   },
 
   async createOrder(data: CreateOrder) {

@@ -69,7 +69,7 @@ async function runScheduledReports() {
     const message = `${r.name} — last ${days} days\n\n${result.columns.join(' | ')}\n${lines.join('\n')}\n\nTotals: ${totals}\n\nOpen the Report Builder in WareTrack Pro for the full report.`;
     const recipients = [r.user.email, ...(r.recipients || '').split(',').map((s) => s.trim()).filter(Boolean)].slice(0, 10);
     for (const email of recipients) {
-      await EmailService.sendEmail({ email, name: email === r.user.email ? r.user.name : 'there', title: `${r.name} (${r.schedule.toLowerCase()} report)`, message });
+      await EmailService.sendEmail({ email, name: email === r.user.email ? r.user.name : 'there', title: `${r.name} (${r.schedule.toLowerCase()} report)`, message, actionPath: '/reports', actionLabel: 'Open Reports' });
     }
     await prisma.savedReport.update({ where: { id: r.id }, data: { lastSentAt: now } });
   }

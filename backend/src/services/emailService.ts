@@ -12,7 +12,14 @@ interface EmailData {
   name: string;
   message: string;
   time?: string;
+  actionPath?: string;
+  actionLabel?: string;
 }
+
+const appUrl = (path: string) => {
+  const origin = (process.env.PUBLIC_APP_URL || 'https://ware-track-pro.vercel.app').replace(/\/$/, '');
+  return `${origin}${path.startsWith('/') ? path : `/${path}`}`;
+};
 
 export class EmailService {
   private static serviceId = process.env.EMAILJS_SERVICE_ID;
@@ -48,12 +55,15 @@ export class EmailService {
 
   private static html(data: EmailData) {
     const body = escapeHtml(data.message).replace(/\n/g, '<br/>');
+    const actionUrl = appUrl(data.actionPath || '/dashboard');
+    const action = `<div style="padding:0 24px 24px"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:#2F5778;color:#fff;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:8px">${escapeHtml(data.actionLabel || 'Open Dashboard')}</a></div>`;
     return `<!doctype html><html><body style="margin:0;background:#F6F8FB;font-family:Arial,Helvetica,sans-serif;color:#1F2937">
 <div style="max-width:560px;margin:24px auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #EEF1F5">
 <div style="background:linear-gradient(135deg,#2F5778,#4682B4);padding:20px 24px;color:#fff">
 <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;opacity:.8">WareTrack Pro</div>
 <div style="font-size:20px;font-weight:bold;margin-top:4px">${escapeHtml(data.title)}</div></div>
 <div style="padding:24px;font-size:15px;line-height:1.6">Hello ${escapeHtml(data.name)},<br/><br/>${body}</div>
+${action}
 <div style="padding:16px 24px;border-top:1px solid #EEF1F5;font-size:12px;color:#6B7280">Sent by WareTrack Pro · ${escapeHtml(data.time || new Date().toLocaleString('en-GB', { timeZone: 'Africa/Kigali' }))}</div>
 </div></body></html>`;
   }
@@ -95,7 +105,18 @@ export class EmailService {
         title: data.title,
         name: data.name,
         message: data.message,
-        time: data.time || new Date().toLocaleString()
+        time: data.time || new Date().toLocaleString(),
+        action_url: appUrl(data.actionPath || '/dashboard'),
+        button_url: appUrl(data.actionPath || '/dashboard'),
+        link: appUrl(data.actionPath || '/dashboard'),
+        url: appUrl(data.actionPath || '/dashboard'),
+        action_label: data.actionLabel || 'Open Dashboard',
+        button_label: data.actionLabel || 'Open Dashboard',
+        dashboard_url: appUrl('/dashboard'),
+        dashboard_link: appUrl('/dashboard'),
+        login_url: appUrl('/login'),
+        reports_url: appUrl('/reports'),
+        report_url: appUrl('/reports')
       }
     }, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
     return response.status === 200;
@@ -115,7 +136,9 @@ export class EmailService {
       email: userEmail,
       title: emailTemplates.orderUpdate.title(orderNumber),
       name: userName,
-      message: emailTemplates.orderUpdate.getMessage(orderNumber, status, userName)
+      message: emailTemplates.orderUpdate.getMessage(orderNumber, status, userName),
+      actionPath: `/track/${encodeURIComponent(orderNumber)}`,
+      actionLabel: 'Track Order'
     });
   }
 
@@ -169,7 +192,9 @@ export class EmailService {
       email: userEmail,
       title: 'Password Reset - WareTrack-Pro',
       name: userName,
-      message: `Your password reset OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request this, please ignore this email.`
+      message: `Your password reset OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request this, please ignore this email.`,
+      actionPath: '/login',
+      actionLabel: 'Go to Sign In'
     });
   }
 
@@ -178,7 +203,9 @@ export class EmailService {
       email: userEmail,
       title: 'Password Reset Successful - WareTrack-Pro',
       name: userName,
-      message: `Your password has been successfully reset.\n\nIf you didn't make this change, please contact support immediately.`
+      message: `Your password has been successfully reset.\n\nIf you didn't make this change, please contact support immediately.`,
+      actionPath: '/login',
+      actionLabel: 'Sign In'
     });
   }
 
@@ -187,7 +214,9 @@ export class EmailService {
       email: userEmail,
       title: 'Login Verification - WareTrack-Pro',
       name: userName,
-      message: `Your login verification OTP is: ${otp}\n\nThis OTP will expire in 5 minutes.\n\nIf you didn't attempt to login, please secure your account immediately.`
+      message: `Your login verification OTP is: ${otp}\n\nThis OTP will expire in 5 minutes.\n\nIf you didn't attempt to login, please secure your account immediately.`,
+      actionPath: '/login',
+      actionLabel: 'Continue to Sign In'
     });
   }
 }
