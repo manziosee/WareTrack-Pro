@@ -1,5 +1,5 @@
 /* WareTrack Pro service worker: the app shell works offline; API data always comes from the network. */
-const VERSION = 'waretrack-v5';
+const VERSION = 'waretrack-v6';
 const SHELL = ['/', '/manifest.webmanifest', '/logo.svg', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -47,6 +47,11 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/assets/') || SHELL.includes(url.pathname)) {
     event.respondWith(
       caches.match(request).then((hit) => hit || fetch(request).then((res) => {
+        // The SPA fallback can return index.html for a removed old chunk. Never
+        // cache that HTML under a JavaScript asset URL.
+        if (url.pathname.startsWith('/assets/') && res.headers.get('content-type')?.includes('text/html')) {
+          return new Response('Asset not found', { status: 404, headers: { 'Content-Type': 'text/plain' } });
+        }
         // Copy before handing the response to the page: its body can only be read once
         if (res.ok) {
           const copy = res.clone();

@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext';
 import { RealtimeProvider } from './context/RealtimeContext';
 import { I18nProvider } from './i18n/I18nContext';
 import MainLayout from './components/layout/MainLayout';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 import RoleGuard from './components/ui/RoleGuard';
 import { PageSkeleton } from './components/ui/Skeleton';
 import type { UserRole } from './types';
@@ -103,6 +104,7 @@ function App() {
           <RealtimeProvider>
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <UsagePageTracker />
+              <ErrorBoundary>
               <Routes>
                 {/* Public */}
                 <Route path="/" element={<Landing />} />
@@ -168,6 +170,7 @@ function App() {
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </ErrorBoundary>
             </BrowserRouter>
             <Toaster
               position="top-right"

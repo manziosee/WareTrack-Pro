@@ -364,7 +364,7 @@ export default function MyDeliveries() {
         <div className={`rounded-2xl border p-3 ${myCash?.cashInHand ? 'border-warning-200 bg-warning-50' : 'border-gray-100 bg-white'}`}>
           <p className="flex items-center gap-1.5 text-xs text-gray-600"><Banknote className="h-3.5 w-3.5" /> Cash in hand</p>
           <p className="text-lg font-bold text-gray-900">RWF {Math.round(myCash?.cashInHand || 0).toLocaleString()}</p>
-          <p className="text-[11px] text-gray-500">{myCash?.payments?.length ? `${myCash.payments.length} deliver${myCash.payments.length === 1 ? 'y' : 'ies'} · hand in at the office` : 'Nothing to hand in'}</p>
+          <p className="text-[11px] text-gray-500">{myCash?.payments?.length ? `${myCash.payments.length} deliver${myCash.payments.length === 1 ? 'y' : 'ies'} · hand this cash to office staff to record the handover` : 'Cash collected on delivery appears here until you hand it to office staff'}</p>
         </div>
         <button onClick={() => setAddingExpense(true)} className="flex flex-col items-start justify-center rounded-2xl border border-gray-100 bg-white p-3 text-left hover:bg-gray-50">
           <span className="flex items-center gap-1.5 text-xs text-gray-600"><Receipt className="h-3.5 w-3.5" /> Fuel or other cost?</span>
@@ -472,7 +472,7 @@ export default function MyDeliveries() {
           {collectsCash(completing) && (
             <label className="block rounded-xl bg-warning-50 p-3 text-sm"><span className="mb-1 flex items-center gap-1.5 font-medium text-warning-900"><Banknote className="h-4 w-4" /> Cash collected (RWF)</span>
               <input type="number" min={0} inputMode="numeric" value={cash} onChange={(e) => setCash(e.target.value)} className="h-11 w-full rounded-xl border border-warning-200 bg-white px-3 text-base font-semibold" />
-              <span className="mt-1 block text-xs text-warning-800">Due: RWF {Math.round(Number(completing.amountDue ?? completing.totalAmount)).toLocaleString()}. Put 0 if the customer didn't pay.</span>
+              <span className="mt-1 block text-xs text-warning-800">Due: RWF {Math.round(Number(completing.amountDue ?? completing.totalAmount)).toLocaleString()}. Enter what the customer actually gives you, or 0 if they did not pay. The amount is added to Cash in hand for office handover.</span>
             </label>
           )}
           <label className="block text-sm"><span className="mb-1 block font-medium text-gray-700">Notes (optional)</span>
