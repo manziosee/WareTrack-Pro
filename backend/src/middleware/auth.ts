@@ -220,6 +220,7 @@ export function permissionForRequest(req: Request): string {
   const method = req.method.toUpperCase();
   const writeAction = /\/(status|complete|cancel|receive|approve|fail|resolve|start|assign|activate|deactivate)(\/|$)/.test(path) ? 'update' : 'create';
   const action = method === 'GET' ? 'read' : method === 'POST' ? writeAction : method === 'DELETE' ? 'delete' : 'update';
+  if (path.includes('/insights/command-center')) return `operations.${action}`;
   if (path.includes('feedback')) return `feedback.${action}`;
   if (path.includes('usage-events')) return `usage.${action}`;
   if (path.includes('adjust')) return 'inventory.adjust';

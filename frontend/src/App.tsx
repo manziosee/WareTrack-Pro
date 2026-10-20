@@ -23,6 +23,8 @@ import NotFound from './pages/NotFound';
 
 // App pages are loaded on demand to keep the first load fast
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const OperationsCenter = lazy(() => import('./pages/OperationsCenter'));
+const ApprovalInbox = lazy(() => import('./pages/ApprovalInbox'));
 const Users = lazy(() => import('./pages/Users'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const EditInventory = lazy(() => import('./pages/EditInventory'));
@@ -62,6 +64,7 @@ const OrderOnline = lazy(() => import('./pages/OrderOnline'));
 const CustomerPortal = lazy(() => import('./pages/CustomerPortal'));
 const Feedback = lazy(() => import('./pages/Feedback'));
 const UsageAnalytics = lazy(() => import('./pages/UsageAnalytics'));
+const DataQuality = lazy(() => import('./pages/DataQuality'));
 
 function UsagePageTracker() {
   const location = useLocation();
@@ -119,6 +122,9 @@ function App() {
 
                 {/* Everyone signed in */}
                 <Route path="/dashboard" element={<AppPage><Dashboard /></AppPage>} />
+                <Route path="/operations-center" element={<AppPage roles={STAFF}><OperationsCenter /></AppPage>} />
+                <Route path="/approvals" element={<AppPage roles={STAFF}><ApprovalInbox /></AppPage>} />
+                <Route path="/data-quality" element={<AppPage roles={STAFF}><DataQuality /></AppPage>} />
                 <Route path="/messages" element={<AppPage><Messages /></AppPage>} />
                 <Route path="/notifications" element={<AppPage><Notifications /></AppPage>} />
                 <Route path="/settings" element={<AppPage><Settings /></AppPage>} />

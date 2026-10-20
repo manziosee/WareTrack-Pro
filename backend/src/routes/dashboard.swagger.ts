@@ -1,5 +1,19 @@
 /**
  * @swagger
+ * /api/insights/command-center:
+ *   get:
+ *     summary: Get tenant-scoped operational alerts and review queues
+ *     description: Returns late and at-risk orders, unassigned deliveries, low stock, driver cash waiting for handover, open feedback, pending stock counts and returns, recent cash discrepancies, and API errors over the past 24 hours.
+ *     tags: [Insights]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Current operations queue for the selected company and branch
+ *       401: { description: Authentication required }
+ *       403: { description: Operations access required }
+ */
+/**
+ * @swagger
  * /api/dashboard/stats:
  *   get:
  *     summary: Get dashboard statistics

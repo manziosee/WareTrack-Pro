@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Building2, Plus, Edit, Wallet, AlertTriangle, Clock, FileText, Upload, Phone, Mail, MapPin, Banknote, RefreshCw, Printer, Link2, ShieldAlert,
+  Building2, Plus, Edit, Wallet, AlertTriangle, Clock, FileText, Upload, Phone, Mail, MapPin, Banknote, RefreshCw, Printer, Link2, ShieldAlert, BarChart3,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
@@ -121,7 +121,7 @@ function AccountDetail({ id, onEdit, onChanged }: { id: number; onEdit: (a: any)
   const [paying, setPaying] = useState(false);
   const { data, refetch } = useQuery({ queryKey: ['account', id], queryFn: async () => (await call('get', `/accounts/${id}`)).data });
   if (!data) return <p className="text-sm text-gray-500">Loading…</p>;
-  const { account, position, payments, orders } = data;
+  const { account, position, payments, orders, profitability } = data;
   const used = position.limit > 0 ? Math.min(100, (position.exposure / position.limit) * 100) : 0;
 
   const statement = () => printStatement(id);
@@ -187,6 +187,12 @@ function AccountDetail({ id, onEdit, onChanged }: { id: number; onEdit: (a: any)
             ))}
           </ul>
         ) : <p className="text-sm text-gray-500">No orders yet.</p>}
+      </DetailSection>
+      <DetailSection title="Customer profitability" icon={<BarChart3 className="h-4 w-4" />}>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[['Delivered sales', profitability?.revenue], ['Estimated product cost', profitability?.estimatedProductCost], ['Delivery costs', profitability?.deliveryCosts], ['Estimated margin', profitability?.estimatedMargin]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-gray-50 p-3"><p className="text-[11px] text-gray-500">{label}</p><p className="mt-1 text-sm font-bold text-gray-900">{rwf(Number(value || 0))}</p></div>)}
+        </div>
+        <p className="mt-2 text-xs text-gray-500">Estimated from delivered order prices, recorded delivery expenses, and average purchase costs. Missing purchase costs may understate margin.</p>
       </DetailSection>
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="secondary" size="sm" onClick={statement}><Printer className="mr-1.5 h-4 w-4" /> Statement</Button>

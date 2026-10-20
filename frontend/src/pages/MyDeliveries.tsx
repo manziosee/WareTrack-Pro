@@ -29,7 +29,7 @@ const slot = (o: any) => {
 const CACHE_KEY = 'waretrack-my-deliveries-cache';
 
 /** Actions waiting for a connection: { url, body, label } (older entries were { orderId, body }). */
-type QueuedAction = { id: string; url: string; body: any; label?: string; status?: 'CONFLICT'; error?: string; queuedAt?: string };
+type QueuedAction = { id: string; url: string; body: any; label?: string; status?: 'CONFLICT'; error?: string; queuedAt?: string; issueReported?: boolean };
 function readQueue(): QueuedAction[] {
   try {
     const items = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
@@ -134,7 +134,17 @@ export default function MyDeliveries() {
         const res = await api.post(item.url, item.body, { headers: { 'Idempotency-Key': item.id } }).catch(() => null);
         if (!res?.status) remaining.push(item);
         else if (res.data?.success === false || res.status >= 400) {
-          remaining.push({ ...item, status: 'CONFLICT', error: res.data?.error?.message || 'The server rejected this saved action. Review it before retrying.' });
+          const conflict: QueuedAction = { ...item, status: 'CONFLICT', error: res.data?.error?.message || 'The server rejected this saved action. Review it before retrying.' };
+          const orderId = item.url.match(/\/(?:orders|my-deliveries)\/(\d+)/)?.[1];
+          if (!item.issueReported) {
+            const report = await api.post('/feedback', {
+              category: 'APP_ISSUE',
+              ...(orderId ? { orderId: Number(orderId) } : {}),
+              message: `Offline ${item.label || 'delivery'} sync failed (sync ID ${item.id})${orderId ? ` for order ${orderId}` : ''}: ${conflict.error}`.slice(0, 4000),
+            }).catch(() => null);
+            if (report?.data?.success) conflict.issueReported = true;
+          }
+          remaining.push(conflict);
         }
       }
       writeQueue(remaining);

@@ -63,6 +63,75 @@ async function checkAnomalies() {
   for (const a of anomalies) await notifyOnce(a.title, a.message, 'ANOMALY', a.severity, 12 * 3600000);
 }
 
+/** Low stock can become critical between manual inventory checks. */
+async function checkStockRisk() {
+  const items = await prisma.inventoryItem.findMany({
+    where: { status: 'ACTIVE', quantity: { lte: prisma.inventoryItem.fields.minQuantity } },
+    select: { id: true, name: true, code: true, quantity: true, minQuantity: true },
+    take: 100,
+  });
+  for (const item of items) {
+    const empty = item.quantity === 0;
+    await notifyOnce(
+      `${empty ? 'Out of stock' : 'Low stock'}: ${item.code}`,
+      `${item.name} (${item.code}) has ${item.quantity} units remaining; minimum is ${item.minQuantity}.`,
+      'LOW_STOCK', empty ? 'ERROR' : 'WARNING', 24 * 3600000,
+    );
+  }
+}
+
+/** Cash left with a driver for a full day needs an office follow-up. */
+async function checkOverdueDriverCash() {
+  const cutoff = new Date(Date.now() - DAY);
+  const pending = await prisma.payment.groupBy({
+    by: ['collectedByDriverId'],
+    where: { provider: 'CASH', status: 'SUCCESSFUL', handoverId: null, collectedByDriverId: { not: null }, completedAt: { lt: cutoff } },
+    _sum: { amount: true }, _min: { completedAt: true }, _count: { _all: true },
+  });
+  for (const row of pending) {
+    if (!row.collectedByDriverId) continue;
+    const driver = await prisma.driver.findUnique({ where: { id: row.collectedByDriverId }, select: { name: true } });
+    if (!driver) continue;
+    const amount = Number(row._sum.amount || 0).toLocaleString();
+    await notifyOnce(
+      `Cash handover overdue: ${driver.name}`,
+      `${driver.name} has RWF ${amount} from ${row._count._all} cash delivery${row._count._all === 1 ? '' : 'ies'} awaiting handover since ${row._min.completedAt?.toLocaleString('en-GB', { timeZone: 'Africa/Kigali' }) || 'yesterday'}.`,
+      'SYSTEM', 'WARNING', 24 * 3600000,
+    );
+  }
+}
+
+/** One brief per active branch, delivered to branch/company administrators. */
+async function sendDailyBriefing() {
+  const tenant = getTenantContext();
+  if (!tenant?.branchId) return;
+  const now = new Date();
+  const kigaliNow = new Date(now.getTime() + 2 * 3600000);
+  const start = new Date(kigaliNow);
+  start.setUTCHours(0, 0, 0, 0);
+  start.setTime(start.getTime() - 2 * 3600000);
+  const branch = await prisma.branch.findUnique({ where: { id: tenant.branchId }, select: { name: true } });
+  const [created, delivered, active, late, lowStock, cashDifferences, openIssues, companyAdmins, branchAdmins] = await Promise.all([
+    prisma.deliveryOrder.count({ where: { createdAt: { gte: start, lte: now } } }),
+    prisma.deliveryOrder.count({ where: { status: 'DELIVERED', deliveredAt: { gte: start, lte: now } } }),
+    prisma.deliveryOrder.count({ where: { status: { in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT'] } } }),
+    prisma.deliveryOrder.count({ where: { status: { in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT'] }, slaDeadline: { lt: now } } }),
+    prisma.inventoryItem.count({ where: { status: 'ACTIVE', quantity: { lte: prisma.inventoryItem.fields.minQuantity } } }),
+    prisma.cashHandover.count({ where: { status: { in: ['SHORT', 'OVER'] }, createdAt: { gte: start } } }),
+    prisma.feedbackReport.count({ where: { status: { in: ['OPEN', 'IN_REVIEW'] } } }),
+    prisma.companyMembership.findMany({ where: { companyId: tenant.companyId, active: true, role: 'ADMIN', user: { status: 'ACTIVE' } }, select: { userId: true } }),
+    prisma.branchMembership.findMany({ where: { branchId: tenant.branchId, active: true, roleOverride: 'ADMIN', membership: { active: true, user: { status: 'ACTIVE' } } }, select: { membership: { select: { userId: true } } } }),
+  ]);
+  const adminIds = [...new Set([...companyAdmins.map((m) => m.userId), ...branchAdmins.map((m) => m.membership.userId)])];
+  const title = `Daily operations briefing · ${branch?.name || 'Branch'}`;
+  const message = `${created} orders created, ${delivered} deliveries completed today. ${active} orders remain active; ${late} are late. ${lowStock} items are at or below minimum stock. ${cashDifferences} cash handover differences and ${openIssues} open operational issues need review.`;
+  for (const userId of adminIds) {
+    const alreadySent = await prisma.notification.findFirst({ where: { userId, title, createdAt: { gte: start } }, select: { id: true } });
+    if (alreadySent) continue;
+    await NotificationService.createNotification({ userId, type: 'SYSTEM', severity: late || cashDifferences ? 'WARNING' : 'INFO', title, message, sendEmail: true });
+  }
+}
+
 async function runScheduledReports() {
   const tenant = getTenantContext();
   if (!tenant) return;
@@ -138,6 +207,8 @@ export function startJobs() {
   const frequent = async () => {
     await safe('tenant jobs', () => forEachTenant(async () => {
       await checkSlaRisk();
+      await checkStockRisk();
+      await checkOverdueDriverCash();
       await checkAnomalies();
       await purgeExpiredOtps();
       await reconcileFleet();
@@ -152,6 +223,7 @@ export function startJobs() {
     if (lastDaily === key || kigali.getUTCHours() < 6) return;
     lastDaily = key;
     if (process.env.AUTO_RESTOCK !== 'false') await safe('auto-restock', () => forEachTenant(() => generateRestockOrders()))();
+    await safe('daily-briefing', () => forEachTenant(sendDailyBriefing))();
   };
 
   setTimeout(safe('dedupe-notifications', () => forEachTenant(dedupeNotifications)), 20 * 1000);

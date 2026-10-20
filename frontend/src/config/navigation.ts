@@ -1,8 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, Users, Package, ShoppingCart, Truck, Car, MapPin, BarChart3, Bell, UserCheck, Settings, Activity,
+  LayoutDashboard, Users, Package, ShoppingCart, Truck, Car, MapPin, BarChart3, Bell, UserCheck, Settings, Activity, Database,
   KanbanSquare, CalendarDays, Map, RotateCcw, ScanLine, Warehouse, FileText, TrendingUp, Award, FileBarChart,
-  Wallet, MessagesSquare, History, Route, Building2, Banknote, Receipt, BookOpen, PackageCheck, ClipboardCheck, MessageSquare,
+  Wallet, MessagesSquare, History, Route, Building2, Banknote, Receipt, BookOpen, PackageCheck, ClipboardCheck, MessageSquare, Siren, ListChecks,
 } from 'lucide-react';
 import type { UserRole } from '@/types';
 
@@ -34,6 +34,9 @@ export const NAV_SECTIONS: NavSection[] = [
     title: 'Overview',
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ALL, keywords: 'home overview', mobileFor: ALL },
+      { name: 'Operations center', href: '/operations-center', icon: Siren, roles: STAFF, keywords: 'command center urgent alerts exceptions approvals' },
+      { name: 'Approval inbox', href: '/approvals', icon: ListChecks, roles: STAFF, keywords: 'review approve stock count returns cash discrepancy' },
+      { name: 'Data quality', href: '/data-quality', icon: Database, roles: STAFF, keywords: 'missing duplicate incomplete records cleanup' },
       { name: 'My Deliveries', href: '/my-deliveries', icon: Route, roles: ['DRIVER'], keywords: 'route stops proof signature', mobileFor: ['DRIVER'] },
     ],
   },

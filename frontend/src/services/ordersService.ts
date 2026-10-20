@@ -13,6 +13,7 @@ export interface Order {
 }
 
 export interface CreateOrder {
+  accountId?: number;
   customerName: string;
   customerEmail?: string;
   customerPhone?: string;

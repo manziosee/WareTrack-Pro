@@ -86,7 +86,7 @@ router.get('/accounts/:id', ...staff, async (req, res, next) => {
   try {
     const account = await prisma.customerAccount.findUnique({ where: { id: Number(req.params.id) } });
     if (!account) return bad(res, 'Account not found', 404);
-    const [position, payments, orders] = await Promise.all([
+    const [position, payments, orders, deliveredOrders] = await Promise.all([
       accountPosition(account.id, account.paymentTermsDays),
       prisma.payment.findMany({
         where: { order: { accountId: account.id }, status: 'SUCCESSFUL' },
@@ -100,7 +100,20 @@ router.get('/accounts/:id', ...staff, async (req, res, next) => {
         take: 30,
         select: { id: true, orderNumber: true, status: true, paymentStatus: true, paymentMethod: true, totalAmount: true, createdAt: true, deliveredAt: true },
       }),
+      prisma.deliveryOrder.findMany({
+        where: { accountId: account.id, status: 'DELIVERED', paymentStatus: { not: 'REFUNDED' } },
+        select: { totalAmount: true, expenses: { where: { status: 'APPROVED' }, select: { amount: true } }, items: { select: { quantity: true, itemId: true, totalPrice: true } } },
+      }),
     ]);
+    const soldItemIds = [...new Set(deliveredOrders.flatMap((o) => o.items.map((i) => i.itemId)))];
+    const costRows = soldItemIds.length ? await prisma.purchaseOrderItem.groupBy({ by: ['itemId'], where: { itemId: { in: soldItemIds }, unitCost: { gt: 0 } }, _avg: { unitCost: true } }) : [];
+    const unitCost = new Map(costRows.map((r) => [r.itemId, Number(r._avg.unitCost || 0)]));
+    const profitability = deliveredOrders.reduce((sum, order) => {
+      const revenue = Number(order.totalAmount);
+      const cost = order.items.reduce((n, item) => n + Number(item.quantity) * (unitCost.get(item.itemId) || 0), 0);
+      const deliveryCosts = order.expenses.reduce((n, expense) => n + Number(expense.amount), 0);
+      return { revenue: sum.revenue + revenue, estimatedProductCost: sum.estimatedProductCost + cost, deliveryCosts: sum.deliveryCosts + deliveryCosts, estimatedMargin: sum.estimatedMargin + revenue - cost - deliveryCosts };
+    }, { revenue: 0, estimatedProductCost: 0, deliveryCosts: 0, estimatedMargin: 0 });
     const limit = money(account.creditLimit);
     res.json({
       success: true,
@@ -109,6 +122,7 @@ router.get('/accounts/:id', ...staff, async (req, res, next) => {
         position: { ...position, limit, available: limit > 0 ? money(limit - position.exposure) : null },
         payments,
         orders,
+        profitability: Object.fromEntries(Object.entries(profitability).map(([key, value]) => [key, money(value)])),
       },
     });
   } catch (error) {
