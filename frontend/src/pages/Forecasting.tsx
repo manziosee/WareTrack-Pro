@@ -17,6 +17,8 @@ export default function Forecasting() {
   const [risk, setRisk] = useState('');
   const [category, setCategory] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [demandUplift, setDemandUplift] = useState(0);
+  const [supplierDelay, setSupplierDelay] = useState(0);
 
   const { data = [], isLoading } = useQuery({
     queryKey: ['forecast'],
@@ -48,6 +50,9 @@ export default function Forecasting() {
   ];
 
   const high = data.filter((i: any) => i.risk === 'high');
+  const scenarioDaily = selected ? Number(selected.avgDailyDemand || 0) * (1 + Math.max(0, Math.min(300, demandUplift)) / 100) : 0;
+  const scenarioCover = scenarioDaily > 0 ? Math.floor(Number(selected?.quantity || 0) / scenarioDaily) : null;
+  const scenarioOrder = selected ? Math.max(0, Math.ceil(scenarioDaily * (Number(selected.leadTimeDays || 7) + supplierDelay + 30) + Number(selected.safetyStock || 0) - Number(selected.quantity || 0))) : 0;
 
   return (
     <div>
@@ -84,6 +89,19 @@ export default function Forecasting() {
         )}
       </div>
 
+      {selected && <section className="mb-5 rounded-2xl border border-primary-100 bg-primary-50/40 p-5">
+        <div className="mb-4"><h2 className="text-base font-semibold text-gray-900">What-if stock plan</h2><p className="mt-1 text-xs text-gray-600">Estimate how higher demand or a late supplier delivery could change this item’s reorder need. This is a planning estimate and does not change stock or create a purchase order.</p></div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="text-sm"><span className="mb-1 flex justify-between font-medium text-gray-700"><span>Demand increase</span><b>{demandUplift}%</b></span><input aria-label="Demand increase percent" type="range" min="0" max="300" step="5" value={demandUplift} onChange={(e) => setDemandUplift(Number(e.target.value))} className="w-full accent-primary-600" /><span className="text-xs text-gray-500">Promotion or new customer demand over baseline</span></label>
+          <label className="text-sm"><span className="mb-1 flex justify-between font-medium text-gray-700"><span>Supplier delay</span><b>{supplierDelay} days</b></span><input aria-label="Supplier delay days" type="range" min="0" max="60" step="1" value={supplierDelay} onChange={(e) => setSupplierDelay(Number(e.target.value))} className="w-full accent-primary-600" /><span className="text-xs text-gray-500">Extra days beyond the normal {selected.leadTimeDays}-day lead time</span></label>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <ScenarioMetric label="Scenario demand" value={`${scenarioDaily.toFixed(1)} ${selected.unit}/day`} />
+          <ScenarioMetric label="Stock cover under scenario" value={scenarioCover === null ? 'No expected demand' : `${scenarioCover} days`} warn={scenarioCover !== null && scenarioCover <= selected.leadTimeDays + supplierDelay} />
+          <ScenarioMetric label="Suggested purchase quantity" value={`${scenarioOrder} ${selected.unit}`} warn={scenarioOrder > 0} />
+        </div>
+      </section>}
+
       <DataTable
         storageKey="forecast"
         rows={rows}
@@ -104,4 +122,8 @@ export default function Forecasting() {
       />
     </div>
   );
+}
+
+function ScenarioMetric({ label, value, warn = false }: { label: string; value: string; warn?: boolean }) {
+  return <div className={`rounded-xl border p-3 ${warn ? 'border-warning-200 bg-warning-50' : 'border-gray-100 bg-white'}`}><p className="text-xs text-gray-500">{label}</p><p className={`mt-1 text-lg font-bold ${warn ? 'text-warning-800' : 'text-gray-900'}`}>{value}</p></div>;
 }
