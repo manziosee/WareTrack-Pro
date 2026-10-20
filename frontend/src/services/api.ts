@@ -88,12 +88,13 @@ api.interceptors.response.use(
       return Promise.reject(new Error('Request timeout. Please try again.'));
     }
     
-    // Return empty data for other network errors to prevent crashes
+    // Reject network failures so callers show an offline/error state instead of
+    // treating an empty placeholder as a successful API response.
     if (error.message?.includes('ERR_INSUFFICIENT_RESOURCES') ||
         error.message?.includes('ERR_CONNECTION_CLOSED') ||
         error.message?.includes('Network Error')) {
-      console.warn('Network error, returning empty response:', error.message);
-      return Promise.resolve({ data: { success: false, data: [], error: 'Network unavailable' } });
+      console.warn('Network request failed:', error.message);
+      return Promise.reject(new Error('Network unavailable. Check your connection and try again.'));
     }
     
     return Promise.reject(error);

@@ -46,7 +46,7 @@ export default function OrderBoard() {
   const move = async (orderId: number, status: string) => {
     const order = rows.find((o) => o.id === orderId);
     if (!order || order.status === status) return;
-    if (status === 'DISPATCHED' && !order.driver) {
+    if (['DISPATCHED', 'IN_TRANSIT', 'DELIVERED'].includes(status) && !order.driverId && !order.driver) {
       toast.error('Assign a driver first: use Dispatch or Auto-dispatch for this order.');
       return;
     }

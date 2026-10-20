@@ -68,12 +68,12 @@ function PackOrder({ id, isAdmin, onChanged }: { id: number; isAdmin: boolean; o
     try { await call('put', `/orders/${id}/packing/lines/${lineId}`, { packedQuantity }); after(); } catch (error: any) { toast.error(error.message); }
   };
   const complete = async (force = false) => {
+    if (!done && isAdmin && !force && !window.confirm('Some items are still missing. Mark this order as packed anyway?')) return;
     try {
       await call('post', `/orders/${id}/packing/complete`, { force });
       toast.success(`${order.orderNumber} packed and ready for dispatch`);
       after();
     } catch (error: any) {
-      if (isAdmin && /Still missing/.test(error.message) && window.confirm(`${error.message}\n\nMark as packed anyway?`)) return complete(true);
       toast.error(error.message, { duration: 6000 });
     }
   };
