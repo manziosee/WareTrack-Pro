@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { storeDataUrl } from '../services/fileStorage';
 
 export class ProofOfDeliveryController {
   static async createProof(req: Request, res: Response) {
@@ -7,13 +8,16 @@ export class ProofOfDeliveryController {
       const { dispatchId, orderId, photoUrl, signatureData, recipientName, notes, latitude, longitude } = req.body;
       
       const confirmationCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const createdById = Number(req.user?.userId) || undefined;
+      const photoRef = await storeDataUrl(photoUrl, 'delivery-photo', { maxBytes: 1_500_000, createdById });
+      const signatureRef = await storeDataUrl(signatureData, 'signature', { maxBytes: 300_000, createdById });
       
       const proof = await prisma.deliveryProof.create({
         data: {
           dispatchId,
           orderId,
-          photoUrl,
-          signatureData,
+          photoUrl: photoRef,
+          signatureData: signatureRef,
           confirmationCode,
           recipientName,
           notes,

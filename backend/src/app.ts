@@ -29,6 +29,9 @@ import platformRoutes from './routes/platform';
 import financeRoutes from './routes/finance';
 import warehouseOpsRoutes from './routes/warehouseOps';
 import intakeRoutes from './routes/intake';
+import filesRoutes from './routes/files';
+import { routingProvider } from './services/routing';
+import { storageBackend } from './services/fileStorage';
 import chatRoutes from './routes/chat';
 import tenancyRoutes from './routes/tenancy';
 import feedbackRoutes from './routes/feedback';
@@ -80,9 +83,28 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Branch-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Branch-Id', 'X-API-Key'],
   maxAge: 86400,
 }));
+
+// Safety net: whatever an endpoint returns, these fields never leave the server
+// (password hashes, authenticator secrets, API key and device token hashes).
+const SECRET_FIELDS = new Set(['password', 'totpSecret', 'keyHash', 'tokenHash']);
+function stripSecrets(value: any, depth = 0): any {
+  if (depth > 12 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((v) => stripSecrets(v, depth + 1));
+  // Only plain objects: Decimals, Dates, Buffers etc. are serialised by their own toJSON
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
+  const out: any = {};
+  for (const [key, v] of Object.entries(value)) if (!SECRET_FIELDS.has(key)) out[key] = stripSecrets(v, depth + 1);
+  return out;
+}
+app.use((_req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body: any) => originalJson(stripSecrets(body));
+  next();
+});
 
 // In production, never send internal error details (SQL, stack traces) to clients.
 // Controllers still log the real error; only the response body is sanitized.
@@ -148,6 +170,8 @@ app.get('/health', async (req, res) => {
     database,
     api: 'up',
     email: { status: EmailService.provider() === 'none' ? 'not_configured' : 'configured', provider: EmailService.provider() },
+    routing: routingProvider(),
+    fileStorage: storageBackend(),
     payments: {
       mobileMoney: process.env.MOMO_API_KEY && process.env.MOMO_API_USER ? 'configured' : 'not_configured',
       airtelMoney: process.env.AIRTEL_CLIENT_ID && process.env.AIRTEL_CLIENT_SECRET ? 'configured' : 'not_configured',
@@ -206,6 +230,7 @@ addUndocumentedRoutes(swaggerSpec, [
   ['/api', 'Customer Accounts, Cash & Expenses', financeRoutes],
   ['/api', 'Stock Counts, Packing & Import', warehouseOpsRoutes],
   ['/api', 'Push, API Keys & Online Ordering', intakeRoutes],
+  ['/api/files', 'Files', filesRoutes],
   ['/api/tenancy', 'Tenancy and Permissions', tenancyRoutes],
   ['/api/feedback', 'Feedback', feedbackRoutes],
   ['/api/usage-events', 'Product Analytics', usageEventRoutes],
@@ -254,6 +279,7 @@ app.use('/api', platformRoutes);
 app.use('/api', financeRoutes);
 app.use('/api', warehouseOpsRoutes);
 app.use('/api', intakeRoutes);
+app.use('/api/files', filesRoutes);
 
 // Unknown routes return JSON instead of Express's HTML page
 app.use((req, res) => {

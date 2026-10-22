@@ -14,6 +14,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [showOtpStep, setShowOtpStep] = useState(false);
   const [otpEmail, setOtpEmail] = useState('');
+  const [trustDevice, setTrustDevice] = useState(true);
   const navigate = useNavigate();
   const { login, verifyOTP, isAuthenticated, loading: authLoading } = useAuth();
 
@@ -73,7 +74,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await verifyOTP(otpEmail, otp);
+      await verifyOTP(otpEmail, otp, trustDevice);
       toast.success('Welcome back!');
       navigate('/dashboard');
     } catch (error: any) {
@@ -145,6 +146,11 @@ export default function Login() {
                   />
                   <p className="text-sm text-gray-500 mt-2">Check your email for the 6-digit verification code</p>
                 </div>
+
+                <label className="flex items-start gap-2.5 text-sm text-gray-700">
+                  <input type="checkbox" checked={trustDevice} onChange={(e) => setTrustDevice(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300" />
+                  <span>Trust this device for 30 days<span className="block text-xs text-gray-500">Skip the emailed code here next time. Untick on shared computers.</span></span>
+                </label>
 
                 <button
                   type="submit"

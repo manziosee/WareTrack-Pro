@@ -5,6 +5,7 @@ import { getJwtSecret } from '../config/env';
 import { recordAudit } from '../middleware/audit';
 import { generateCode, saveOtp, checkOtp } from '../services/otpStore';
 import { verifyTotp } from '../services/totp';
+import { forgetTrustedDevices, isTrustedDevice, trustDevice } from '../services/trustedDevices';
 import { prisma } from '../lib/prisma';
 import { CacheService } from '../services/cacheService';
 import { QueueService } from '../services/queueService';
@@ -13,6 +14,46 @@ import { EmailService } from '../services/emailService';
 const cache = CacheService.getInstance();
 
 // In-memory OTP storage for login (in production, use Redis)
+
+
+/** Record the sign-in and issue tokens (shared by code and trusted-device sign-in). */
+async function completeSignIn(user: any, req: Request) {
+  // Check if this is first login (lastLogin is null)
+  const isFirstLogin = !user.lastLogin;
+  recordAudit({ userId: user.id, action: 'LOGIN', entityType: 'User', entityId: user.id, summary: `${user.name} signed in`, ipAddress: req.ip });
+  
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLogin: new Date() }
+  });
+
+  // Send welcome email for first-time users
+  if (isFirstLogin) {
+    console.log('✅ Welcome to WareTrack-Pro 🎉 - Sent successfully');
+    await QueueService.addEmailJob({
+      email: user.email,
+      title: 'Welcome to WareTrack-Pro 🎉',
+      name: user.name || user.firstName || 'User',
+      message: `Welcome to WareTrack-Pro, ${user.name || user.firstName || 'User'}! You have successfully logged in for the first time.`,
+      template: 'welcome',
+      actionPath: '/dashboard',
+      actionLabel: 'Open Dashboard'
+    });
+  }
+
+  const accessToken = jwt.sign({ userId: user.id, role: user.role }, getJwtSecret(), { expiresIn: '7d' });
+  const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, getJwtSecret(), { expiresIn: '30d' });
+  
+  await cache.setSession(accessToken, user.id);
+  
+  // Never send the password hash or the authenticator secret to the browser
+  const { password: _, totpSecret: __, ...userWithoutPassword } = user;
+  
+  // All users go to dashboard - role-specific routing handled in frontend
+  const redirectUrl = '/dashboard';
+  
+  return { user: userWithoutPassword, tokens: { access: accessToken, refresh: refreshToken }, redirectUrl };
+}
 
 export class AuthController {
   // Generate 6-digit OTP for login
@@ -154,7 +195,8 @@ export class AuthController {
         console.warn('Welcome email failed:', emailError);
       }
       
-      const { password: _, ...userWithoutPassword } = user;
+      // Never send the password hash or the authenticator secret to the browser
+  const { password: _, totpSecret: __, ...userWithoutPassword } = user;
       // No tokens here: every sign-in goes through password + emailed OTP
       res.status(201).json({ 
         success: true,
@@ -258,6 +300,12 @@ export class AuthController {
           message: 'Enter the 6-digit code from your authenticator app',
           data: { email: email.toLowerCase(), otpRequired: true, method: 'totp' }
         });
+      }
+
+      // A browser trusted after an earlier emailed code skips the email
+      if (await isTrustedDevice(user.id, req.body.deviceToken)) {
+        const session = await completeSignIn(user, req);
+        return res.json({ success: true, requiresOTP: false, message: 'Signed in on a trusted device', data: { ...session, trustedDevice: true } });
       }
 
       // Generate and send OTP for login verification (valid 5 minutes, stored hashed)
@@ -366,50 +414,12 @@ export class AuthController {
         });
       }
 
-      // Check if this is first login (lastLogin is null)
-      const isFirstLogin = !user.lastLogin;
-      recordAudit({ userId: user.id, action: 'LOGIN', entityType: 'User', entityId: user.id, summary: `${user.name} signed in`, ipAddress: req.ip });
-      
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { lastLogin: new Date() }
-      });
-
-      // Send welcome email for first-time users
-      if (isFirstLogin) {
-        console.log('✅ Welcome to WareTrack-Pro 🎉 - Sent successfully');
-        await QueueService.addEmailJob({
-          email: user.email,
-          title: 'Welcome to WareTrack-Pro 🎉',
-          name: user.name || user.firstName || 'User',
-          message: `Welcome to WareTrack-Pro, ${user.name || user.firstName || 'User'}! You have successfully logged in for the first time.`,
-          template: 'welcome',
-          actionPath: '/dashboard',
-          actionLabel: 'Open Dashboard'
-        });
-      }
-
-      const accessToken = jwt.sign({ userId: user.id, role: user.role }, getJwtSecret(), { expiresIn: '7d' });
-      const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, getJwtSecret(), { expiresIn: '30d' });
-      
-      await cache.setSession(accessToken, user.id);
-      
-      const { password: _, ...userWithoutPassword } = user;
-      
-      // All users go to dashboard - role-specific routing handled in frontend
-      const redirectUrl = '/dashboard';
-      
-      res.json({ 
-        success: true,
-        data: {
-          user: userWithoutPassword,
-          tokens: {
-            access: accessToken,
-            refresh: refreshToken
-          },
-          redirectUrl
-        }
-      });
+      const session = await completeSignIn(user, req);
+      // "Trust this device": later sign-ins from this browser skip the emailed code
+      const deviceToken = req.body.rememberDevice && !(user.twoFactorEnabled && user.totpSecret)
+        ? await trustDevice(user.id, String(req.headers['user-agent'] || ''))
+        : undefined;
+      res.json({ success: true, data: { ...session, ...(deviceToken && { deviceToken }) } });
     } catch (error: any) {
       console.error('OTP verification error:', error);
       res.status(500).json({
@@ -508,7 +518,8 @@ export class AuthController {
         });
       }
 
-      const { password: _, ...userWithoutPassword } = user;
+      // Never send the password hash or the authenticator secret to the browser
+  const { password: _, totpSecret: __, ...userWithoutPassword } = user;
       res.json({ 
         success: true,
         data: userWithoutPassword
@@ -538,7 +549,7 @@ export class AuthController {
         }
       });
 
-      const { password: _, ...userWithoutPassword } = updatedUser;
+      const { password: _, totpSecret: __, ...userWithoutPassword } = updatedUser;
       res.json({ 
         success: true,
         data: userWithoutPassword
@@ -684,6 +695,8 @@ export class AuthController {
         where: { id: userId },
         data: { password: hashedNewPassword }
       });
+      // A new password signs every trusted browser out of the code-free sign-in
+      await forgetTrustedDevices(user.id);
 
       res.json({ success: true, message: 'Password changed successfully' });
     } catch (error) {

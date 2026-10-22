@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { nextDocumentNumber } from '../lib/documentNumbers';
 
 const DAY = 86400000;
 
@@ -155,10 +156,10 @@ export async function allocateAccountPayment(input: {
   return created;
 }
 
-/** Next number like ACC-0007 / CH-000012 / EXP-000031. */
+/** Next number like ACC-0007 / CH-000012 / EXP-000031 (unique across all companies). */
 export async function nextNumber(model: 'customerAccount' | 'cashHandover' | 'expense', prefix: string, size: number) {
-  const count = await (prisma[model] as any).count();
-  return `${prefix}-${String(count + 1).padStart(size, '0')}`;
+  const kind = model === 'customerAccount' ? 'account' : model === 'cashHandover' ? 'handover' : 'expense';
+  return nextDocumentNumber(kind, prefix, size);
 }
 
 /** Create accounts for customer names used on orders and link those orders. */

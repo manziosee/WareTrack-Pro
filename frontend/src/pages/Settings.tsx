@@ -12,6 +12,7 @@ import SecuritySettings from '@/components/SecuritySettings';
 import SystemConfigurationComponent from '@/components/SystemConfiguration';
 import ReportSettingsComponent from '@/components/ReportSettings';
 import TwoFactorSettings from '@/components/settings/TwoFactorSettings';
+import TrustedDevices from '@/components/settings/TrustedDevices';
 import WebhookSettings from '@/components/settings/WebhookSettings';
 import IntegrationSettings from '@/components/settings/IntegrationSettings';
 import PushSettings from '@/components/settings/PushSettings';
@@ -86,7 +87,7 @@ export default function Settings() {
           </div>
 
           {activeTab === 'profile' && <UserProfile />}
-          {activeTab === 'signin' && <TwoFactorSettings />}
+          {activeTab === 'signin' && <><TwoFactorSettings /><TrustedDevices /></>}
           {activeTab === 'language' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {LANGUAGES.map((l) => (

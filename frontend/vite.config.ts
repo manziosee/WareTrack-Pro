@@ -18,6 +18,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/tests/setup.ts'],
+    // Browser tests in e2e/ run with Playwright, not Vitest
+    include: ['src/**/*.test.{ts,tsx}'],
     css: true,
     // The first jsdom render can be slow on a busy machine or CI runner
     testTimeout: 30000

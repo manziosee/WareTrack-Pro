@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { nextDocumentNumber } from '../lib/documentNumbers';
 import { NotificationService } from './notificationService';
 
 /**
@@ -34,7 +35,6 @@ export async function generateRestockOrders(createdBy?: number) {
     groups.set(supplier.id, [...(groups.get(supplier.id) || []), item]);
   }
 
-  let count = await prisma.purchaseOrder.count();
   const created = [];
   for (const [supplierId, list] of groups) {
     const supplier = suppliers.find((s) => s.id === supplierId)!;
@@ -43,10 +43,9 @@ export async function generateRestockOrders(createdBy?: number) {
       quantity: Math.max(1, i.minQuantity * 3 - i.quantity),
       unitCost: Math.round(Number(i.unitPrice) * 0.72),
     }));
-    count++;
     const po = await prisma.purchaseOrder.create({
       data: {
-        poNumber: `PO-${new Date().getFullYear()}-${String(count).padStart(4, '0')}`,
+        poNumber: await nextDocumentNumber('purchaseOrder', `PO-${new Date().getFullYear()}`, 4),
         supplierId,
         warehouseId: warehouse?.id,
         status: 'DRAFT',

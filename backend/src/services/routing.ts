@@ -92,26 +92,50 @@ export function routeLegs<T extends Stop>(start: Point, route: T[], departAt = n
 }
 
 // ---------------------------------------------------------------------------
-// Real road distances (OSRM, open-source routing on OpenStreetMap data)
+// Real road distances: Mapbox (traffic-aware) when MAPBOX_TOKEN is set,
+// otherwise OSRM (open-source routing on OpenStreetMap data).
 // ---------------------------------------------------------------------------
 
 /** OSRM server; set OSRM_URL=off to use straight-line estimates only. */
 const OSRM_URL = (process.env.OSRM_URL || 'https://router.project-osrm.org').replace(/\/$/, '');
+const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || '';
 const OSRM_TIMEOUT_MS = 4000;
-/** OSRM assumes free-flowing roads; city traffic and stops make trips longer. */
-const TRAFFIC_FACTOR = Number(process.env.ROUTE_TRAFFIC_FACTOR) || 1.6;
+/**
+ * OSRM assumes free-flowing roads, so its times are scaled up for city traffic.
+ * Mapbox "driving-traffic" already includes traffic.
+ */
+const TRAFFIC_FACTOR = Number(process.env.ROUTE_TRAFFIC_FACTOR) || (MAPBOX_TOKEN ? 1.0 : 1.6);
 const osrmCache = new Map<string, { at: number; data: any }>();
+
+export const routingProvider = () => (MAPBOX_TOKEN ? 'mapbox' : OSRM_URL === 'off' ? 'estimate' : 'osrm');
 
 const coords = (points: Point[]) => points.map((p) => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
 
+/** Turn an OSRM-style path (/table/v1/driving/…, /route/v1/driving/…) into the provider's URL. */
+function routingUrl(path: string) {
+  if (!MAPBOX_TOKEN) return `${OSRM_URL}${path}`;
+  const [base, query = ''] = path.split('?');
+  const coordinates = base.split('/').pop()!;
+  const count = coordinates.split(';').length;
+  const params = new URLSearchParams(query);
+  params.set('access_token', MAPBOX_TOKEN);
+  if (base.startsWith('/table/')) {
+    // Traffic-aware matrices allow up to 10 points; larger ones use normal driving times
+    const profile = count <= 10 ? 'driving-traffic' : 'driving';
+    return `https://api.mapbox.com/directions-matrix/v1/mapbox/${profile}/${coordinates}?${params}`;
+  }
+  params.delete('steps');
+  return `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordinates}?${params}`;
+}
+
 async function osrm(path: string) {
-  if (OSRM_URL === 'off') return null;
+  if (!MAPBOX_TOKEN && OSRM_URL === 'off') return null;
   const hit = osrmCache.get(path);
   if (hit && Date.now() - hit.at < 5 * 60_000) return hit.data;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), OSRM_TIMEOUT_MS);
   try {
-    const res = await fetch(`${OSRM_URL}${path}`, { signal: controller.signal, headers: { 'User-Agent': 'WareTrack-Pro' } });
+    const res = await fetch(routingUrl(path), { signal: controller.signal, headers: { 'User-Agent': 'WareTrack-Pro' } });
     if (!res.ok) return null;
     const data = await res.json();
     if (data?.code !== 'Ok') return null;
@@ -127,7 +151,7 @@ async function osrm(path: string) {
 
 /** Road distance (km) and drive time (min) between every pair of points, or null if unavailable. */
 export async function roadMatrix(points: Point[]) {
-  if (points.length < 2 || points.length > 60) return null;
+  if (points.length < 2 || points.length > (MAPBOX_TOKEN ? 25 : 60)) return null;
   const data = await osrm(`/table/v1/driving/${coords(points)}?annotations=duration,distance`);
   if (!data?.distances || !data?.durations) return null;
   return {
@@ -138,7 +162,7 @@ export async function roadMatrix(points: Point[]) {
 
 /** Road distance (km) from several origins to one destination, or null. */
 export async function roadDistancesTo(origins: Point[], destination: Point) {
-  if (!origins.length || origins.length > 60) return null;
+  if (!origins.length || origins.length > (MAPBOX_TOKEN ? 24 : 60)) return null;
   const all = [...origins, destination];
   const sources = origins.map((_, i) => i).join(';');
   const data = await osrm(`/table/v1/driving/${coords(all)}?sources=${sources}&destinations=${origins.length}&annotations=distance,duration`);
@@ -148,7 +172,7 @@ export async function roadDistancesTo(origins: Point[], destination: Point) {
 
 /** The road path through the points, for drawing on the map. */
 export async function roadPath(points: Point[]) {
-  if (points.length < 2 || points.length > 60) return null;
+  if (points.length < 2 || points.length > (MAPBOX_TOKEN ? 25 : 60)) return null;
   const data = await osrm(`/route/v1/driving/${coords(points)}?overview=full&geometries=geojson&steps=false`);
   const route = data?.routes?.[0];
   if (!route) return null;

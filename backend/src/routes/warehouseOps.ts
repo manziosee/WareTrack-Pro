@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { nextDocumentNumber } from '../lib/documentNumbers';
 import { barcodeLookupOr } from '../lib/barcodeLookup';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { NotificationService } from '../services/notificationService';
@@ -136,10 +137,9 @@ router.post('/stock-counts', ...stock, async (req, res, next) => {
     const perWarehouse = warehouseId
       ? new Map((await prisma.warehouseStock.findMany({ where: { warehouseId } })).map((w) => [w.itemId, w.quantity]))
       : null;
-    const total = await prisma.stockCount.count();
     const count = await prisma.stockCount.create({
       data: {
-        countNumber: `SC-${String(total + 1).padStart(5, '0')}`,
+        countNumber: await nextDocumentNumber('stockCount', 'SC', 5),
         title: title ? String(title).slice(0, 80) : type === 'FULL' ? 'Full stocktake' : category ? `${category} count` : 'Cycle count',
         type, category: category || null, warehouseId, notes: notes ? String(notes).slice(0, 500) : null, createdById: userId(req),
         lines: { create: items.map((i) => ({ itemId: i.id, expected: perWarehouse ? perWarehouse.get(i.id) || 0 : i.quantity })) },
@@ -186,7 +186,7 @@ router.post('/stock-counts/:id/scan', ...stock, async (req, res, next) => {
     let units = Math.max(1, Math.round(Number(req.body?.quantity) || 1));
     let item = await prisma.inventoryItem.findFirst({ where: { OR: barcodeLookupOr(code) }, select: { id: true, name: true } });
     if (!item) {
-      const pack = await prisma.itemPackaging.findUnique({ where: { barcode: code } });
+      const pack = await prisma.itemPackaging.findFirst({ where: { barcode: code } });
       if (pack) {
         units *= pack.unitsPerPack;
         item = await prisma.inventoryItem.findUnique({ where: { id: pack.itemId }, select: { id: true, name: true } });
@@ -388,7 +388,7 @@ router.post('/orders/:id/packing/scan', ...staff, async (req, res, next) => {
       const matches = (order.items as any[]).filter((l) => l.item.barcode?.toLowerCase() === code || l.item.code.toLowerCase() === code || l.item.legacyBarcodes.some((value: string) => value.toLowerCase() === code));
       line = matches.find((l) => l.packedQuantity < l.quantity) || matches[0];
       if (!line) {
-        const pack = await prisma.itemPackaging.findUnique({ where: { barcode: String(req.body.code).trim() } });
+        const pack = await prisma.itemPackaging.findFirst({ where: { barcode: String(req.body.code).trim() } });
         line = pack ? order.items.find((l) => l.itemId === pack.itemId) : undefined;
         if (line && pack) units *= pack.unitsPerPack;
       }

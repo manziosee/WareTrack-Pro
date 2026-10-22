@@ -1,6 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
+import { FileInputError, storeDataUrl } from '../services/fileStorage';
+import { nextDocumentNumber } from '../lib/documentNumbers';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { haversineKm, optimizeRouteByRoad, roadDistancesTo, roadLegs, ROAD_FACTOR, type Point } from '../services/routing';
 import { onOrderStatusChanged } from '../services/orderLifecycle';
@@ -328,6 +330,18 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
       normalizedDeliveredItems.push({ itemId: line.itemId, scannedQuantity, deliveredQuantity, orderedQuantity: line.quantity, scannedCode: (scannedCode || line.item.barcode || line.item.code).slice(0, 128) });
     }
 
+    // Signature and photo go to file storage; the proof keeps a short reference
+    let signatureRef: string | null;
+    let photoRef: string | null;
+    try {
+      const createdById = Number(req.user!.userId);
+      signatureRef = await storeDataUrl(signatureData, 'signature', { maxBytes: 300_000, createdById });
+      photoRef = await storeDataUrl(photoData, 'delivery-photo', { maxBytes: 1_500_000, createdById });
+    } catch (error) {
+      if (error instanceof FileInputError) return bad(res, error.message);
+      throw error;
+    }
+
     const now = new Date();
     const confirmationCode = crypto.randomBytes(4).toString('hex').toUpperCase();
     const completion = await prisma.$transaction(async (tx) => {
@@ -343,10 +357,10 @@ router.post('/my-deliveries/:orderId/complete', auth, authorizeRoles('DRIVER'), 
       }
       await tx.deliveryProof.upsert({
         where: { dispatchId: dispatch.id },
-        update: { recipientName, signatureData, photoUrl: photoData || null, notes, latitude, longitude, confirmationCode },
-        create: { dispatchId: dispatch.id, orderId: order.id, recipientName, signatureData, photoUrl: photoData || null, notes, latitude, longitude, confirmationCode },
+        update: { recipientName, signatureData: signatureRef, photoUrl: photoRef, notes, latitude, longitude, confirmationCode },
+        create: { dispatchId: dispatch.id, orderId: order.id, recipientName, signatureData: signatureRef, photoUrl: photoRef, notes, latitude, longitude, confirmationCode },
       });
-      await tx.$executeRaw`UPDATE delivery_proofs SET delivered_items = ${JSON.stringify(normalizedDeliveredItems)}::jsonb WHERE dispatch_id = ${dispatch.id}`;
+      await tx.deliveryProof.update({ where: { dispatchId: dispatch.id }, data: { deliveredItems: normalizedDeliveredItems as any } });
       await tx.dispatch.update({ where: { id: dispatch.id }, data: { status: 'DELIVERED', actualDelivery: now } });
       // Cash on delivery: the driver holds it until they hand it in (Cash page)
       if (cash > 0) {
@@ -403,6 +417,13 @@ router.post('/orders/:orderId/fail', auth, async (req, res, next) => {
     const { reason, notes, photoData } = req.body || {};
     if (!reason) return bad(res, 'A reason is required');
     if (photoData && String(photoData).length > 2_000_000) return bad(res, 'Exception photo is too large');
+    let photoRef: string | null = null;
+    try {
+      photoRef = await storeDataUrl(photoData, 'exception-photo', { maxBytes: 1_500_000, createdById: Number(req.user!.userId) });
+    } catch (error) {
+      if (error instanceof FileInputError) return bad(res, error.message);
+      throw error;
+    }
     const order = await prisma.deliveryOrder.findUnique({ where: { id: Number(req.params.orderId) } });
     if (!order) return bad(res, 'Order not found', 404);
     if (req.user!.role === 'DRIVER') {
@@ -420,9 +441,8 @@ router.post('/orders/:orderId/fail', auth, async (req, res, next) => {
     const ret = await prisma.$transaction(async (tx) => {
       await tx.deliveryOrder.update({ where: { id: order.id }, data: { status: 'FAILED', failureReason: String(reason).slice(0, 200), deliveryAttempts: { increment: 1 } } });
       await tx.dispatch.updateMany({ where: { orderId: order.id, status: { in: ['PENDING', 'DISPATCHED', 'IN_TRANSIT'] } }, data: { status: 'CANCELLED', notes: `Failed: ${reason}` } });
-      const count = await tx.returnRequest.count();
       return tx.returnRequest.create({
-        data: { returnNumber: `RET-${String(count + 1).padStart(6, '0')}`, orderId: order.id, type: 'FAILED_DELIVERY', reason: String(reason).slice(0, 200), notes: notes ? String(notes).slice(0, 2000) : null, photoUrl: photoData || null, createdBy: Number(req.user!.userId) },
+        data: { returnNumber: await nextDocumentNumber('return', 'RET', 6), orderId: order.id, type: 'FAILED_DELIVERY', reason: String(reason).slice(0, 200), notes: notes ? String(notes).slice(0, 2000) : null, photoUrl: photoRef, createdBy: Number(req.user!.userId) },
       });
     });
     await onOrderStatusChanged(order.id, order.status);
@@ -532,10 +552,9 @@ router.post('/returns', ...orderStaff, async (req, res, next) => {
     if (!orderId || !reason) return bad(res, 'orderId and reason are required');
     const order = await prisma.deliveryOrder.findUnique({ where: { id: Number(orderId) } });
     if (!order) return bad(res, 'Order not found', 404);
-    const count = await prisma.returnRequest.count();
     const ret = await prisma.returnRequest.create({
       data: {
-        returnNumber: `RET-${String(count + 1).padStart(6, '0')}`, orderId: order.id, type: 'RETURN', reason, notes,
+        returnNumber: await nextDocumentNumber('return', 'RET', 6), orderId: order.id, type: 'RETURN', reason, notes,
         refundAmount: refundAmount !== undefined ? Number(refundAmount) : Number(order.totalAmount), createdBy: Number(req.user!.userId),
       },
     });

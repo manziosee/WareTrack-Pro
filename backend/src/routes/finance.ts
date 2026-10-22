@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { FileInputError, storeDataUrl } from '../services/fileStorage';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { NotificationService } from '../services/notificationService';
 import {
@@ -512,6 +513,13 @@ router.post('/expenses', auth, async (req, res, next) => {
     const amount = money(body.amount);
     if (!(amount > 0)) return bad(res, 'Amount must be more than 0');
     if (body.receiptPhoto && String(body.receiptPhoto).length > 2_000_000) return bad(res, 'Receipt photo is too large');
+    let receiptRef: string | null = null;
+    try {
+      receiptRef = await storeDataUrl(body.receiptPhoto, 'receipt', { maxBytes: 1_500_000, createdById: Number(req.user!.userId) });
+    } catch (error) {
+      if (error instanceof FileInputError) return bad(res, error.message);
+      throw error;
+    }
     let driverId = num(body.driverId) ?? null;
     let vehicleId = num(body.vehicleId) ?? null;
     if (req.user!.role === 'DRIVER') {
@@ -527,7 +535,7 @@ router.post('/expenses', auth, async (req, res, next) => {
         expenseNumber: await nextNumber('expense', 'EXP', 6), type: body.type, amount,
         liters: num(body.liters) ?? null, odometer: num(body.odometer) !== undefined ? Math.round(Number(body.odometer)) : null,
         vehicleId, driverId, orderId: num(body.orderId) ?? null, description: text(body.description, 300) || null,
-        receiptPhoto: body.receiptPhoto || null, spentAt: body.spentAt ? new Date(body.spentAt) : new Date(),
+        receiptPhoto: receiptRef, spentAt: body.spentAt ? new Date(body.spentAt) : new Date(),
         createdById: Number(req.user!.userId),
         // Staff entries are approved straight away; driver entries wait for review
         status: req.user!.role === 'DRIVER' ? 'PENDING' : 'APPROVED',

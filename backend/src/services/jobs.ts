@@ -10,6 +10,8 @@ import { EmailService } from './emailService';
 import { getTenantContext, runWithTenant } from '../lib/tenantContext';
 import { captureError } from '../config/monitoring';
 import { recordJobFailure, recordJobStart, recordJobSuccess } from './jobHealth';
+import { claimJob, finishJob } from './jobLock';
+import { moveInlineFiles } from './fileMigration';
 
 /**
  * Background jobs. Everything is idempotent and de-duplicated, so restarts and
@@ -184,11 +186,26 @@ async function dedupeNotifications() {
   if (removed || old.count) console.log(`🧹 Notifications tidied: ${removed} duplicates, ${old.count} old read`);
 }
 
-function safe(name: string, fn: () => Promise<unknown>) {
+/**
+ * Run a job safely: errors are logged, and with `windowMs` the job is claimed
+ * in the database first, so with several API servers it runs once per period.
+ * `claimKey` lets daily jobs claim one run per day.
+ */
+function safe(name: string, fn: () => Promise<unknown>, windowMs?: number, claimKey?: () => string) {
   return async () => {
+    if (windowMs) {
+      const key = claimKey ? claimKey() : name;
+      const claimed = await claimJob(key, windowMs).catch((error) => {
+        console.error(`Job "${name}" could not be claimed:`, error?.message || error);
+        return false;
+      });
+      // Another server has it (or ran it this period): that counts as healthy
+      if (!claimed) return recordJobSuccess(name);
+    }
     recordJobStart(name);
     try {
       await fn();
+      if (windowMs) await finishJob(claimKey ? claimKey() : name).catch(() => undefined);
       recordJobSuccess(name);
     } catch (error: any) {
       recordJobFailure(name);
@@ -212,34 +229,32 @@ export function startJobs() {
       await checkAnomalies();
       await purgeExpiredOtps();
       await reconcileFleet();
-    }))();
+      await moveInlineFiles();
+    }), 14 * MINUTE)();
   };
 
-  // Daily jobs run once per day around 06:00 Kigali time (UTC+2)
-  let lastDaily = '';
+  // Daily jobs run once per day (across all servers) from 06:00 Kigali time (UTC+2)
+  const kigaliDay = () => new Date(Date.now() + 2 * 3600000).toISOString().slice(0, 10);
   const daily = async () => {
-    const kigali = new Date(Date.now() + 2 * 3600000);
-    const key = kigali.toISOString().slice(0, 10);
-    if (lastDaily === key || kigali.getUTCHours() < 6) return;
-    lastDaily = key;
-    if (process.env.AUTO_RESTOCK !== 'false') await safe('auto-restock', () => forEachTenant(() => generateRestockOrders()))();
-    await safe('daily-briefing', () => forEachTenant(sendDailyBriefing))();
+    if (new Date(Date.now() + 2 * 3600000).getUTCHours() < 6) return;
+    if (process.env.AUTO_RESTOCK !== 'false') await safe('auto-restock', () => forEachTenant(() => generateRestockOrders()), 23 * 60 * MINUTE, () => `auto-restock:${kigaliDay()}`)();
+    await safe('daily-briefing', () => forEachTenant(sendDailyBriefing), 23 * 60 * MINUTE, () => `daily-briefing:${kigaliDay()}`)();
   };
 
-  setTimeout(safe('dedupe-notifications', () => forEachTenant(dedupeNotifications)), 20 * 1000);
+  setTimeout(safe('dedupe-notifications', () => forEachTenant(dedupeNotifications), 10 * MINUTE), 20 * 1000);
   // First run after customer accounts were added: build them from existing orders
   setTimeout(safe('customer-accounts', async () => forEachTenant(async () => {
     if (await prisma.customerAccount.count()) return;
     const { created, linked } = await linkOrdersToAccounts();
     if (created) console.log(`🏢 Customer accounts created from orders: ${created} accounts, ${linked} orders linked`);
-  })), 15 * 1000);
+  }), 10 * MINUTE), 15 * 1000);
   setTimeout(safe('fleet-status', async () => forEachTenant(async () => {
     const { closedDispatches } = await reconcileFleet();
     if (closedDispatches) console.log(`🚚 Fleet status repaired: ${closedDispatches} stale dispatches closed`);
-  })), 10 * 1000);
+  }), 10 * MINUTE), 10 * 1000);
   setTimeout(frequent, 60 * 1000);
   setInterval(frequent, 15 * MINUTE);
   setInterval(daily, 15 * MINUTE);
-  setInterval(safe('scheduled-reports', () => forEachTenant(runScheduledReports)), 60 * MINUTE);
+  setInterval(safe('scheduled-reports', () => forEachTenant(runScheduledReports), 55 * MINUTE), 60 * MINUTE);
   console.log('⏱️  Background jobs scheduled (SLA risk, anomalies, fleet status, restock, reports)');
 }

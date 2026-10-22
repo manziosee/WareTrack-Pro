@@ -14,7 +14,7 @@ interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<{ requiresOTP?: boolean; email?: string }>;
-  verifyOTP: (email: string, otp: string) => Promise<void>;
+  verifyOTP: (email: string, otp: string, rememberDevice?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   loading: boolean;
@@ -69,9 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { requiresOTP: true, email: response.data?.email };
       }
       
-      // Direct login (shouldn't happen with current 2FA setup)
+      // Trusted browser: signed in without an emailed code
       if (response.data?.user && response.data?.tokens) {
         const userData = { ...response.data.user, role: response.data.user.role as UserRole };
+        localStorage.setItem('token', response.data.tokens.access);
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
         return {};
@@ -84,9 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const verifyOTP = async (email: string, otp: string) => {
+  const verifyOTP = async (email: string, otp: string, rememberDevice = false) => {
     try {
-      const response = await authService.verifyOTP({ email, otp });
+      const response = await authService.verifyOTP({ email, otp, rememberDevice });
       const userData = { ...response.user, role: response.user.role as UserRole };
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);

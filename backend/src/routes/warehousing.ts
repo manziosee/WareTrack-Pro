@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
+import { nextDocumentNumber } from '../lib/documentNumbers';
 import { barcodeLookupOr } from '../lib/barcodeLookup';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { emitEvent } from '../services/events';
@@ -14,7 +15,6 @@ const manage = [auth, authorizeRoles(...ROLES.inventoryManagers)];
 const bad = (res: Response, message: string, status = 400) =>
   res.status(status).json({ success: false, error: { code: status === 404 ? 'NOT_FOUND' : 'VALIDATION_ERROR', message } });
 
-const seq = (prefix: string, n: number, size = 4) => `${prefix}-${String(n).padStart(size, '0')}`;
 
 // ---------------------------------------------------------------------------
 // Warehouses
@@ -113,14 +113,14 @@ router.post('/transfers', ...manage, async (req, res, next) => {
     const source = await prisma.warehouseStock.findUnique({ where: { warehouseId_itemId: { warehouseId: Number(fromWarehouseId), itemId: Number(itemId) } } });
     if (!source || source.quantity < qty) return bad(res, `Only ${source?.quantity ?? 0} units available at the source warehouse`);
 
-    const count = await prisma.stockTransfer.count();
+    const transferNumber = await nextDocumentNumber('transfer', 'TR', 4);
     const transfer = await prisma.$transaction(async (tx) => {
       // Stock leaves the source warehouse immediately and arrives when completed
       const changed = await tx.warehouseStock.updateMany({ where: { id: source.id, quantity: { gte: qty } }, data: { quantity: { decrement: qty } } });
       if (changed.count !== 1) throw new Error('Stock changed while the adjustment was being saved. Refresh and try again.');
       const created = await tx.stockTransfer.create({
         data: {
-          transferNumber: seq('TR', count + 1), fromWarehouseId: Number(fromWarehouseId), toWarehouseId: Number(toWarehouseId),
+          transferNumber, fromWarehouseId: Number(fromWarehouseId), toWarehouseId: Number(toWarehouseId),
           itemId: Number(itemId), quantity: qty, notes, status: 'IN_TRANSIT', createdBy: Number(req.user!.userId),
         },
       });
@@ -283,12 +283,11 @@ router.post('/purchase-orders', ...manage, async (req, res, next) => {
     if (lines.some((l: any) => !l.itemId || !(l.quantity > 0))) return bad(res, 'Each item needs an itemId and a positive quantity');
     const warehouse = await prisma.warehouse.findFirst({ where: { active: true, ...(warehouseId ? { id: Number(warehouseId) } : {}) }, orderBy: { id: 'asc' }, select: { id: true } });
     if (!warehouse) return bad(res, 'Create or select an active warehouse in this branch first', 409);
-    const count = await prisma.purchaseOrder.count();
     const supplier = await prisma.supplier.findUnique({ where: { id: Number(supplierId) } });
     if (!supplier) return bad(res, 'Supplier not found', 404);
     const order = await prisma.purchaseOrder.create({
       data: {
-        poNumber: `PO-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`,
+        poNumber: await nextDocumentNumber('purchaseOrder', `PO-${new Date().getFullYear()}`, 4),
         supplierId: supplier.id,
         warehouseId: warehouse.id,
         expectedDate: expectedDate ? new Date(expectedDate) : new Date(Date.now() + supplier.leadTimeDays * 86400000),
@@ -412,7 +411,7 @@ router.get('/inventory-lookup/:code', auth, async (req, res, next) => {
     // A pack barcode (e.g. a crate) finds its item, and says which pack was scanned
     let packaging = null;
     if (!item) {
-      packaging = await prisma.itemPackaging.findUnique({ where: { barcode: code } });
+      packaging = await prisma.itemPackaging.findFirst({ where: { barcode: code } });
       if (packaging) item = await prisma.inventoryItem.findUnique({ where: { id: packaging.itemId }, include });
     }
     if (!item) return bad(res, `No item found for “${code}”`, 404);

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { nextDocumentNumber } from '../lib/documentNumbers';
 import { emitEvent } from './events';
 import { creditCheck, nextNumber } from './finance';
 import { barcodeLookupOr } from '../lib/barcodeLookup';
@@ -99,11 +100,20 @@ export interface CreateOptions {
   trustPrices?: boolean;
 }
 
-/** Next ORD-###### number, safe even after orders are deleted. */
+async function withUniqueRetry<T>(run: () => Promise<T>, attempts = 5): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (error: any) {
+      const clash = error?.code === 'P2002' && String(error?.meta?.target || '').includes('order_number');
+      if (!clash || attempt >= attempts) throw error;
+    }
+  }
+}
+
+/** Next ORD-###### number, unique across all companies so tracking links stay unambiguous. */
 export async function nextOrderNumber() {
-  const last = await prisma.deliveryOrder.findFirst({ orderBy: { id: 'desc' }, select: { orderNumber: true, id: true } });
-  const fromLast = Number(String(last?.orderNumber || '').replace(/\D/g, '')) || 0;
-  return `ORD-${String(Math.max(fromLast, last?.id || 0) + 1).padStart(6, '0')}`;
+  return nextDocumentNumber('order', 'ORD', 6);
 }
 
 const PRIORITIES = ['HIGH', 'MEDIUM', 'LOW'];
@@ -199,7 +209,8 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
   }
 
   const priority = PRIORITIES.includes(String(input.priority || '').toUpperCase()) ? String(input.priority).toUpperCase() : 'MEDIUM';
-  const order = await prisma.$transaction(async (tx) => {
+  // Two orders created at the same instant could pick the same number: retry with the next one
+  const order = await withUniqueRetry(() => prisma.$transaction(async (tx) => {
     const created = await tx.deliveryOrder.create({
       data: {
         orderNumber: await nextOrderNumber(),
@@ -257,7 +268,7 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
       });
     }
     return created;
-  });
+  }));
 
   emitEvent('order.created', { id: order.id, orderNumber: order.orderNumber, customerName: order.customerName, totalAmount: Number(order.totalAmount), source: order.source });
   return order;

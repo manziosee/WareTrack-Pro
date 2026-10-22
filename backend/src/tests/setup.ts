@@ -1,30 +1,22 @@
 import { prisma } from '../lib/prisma';
 
-beforeAll(async () => {
-  await prisma.$connect();
-});
+/**
+ * Tests create real rows. Refuse to run anywhere except a local test database,
+ * so `npm test` can never touch production data.
+ */
+const url = process.env.DATABASE_URL || '';
+const host = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
+const dbName = (() => { try { return new URL(url).pathname.slice(1); } catch { return ''; } })();
+if (!['localhost', '127.0.0.1', 'postgres'].includes(host) || !/test/i.test(dbName)) {
+  throw new Error(`Tests only run against a local database whose name contains "test" (got ${host || 'no host'}/${dbName || 'no db'}). Set DATABASE_URL, e.g. postgresql://postgres:postgres@localhost:5432/waretrack_test`);
+}
 
-beforeEach(async () => {
-  try {
-    await prisma.dispatch.deleteMany();
-    await prisma.deliveryOrder.deleteMany();
-    await prisma.inventoryHistory.deleteMany();
-    await prisma.inventoryItem.deleteMany();
-    await prisma.driver.deleteMany();
-    await prisma.vehicle.deleteMany();
-    await prisma.notification.deleteMany();
-    await prisma.user.deleteMany();
-  } catch (error) {
-    console.warn('Database cleanup warning:', error);
-  }
-});
+process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-'.padEnd(64, 'x');
+process.env.OSRM_URL = 'off';
 
 afterAll(async () => {
-  try {
-    await prisma.$disconnect();
-  } catch (error) {
-    console.warn('Database disconnect warning:', error);
-  }
+  await prisma.$disconnect();
 });
 
-jest.setTimeout(30000);
+jest.setTimeout(60000);

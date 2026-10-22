@@ -8,6 +8,7 @@ export interface LoginCredentials {
 export interface OTPVerificationData {
   email: string;
   otp: string;
+  rememberDevice?: boolean;
 }
 
 export interface LoginResponse {
@@ -23,6 +24,7 @@ export interface LoginResponse {
       refresh: string;
     };
     redirectUrl?: string;
+    trustedDevice?: boolean;
   };
 }
 
@@ -44,13 +46,28 @@ export interface User {
   lastLogin?: string;
 }
 
+/** Trusted-browser tokens, per email: a trusted browser skips the emailed sign-in code. */
+const DEVICE_KEY = 'waretrack-trusted-devices';
+const readDevices = (): Record<string, string> => {
+  try { return JSON.parse(localStorage.getItem(DEVICE_KEY) || '{}'); } catch { return {}; }
+};
+export const deviceTokenFor = (email: string) => readDevices()[email.trim().toLowerCase()];
+export const rememberDeviceToken = (email: string, token?: string) => {
+  try {
+    const all = readDevices();
+    if (token) all[email.trim().toLowerCase()] = token;
+    else delete all[email.trim().toLowerCase()];
+    localStorage.setItem(DEVICE_KEY, JSON.stringify(all));
+  } catch { /* storage unavailable */ }
+};
+
 export const authService = {
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     try {
       console.log('🔄 Starting login request to:', import.meta.env.VITE_API_URL);
       console.log('📧 Login credentials:', { email: credentials.email, passwordLength: credentials.password.length });
       
-      const response = await api.post('/auth/login', credentials);
+      const response = await api.post('/auth/login', { ...credentials, deviceToken: deviceTokenFor(credentials.email) });
       
       console.log('📥 Login response received:', {
         status: response.status,
@@ -119,6 +136,7 @@ export const authService = {
       
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
+      if (data.deviceToken) rememberDeviceToken(otpData.email, data.deviceToken);
       
       console.log('✅ OTP verification successful, user logged in');
       return { token, user, redirectUrl: data.redirectUrl };

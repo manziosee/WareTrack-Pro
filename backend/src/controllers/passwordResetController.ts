@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
+import { forgetTrustedDevices } from '../services/trustedDevices';
 import { EmailService } from '../services/emailService';
 import { generateCode, saveOtp, checkOtp, clearOtp } from '../services/otpStore';
 import { recordAudit } from '../middleware/audit';
@@ -83,6 +84,8 @@ export class PasswordResetController {
         data: { password: await bcrypt.hash(newPassword, 12) },
       });
       await clearOtp(String(email), 'LOGIN');
+      // A reset password means nobody's old trusted browser keeps skipping codes
+      await forgetTrustedDevices(user.id);
       recordAudit({ userId: user.id, action: 'UPDATE', entityType: 'User', entityId: user.id, summary: `${user.name} reset their password`, ipAddress: req.ip });
       EmailService.sendPasswordResetConfirmation(user.email, user.name).catch(() => undefined);
 

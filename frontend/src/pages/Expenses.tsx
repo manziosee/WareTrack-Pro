@@ -20,6 +20,7 @@ import api from '@/services/api';
 import { useList } from '@/hooks/useList';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/utils/formatters';
+import StoredImage from '@/components/ui/StoredImage';
 
 const rwf = (v: number) => `RWF ${Math.round(Number(v) || 0).toLocaleString()}`;
 const typeLabel = (t: string) => EXPENSE_TYPES.find(([v]) => v === t)?.[1] || t;
@@ -57,7 +58,7 @@ function ExpenseDetail({ id, canReview, canDelete, onChanged }: { id: number; ca
         </DetailGrid>
       </DetailSection>
       <DetailSection title="Receipt" icon={<ImageIcon className="h-4 w-4" />}>
-        {e.receiptPhoto ? <a href={e.receiptPhoto} target="_blank" rel="noreferrer"><img src={e.receiptPhoto} alt="Receipt" className="max-h-80 w-full rounded-xl object-contain" /></a> : <p className="text-sm text-gray-500">No receipt photo.</p>}
+        {e.receiptPhoto ? <StoredImage value={e.receiptPhoto} alt="Receipt" className="max-h-80 w-full rounded-xl object-contain" link /> : <p className="text-sm text-gray-500">No receipt photo.</p>}
       </DetailSection>
       {canReview && e.status === 'PENDING' && (
         <div className="space-y-2 rounded-xl bg-gray-50 p-3">
