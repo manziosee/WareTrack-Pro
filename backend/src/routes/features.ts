@@ -11,7 +11,10 @@ import { UserPreferencesController } from '../controllers/userPreferencesControl
 import { authenticateToken, authorizeRoles, ROLES } from '../middleware/auth';
 import { publicTenant } from '../middleware/publicTenant';
 import { prisma } from '../lib/prisma';
-import { runWithoutTenant } from '../lib/tenantContext';
+import { runWithTenant, runWithoutTenant } from '../lib/tenantContext';
+import { buildInvoice, InvoiceError } from '../services/invoices';
+import { buildStatement } from '../services/finance';
+import { CollectionError, checkMobilePayment, requestMobilePayment } from '../services/collections';
 
 const router = express.Router();
 
@@ -192,6 +195,95 @@ router.post('/customer/feedback', authenticateCustomer, async (req: any, res, ne
  *       409: { description: One or more items no longer have enough stock }
  */
 router.post('/customer/reorder/:orderId', authenticateCustomer, CustomerPortalController.reorder);
+
+/** The customer's own order (placed by them, or on an account with their email), inside their company. */
+async function customerOrder(req: any, orderId: number) {
+  return runWithTenant({ companyId: req.customer.companyId, branchId: null, allBranches: true }, async () => prisma.deliveryOrder.findFirst({
+    where: { id: orderId, OR: [{ customerId: req.customer.customerId }, { account: { email: { equals: req.customer.email, mode: 'insensitive' } } }] },
+    select: { id: true, orderNumber: true, branchId: true },
+  }));
+}
+const asCustomer = <T>(req: any, fn: () => Promise<T>) => runWithTenant({ companyId: req.customer.companyId, branchId: null, allBranches: true }, async () => await fn());
+
+/**
+ * @swagger
+ * /api/features/customer/orders/{orderId}/invoice:
+ *   get:
+ *     tags: [Customer Portal]
+ *     summary: Invoice of one of the customer's orders (VAT per line)
+ *     parameters: [{ in: path, name: orderId, required: true, schema: { type: integer } }]
+ *     responses: { 200: { description: Invoice }, 404: { description: Not your order } }
+ */
+router.get('/customer/orders/:orderId/invoice', authenticateCustomer, async (req: any, res, next) => {
+  try {
+    const order = await customerOrder(req, Number(req.params.orderId));
+    if (!order) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
+    res.json({ success: true, data: await asCustomer(req, () => buildInvoice(order.id)) });
+  } catch (error: any) {
+    if (error instanceof InvoiceError) return res.status(error.status).json({ success: false, error: { code: 'NOT_FOUND', message: error.message } });
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/features/customer/statement:
+ *   get:
+ *     tags: [Customer Portal]
+ *     summary: The customer's account statement(s) - orders, payments, credit notes and balance
+ *     parameters:
+ *       - { in: query, name: from, schema: { type: string, format: date } }
+ *       - { in: query, name: to, schema: { type: string, format: date } }
+ *     responses: { 200: { description: One statement per account with the customer's email } }
+ */
+router.get('/customer/statement', authenticateCustomer, async (req: any, res, next) => {
+  try {
+    const statements = await asCustomer(req, async () => {
+      const accounts = await prisma.customerAccount.findMany({ where: { email: { equals: req.customer.email, mode: 'insensitive' } } });
+      return Promise.all(accounts.map((a) => buildStatement(a, req.query.from, req.query.to)));
+    });
+    res.json({ success: true, data: statements });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/features/customer/orders/{orderId}/pay:
+ *   post:
+ *     tags: [Customer Portal]
+ *     summary: Pay what an order still owes with MTN MoMo or Airtel Money (the phone gets an approval prompt)
+ *     parameters: [{ in: path, name: orderId, required: true, schema: { type: integer } }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [provider], properties: { provider: { type: string, enum: [MTN_MOMO, AIRTEL_MONEY] }, phoneNumber: { type: string } } }
+ *     responses: { 201: { description: Payment requested; check its status }, 503: { description: Mobile Money not available yet } }
+ */
+router.post('/customer/orders/:orderId/pay', authenticateCustomer, async (req: any, res, next) => {
+  try {
+    const order = await customerOrder(req, Number(req.params.orderId));
+    if (!order) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
+    const payment = await runWithTenant({ companyId: req.customer.companyId, branchId: order.branchId }, async () => requestMobilePayment(order.id, String(req.body?.provider || ''), req.body?.phoneNumber));
+    res.status(201).json({ success: true, data: { id: payment.id, status: payment.status, amount: Number(payment.amount), provider: payment.provider } });
+  } catch (error: any) {
+    if (error instanceof CollectionError) return res.status(error.status).json({ success: false, error: { code: 'PAYMENT_ERROR', message: error.message } });
+    next(error);
+  }
+});
+
+router.get('/customer/payments/:id', authenticateCustomer, async (req: any, res, next) => {
+  try {
+    const payment = await asCustomer(req, () => prisma.payment.findUnique({ where: { id: Number(req.params.id) }, select: { id: true, orderId: true } }));
+    if (!payment || !(await customerOrder(req, payment.orderId))) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Payment not found' } });
+    const checked = await asCustomer(req, () => checkMobilePayment(payment.id));
+    res.json({ success: true, data: { id: checked!.id, status: checked!.status, amount: Number(checked!.amount), provider: checked!.provider, message: checked!.message } });
+  } catch (error: any) {
+    if (error instanceof CollectionError) return res.status(error.status).json({ success: false, error: { code: 'PAYMENT_ERROR', message: error.message } });
+    next(error);
+  }
+});
 
 // Predictive Maintenance
 router.post('/maintenance/vehicle-health', authenticateToken, PredictiveMaintenanceController.recordVehicleHealth);

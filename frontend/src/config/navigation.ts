@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Truck, Car, MapPin, BarChart3, Bell, UserCheck, Settings, Activity, Database,
   KanbanSquare, CalendarDays, Map, RotateCcw, ScanLine, Warehouse, FileText, TrendingUp, Award, FileBarChart,
-  Wallet, MessagesSquare, History, Route, Building2, Banknote, Receipt, BookOpen, PackageCheck, ClipboardCheck, MessageSquare, Siren, ListChecks,
+  Wallet, MessagesSquare, History, Route, Building2, Banknote, Receipt, BookOpen, PackageCheck, ClipboardCheck, MessageSquare, Siren, ListChecks, Container, Tag,
 } from 'lucide-react';
 import type { UserRole } from '@/types';
 
@@ -46,6 +46,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { name: 'Orders', href: '/orders', icon: ShoppingCart, roles: STAFF, keywords: 'deliveries customers', mobileFor: ['WAREHOUSE_STAFF', 'DISPATCH_OFFICER', 'ADMIN'] },
       { name: 'Order Board', href: '/orders/board', icon: KanbanSquare, roles: STAFF, keywords: 'kanban drag status pipeline' },
       { name: 'Dispatch', href: '/dispatch', icon: Truck, roles: FLEET, keywords: 'assign schedule auto', mobileFor: ['DISPATCH_OFFICER'] },
+      { name: 'Trip planner', href: '/trips', icon: Container, roles: FLEET, keywords: 'load vehicle capacity weight volume several orders route plan' },
       { name: 'Live Map', href: '/map', icon: Map, roles: FLEET, keywords: 'drivers location gps', mobileFor: ['DISPATCH_OFFICER', 'ADMIN'] },
       { name: 'Calendar', href: '/calendar', icon: CalendarDays, roles: FLEET, keywords: 'schedule maintenance week' },
       { name: 'Tracking', href: '/tracking', icon: MapPin, roles: ['ADMIN', 'DISPATCH_OFFICER', 'DRIVER'], keywords: 'deliveries status' },
@@ -85,6 +86,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: 'Payments', href: '/payments', icon: Wallet, roles: STAFF, keywords: 'momo airtel invoices cash' },
       { name: 'Customer accounts', href: '/accounts', icon: Building2, roles: STAFF, keywords: 'credit balance owe debt statement customers' },
+      { name: 'Pricing', href: '/pricing', icon: Tag, roles: STAFF, keywords: 'price list promotion discount offer special customer price quote' },
       { name: 'Driver cash', href: '/cash', icon: Banknote, roles: STAFF, keywords: 'cash on delivery handover reconcile' },
       { name: 'Accounting export', href: '/accounting', icon: BookOpen, roles: ['ADMIN'], keywords: 'quickbooks odoo vat csv accountant' },
     ],

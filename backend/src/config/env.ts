@@ -45,5 +45,8 @@ export function getAllowedOrigins(): string[] {
   if (process.env.NODE_ENV !== 'production') {
     configured.push('http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173');
   }
+  // The Android driver app (Capacitor) loads the web app from this origin.
+  // Sign-in uses a bearer token, not cookies, so this grants no ambient access.
+  configured.push('https://localhost');
   return Array.from(new Set(configured));
 }

@@ -12,6 +12,8 @@ import { captureError } from '../config/monitoring';
 import { recordJobFailure, recordJobStart, recordJobSuccess } from './jobHealth';
 import { claimJob, finishJob } from './jobLock';
 import { moveInlineFiles } from './fileMigration';
+import { expiringDocuments } from '../routes/stockFleet';
+import { buildSummary, summaryPdf, summaryText, PERIOD_NAMES, type SummaryPeriod } from './summaryReport';
 
 /**
  * Background jobs. Everything is idempotent and de-duplicated, so restarts and
@@ -134,6 +136,54 @@ async function sendDailyBriefing() {
   }
 }
 
+/**
+ * PDF management summary per branch. Admins get the weekly one on Mondays
+ * unless they switched email reports off; anyone who turned on automatic
+ * reports gets the daily, weekly (Monday) or monthly (1st) one they chose.
+ */
+export async function sendSummaryReports(now = new Date()) {
+  const tenant = getTenantContext();
+  if (!tenant?.branchId) return { sent: 0 };
+  const local = new Date(now.getTime() + 2 * 3600000);
+  const due: SummaryPeriod[] = ['day'];
+  if (local.getUTCDay() === 1) due.push('week');
+  if (local.getUTCDate() === 1) due.push('month');
+
+  const [companyMembers, branchMembers] = await Promise.all([
+    prisma.companyMembership.findMany({ where: { companyId: tenant.companyId, active: true, user: { status: 'ACTIVE' } }, select: { userId: true, role: true } }),
+    prisma.branchMembership.findMany({ where: { branchId: tenant.branchId, active: true, membership: { active: true, user: { status: 'ACTIVE' } } }, select: { roleOverride: true, membership: { select: { userId: true } } } }),
+  ]);
+  const admins = new Set([...companyMembers.filter((m) => m.role === 'ADMIN').map((m) => m.userId), ...branchMembers.filter((m) => m.roleOverride === 'ADMIN').map((m) => m.membership.userId)]);
+  // Only people who work in this branch (or company admins) receive its summary
+  const inBranch = new Set([...admins, ...branchMembers.map((m) => m.membership.userId)]);
+  const users = await prisma.user.findMany({ where: { id: { in: [...inBranch] } }, select: { id: true, name: true, email: true, reportSettings: true } });
+
+  const wanted = new Map<SummaryPeriod, typeof users>();
+  for (const u of users) {
+    const settings = u.reportSettings;
+    if (settings && !settings.emailReports) continue;
+    const chosen: SummaryPeriod | null = settings?.autoReportsEnabled
+      ? ({ daily: 'day', weekly: 'week', monthly: 'month' } as Record<string, SummaryPeriod>)[settings.reportFrequency] || 'week'
+      : admins.has(u.id) ? 'week' : null;
+    if (chosen && due.includes(chosen)) wanted.set(chosen, [...(wanted.get(chosen) || []), u]);
+  }
+
+  let sent = 0;
+  for (const [period, recipients] of wanted) {
+    const summary = await buildSummary(period, now);
+    const pdf = await summaryPdf(summary);
+    const filename = `waretrack-${period}-summary-${summary.from.toISOString().slice(0, 10)}.pdf`;
+    for (const u of recipients) {
+      const ok = await EmailService.sendEmail({
+        email: u.email, name: u.name, title: `${PERIOD_NAMES[period]} summary · ${summary.branch}`, message: summaryText(summary),
+        actionPath: '/reports', actionLabel: 'Open Reports', attachments: [{ filename, content: pdf }],
+      });
+      if (ok) sent++;
+    }
+  }
+  return { sent };
+}
+
 async function runScheduledReports() {
   const tenant = getTenantContext();
   if (!tenant) return;
@@ -215,6 +265,17 @@ function safe(name: string, fn: () => Promise<unknown>, windowMs?: number, claim
   };
 }
 
+/** Remind fleet managers 30, 14, 7 and 1 day(s) before insurance, inspection or licences expire. */
+async function remindExpiringDocuments() {
+  const soon = await expiringDocuments(30);
+  for (const d of soon) {
+    if (![30, 14, 7, 1, 0].includes(d.daysLeft) && d.daysLeft > 0) continue;
+    const when = d.daysLeft < 0 ? `expired ${-d.daysLeft} day${d.daysLeft === -1 ? '' : 's'} ago` : d.daysLeft === 0 ? 'expires today' : `expires in ${d.daysLeft} day${d.daysLeft === 1 ? '' : 's'}`;
+    // Expired documents are repeated weekly, upcoming ones once per milestone
+    await notifyOnce(`${d.name} ${when}`, `${d.name}${d.number ? ` (${d.number})` : ''} ${when}. Renew it to keep the ${d.kind === 'vehicle' ? 'vehicle' : 'driver'} on the road.`, 'SYSTEM', d.daysLeft <= 7 ? 'WARNING' : 'INFO', 7 * DAY);
+  }
+}
+
 let started = false;
 
 export function startJobs() {
@@ -239,6 +300,8 @@ export function startJobs() {
     if (new Date(Date.now() + 2 * 3600000).getUTCHours() < 6) return;
     if (process.env.AUTO_RESTOCK !== 'false') await safe('auto-restock', () => forEachTenant(() => generateRestockOrders()), 23 * 60 * MINUTE, () => `auto-restock:${kigaliDay()}`)();
     await safe('daily-briefing', () => forEachTenant(sendDailyBriefing), 23 * 60 * MINUTE, () => `daily-briefing:${kigaliDay()}`)();
+    await safe('summary-reports', () => forEachTenant(sendSummaryReports), 23 * 60 * MINUTE, () => `summary-reports:${kigaliDay()}`)();
+    await safe('document-reminders', () => forEachTenant(remindExpiringDocuments), 23 * 60 * MINUTE, () => `document-reminders:${kigaliDay()}`)();
   };
 
   setTimeout(safe('dedupe-notifications', () => forEachTenant(dedupeNotifications), 10 * MINUTE), 20 * 1000);

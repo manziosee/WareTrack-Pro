@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
@@ -33,6 +34,8 @@ const ViewOrder = lazy(() => import('./pages/ViewOrder'));
 const EditOrder = lazy(() => import('./pages/EditOrder'));
 const OrderBoard = lazy(() => import('./pages/OrderBoard'));
 const Dispatch = lazy(() => import('./pages/Dispatch'));
+const TripPlanner = lazy(() => import('./pages/TripPlanner'));
+const Pricing = lazy(() => import('./pages/Pricing'));
 const LiveMap = lazy(() => import('./pages/LiveMap'));
 const Calendar = lazy(() => import('./pages/Calendar'));
 const Vehicles = lazy(() => import('./pages/Vehicles'));
@@ -110,7 +113,8 @@ function App() {
               <ErrorBoundary>
               <Routes>
                 {/* Public */}
-                <Route path="/" element={<Landing />} />
+                {/* The Android driver app opens straight on sign-in */}
+                <Route path="/" element={Capacitor.isNativePlatform() ? <Navigate to="/login" replace /> : <Landing />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -140,6 +144,7 @@ function App() {
                 <Route path="/orders/:id" element={<AppPage roles={STAFF}><ViewOrder /></AppPage>} />
                 <Route path="/orders/:id/edit" element={<AppPage roles={STAFF}><EditOrder /></AppPage>} />
                 <Route path="/dispatch" element={<AppPage roles={FLEET}><Dispatch /></AppPage>} />
+                <Route path="/trips" element={<AppPage roles={FLEET}><TripPlanner /></AppPage>} />
                 <Route path="/map" element={<AppPage roles={FLEET}><LiveMap /></AppPage>} />
                 <Route path="/calendar" element={<AppPage roles={FLEET}><Calendar /></AppPage>} />
                 <Route path="/tracking" element={<AppPage roles={['ADMIN', 'DISPATCH_OFFICER', 'DRIVER']}><Tracking /></AppPage>} />
@@ -163,6 +168,7 @@ function App() {
                 <Route path="/reports/builder" element={<AppPage roles={STAFF}><ReportBuilder /></AppPage>} />
                 <Route path="/payments" element={<AppPage roles={STAFF}><Payments /></AppPage>} />
                 <Route path="/accounts" element={<AppPage roles={STAFF}><Accounts /></AppPage>} />
+                <Route path="/pricing" element={<AppPage roles={STAFF}><Pricing /></AppPage>} />
                 <Route path="/cash" element={<AppPage roles={STAFF}><Cash /></AppPage>} />
                 <Route path="/expenses" element={<AppPage roles={['ADMIN', 'DISPATCH_OFFICER', 'DRIVER']}><Expenses /></AppPage>} />
                 <Route path="/accounting" element={<AppPage roles={['ADMIN']}><Accounting /></AppPage>} />

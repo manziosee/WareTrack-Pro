@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { getTenantContext } from '../lib/tenantContext';
+import { priceLine } from './pricing';
 import { nextDocumentNumber } from '../lib/documentNumbers';
 import { emitEvent } from './events';
 import { creditCheck, nextNumber } from './finance';
@@ -135,8 +137,11 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
   }
   if (!Array.isArray(input.items) || !input.items.length) throw new OrderInputError('At least one item is required');
 
-  // Resolve items (by id, or by code/barcode) and packs
-  const lines: { itemId: number; itemName: string; quantity: number; unit: string; unitPrice: number; totalPrice: number; stockUnits: number; packagingId: number | null; packQuantity: number | null }[] = [];
+  // Resolve items (by id, or by code/barcode) and packs, and price each line
+  const tenant = getTenantContext();
+  const company = tenant ? await prisma.company.findUnique({ where: { id: tenant.companyId }, select: { taxRate: true } }) : null;
+  const companyTaxRate = company ? Number(company.taxRate) : 0.18;
+  const lines: { itemId: number; itemName: string; quantity: number; unit: string; unitPrice: number; totalPrice: number; listPrice: number; discountAmount: number; vatRate: number; stockUnits: number; packagingId: number | null; packQuantity: number | null }[] = [];
   const shortages: string[] = [];
   const need = new Map<number, number>();
   const itemNames = new Map<number, { name: string; unit: string }>();
@@ -157,9 +162,11 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
       if (!pack) throw new OrderInputError(`That pack size isn't set up for ${item.name}`);
     }
     const stockUnits = pack ? quantity * pack.unitsPerPack : quantity;
-    const listPrice = pack ? (Number(pack.price) || Number(item.unitPrice) * pack.unitsPerPack) : Number(item.unitPrice);
-    const given = Number(raw.unitPrice ?? raw.price);
-    const unitPrice = options.trustPrices && Number.isFinite(given) && given >= 0 ? given : listPrice;
+    // Customer price list, promotions and discount; staff may still type a price by hand
+    const priced = await priceLine({ item, pack, quantity, account, companyTaxRate });
+    const given = raw.unitPrice === undefined || raw.unitPrice === null || raw.unitPrice === '' ? NaN : Number(raw.unitPrice ?? raw.price);
+    const unitPrice = options.trustPrices && Number.isFinite(given) && given >= 0 ? given : priced.unitPrice;
+    const listPrice = priced.listPrice;
 
     need.set(item.id, (need.get(item.id) || 0) + stockUnits);
     itemNames.set(item.id, { name: item.name, unit: item.unit });
@@ -170,6 +177,9 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
       unit: pack ? pack.name : raw.unit || item.unit,
       unitPrice: pack ? Math.round((unitPrice / pack.unitsPerPack) * 100) / 100 : unitPrice,
       totalPrice: Math.round(quantity * unitPrice * 100) / 100,
+      listPrice: Math.round(quantity * listPrice * 100) / 100,
+      discountAmount: Math.max(0, Math.round(quantity * (listPrice - unitPrice) * 100) / 100),
+      vatRate: priced.vatRate,
       stockUnits,
       packagingId: pack?.id ?? null,
       packQuantity: pack ? quantity : null,
@@ -259,6 +269,8 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
         if (stock.count !== 1) throw new OrderInputError(`${itemNames.get(itemId)?.name || 'An item'} stock changed in this branch. Refresh and try again.`, 409, 'INSUFFICIENT_STOCK');
         await tx.stockReservation.create({ data: { orderId: created.id, itemId, warehouseId: allocation.warehouseId, quantity: allocation.quantity, createdById: options.createdBy } });
       }
+      // Take batches that expire first (FEFO) and note them on the order lines
+      await allocateBatches(tx, created, itemId, units, (allocations.get(itemId) || []).map((a) => a.warehouseId));
       await tx.inventoryHistory.create({
         data: {
           itemId, action: 'order_allocation', quantity: units, previousQuantity: before.quantity,
@@ -267,11 +279,48 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
         },
       });
     }
-    return created;
+    return tx.deliveryOrder.findUnique({ where: { id: created.id }, include: { items: { include: { item: true } }, driver: true, vehicle: true, account: true } }) as Promise<typeof created>;
   }));
 
   emitEvent('order.created', { id: order.id, orderNumber: order.orderNumber, customerName: order.customerName, totalAmount: Number(order.totalAmount), source: order.source });
   return order;
+}
+
+/**
+ * Earliest-expiry-first: take `units` of an item from its batches (in the
+ * warehouses the stock came from), and record which batches on the order lines.
+ */
+async function allocateBatches(tx: any, order: { id: number; items: { id: number; itemId: number; quantity: number }[] }, itemId: number, units: number, warehouseIds: number[]) {
+  const batches = await tx.inventoryBatch.findMany({
+    where: { itemId, quantity: { gt: 0 }, ...(warehouseIds.length ? { OR: [{ warehouseId: { in: warehouseIds } }, { warehouseId: null }] } : {}) },
+    orderBy: [{ expiryDate: { sort: 'asc', nulls: 'last' } }, { receivedAt: 'asc' }],
+  });
+  if (!batches.length) return;
+  const taken: { batchId: number; batchNumber: string; expiryDate: Date | null; quantity: number }[] = [];
+  let remaining = units;
+  for (const batch of batches) {
+    if (!remaining) break;
+    const take = Math.min(batch.quantity, remaining);
+    const changed = await tx.inventoryBatch.updateMany({ where: { id: batch.id, quantity: { gte: take } }, data: { quantity: { decrement: take } } });
+    if (changed.count !== 1) continue;
+    taken.push({ batchId: batch.id, batchNumber: batch.batchNumber, expiryDate: batch.expiryDate, quantity: take });
+    remaining -= take;
+  }
+  // Split the batches over the item's lines in order
+  let pool = taken.map((t) => ({ ...t }));
+  for (const line of order.items.filter((l) => l.itemId === itemId)) {
+    let need = line.quantity;
+    const forLine: typeof taken = [];
+    for (const t of pool) {
+      if (!need || !t.quantity) continue;
+      const q = Math.min(t.quantity, need);
+      forLine.push({ ...t, quantity: q });
+      t.quantity -= q;
+      need -= q;
+    }
+    pool = pool.filter((t) => t.quantity > 0);
+    if (forLine.length) await tx.orderItem.update({ where: { id: line.id }, data: { batchAllocations: forLine as any } });
+  }
 }
 
 /** Find or create the account for a customer name (used by imports and online orders). */

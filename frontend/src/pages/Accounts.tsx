@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Building2, Plus, Edit, Wallet, AlertTriangle, Clock, FileText, Upload, Phone, Mail, MapPin, Banknote, RefreshCw, Printer, Link2, ShieldAlert, BarChart3,
+  Building2, Plus, Edit, Wallet, AlertTriangle, Clock, FileText, Upload, Phone, Mail, MapPin, Banknote, RefreshCw, Printer, Link2, ShieldAlert, BarChart3, Tag, FileMinus2, Ban,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
@@ -40,7 +40,9 @@ function AccountForm({ account, isAdmin, onSaved }: { account?: any; isAdmin: bo
     name: account?.name || '', contactName: account?.contactName || '', phone: account?.phone || '', email: account?.email || '',
     address: account?.address || '', tin: account?.tin || '', creditLimit: account?.creditLimit ?? 0, paymentTermsDays: account?.paymentTermsDays ?? 0,
     status: account?.status || 'ACTIVE', notes: account?.notes || '',
+    priceListId: account?.priceListId ?? '', discountPercent: account?.discountPercent ?? 0,
   });
+  const { data: priceLists = [] } = useQuery({ queryKey: ['price-lists'], queryFn: async () => (await call('get', '/price-lists')).data as any[] });
   const [busy, setBusy] = useState(false);
   const set = (k: string, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
   const submit = async (e: React.FormEvent) => {
@@ -48,7 +50,8 @@ function AccountForm({ account, isAdmin, onSaved }: { account?: any; isAdmin: bo
     setBusy(true);
     try {
       const body: any = { ...form };
-      if (!isAdmin) { delete body.creditLimit; delete body.paymentTermsDays; }
+      if (!isAdmin) { delete body.creditLimit; delete body.paymentTermsDays; delete body.priceListId; delete body.discountPercent; }
+      else body.priceListId = body.priceListId === '' ? null : Number(body.priceListId);
       await call(account ? 'put' : 'post', account ? `/accounts/${account.id}` : '/accounts', body);
       toast.success(account ? 'Account updated' : 'Account created');
       onSaved();
@@ -77,6 +80,16 @@ function AccountForm({ account, isAdmin, onSaved }: { account?: any; isAdmin: bo
           </select>
         </label>
         <p className="text-xs text-gray-500 sm:col-span-3">{isAdmin ? '0 means no credit limit / pay on delivery.' : 'Only an admin can change the credit limit and payment terms.'}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-3 rounded-xl bg-gray-50 p-3 sm:grid-cols-2">
+        <label className="text-sm"><span className="mb-1 block font-medium text-gray-700">Price list</span>
+          <select value={form.priceListId} disabled={!isAdmin} onChange={(e) => set('priceListId', e.target.value)} className={field}>
+            <option value="">Normal prices</option>
+            {priceLists.filter((l) => l.active || l.id === account?.priceListId).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </label>
+        <label className="text-sm"><span className="mb-1 block font-medium text-gray-700">Extra discount (%)</span><input type="number" min={0} max={100} step="0.5" disabled={!isAdmin} value={form.discountPercent} onChange={(e) => set('discountPercent', e.target.value)} className={field} /></label>
+        <p className="text-xs text-gray-500 sm:col-span-2">New orders for this customer use the price list, then any running promotion, then this discount. Manage lists on the <Link to="/pricing" className="text-primary-700 hover:underline">Pricing</Link> page.</p>
       </div>
       <label className="block text-sm"><span className="mb-1 block font-medium text-gray-700">Notes</span><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={2} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" /></label>
       <div className="flex justify-end"><Button type="submit" disabled={busy}>{account ? 'Save changes' : 'Create account'}</Button></div>
@@ -117,7 +130,88 @@ function ReceivePayment({ account, owed, onSaved }: { account: any; owed: number
   );
 }
 
+const SETTLEMENTS: [string, string][] = [['ACCOUNT_CREDIT', 'Keep the rest as account credit'], ['CASH_REFUND', 'Refund the rest in cash']];
+
+/** Credit notes reduce what a customer owes for an order (returns, damage, goodwill). */
+function CreditNotes({ accountId, orders, isAdmin, onChanged }: { accountId: number; orders: any[]; isAdmin: boolean; onChanged: () => void }) {
+  const { data: notes = [], refetch } = useQuery({ queryKey: ['credit-notes', accountId], queryFn: async () => (await call('get', `/credit-notes?accountId=${accountId}`)).data as any[] });
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ orderId: '', amount: '', reason: '', settlement: 'ACCOUNT_CREDIT' });
+  const [busy, setBusy] = useState(false);
+  const delivered = orders.filter((o) => o.status === 'DELIVERED');
+  const done = () => { refetch(); onChanged(); };
+
+  const issue = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const res = await call('post', '/credit-notes', { orderId: Number(form.orderId), amount: Number(form.amount), reason: form.reason, settlement: form.settlement });
+      const n = res.data;
+      toast.success(`${n.creditNoteNumber} issued${Number(n.appliedAmount) > 0 ? `: ${rwf(n.appliedAmount)} taken off the order` : ''}`);
+      setOpen(false);
+      setForm({ orderId: '', amount: '', reason: '', settlement: 'ACCOUNT_CREDIT' });
+      done();
+    } catch (error: any) {
+      toast.error(error.message, { duration: 6000 });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const voidNote = async (n: any) => {
+    if (!window.confirm(`Void ${n.creditNoteNumber}? What it settled becomes owed again.`)) return;
+    try {
+      await call('post', `/credit-notes/${n.id}/void`);
+      toast.success(`${n.creditNoteNumber} voided`);
+      done();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  return (
+    <DetailSection title="Credit notes" icon={<FileMinus2 className="h-4 w-4" />}>
+      {notes.length ? (
+        <ul className="divide-y divide-gray-100 text-sm">
+          {notes.slice(0, 10).map((n) => (
+            <li key={n.id} className="flex items-center justify-between gap-2 py-2">
+              <span className={n.status === 'VOID' ? 'text-gray-400 line-through' : ''}>
+                <span className="font-medium">{n.creditNoteNumber}</span> · <Link to={`/orders/${n.order.id}`} className="text-primary-700 hover:underline">{n.order.orderNumber}</Link>
+                <span className="block text-xs text-gray-500">{formatDate(n.createdAt)} · {n.reason}{n.status === 'REFUNDED' ? ' · refunded in cash' : ''}</span>
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="font-semibold text-success-700">{rwf(n.amount)}</span>
+                {isAdmin && n.status !== 'VOID' && <button onClick={() => voidNote(n)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-error-600" title="Void"><Ban className="h-3.5 w-3.5" /></button>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="text-sm text-gray-500">No credit notes.</p>}
+      {isAdmin && delivered.length > 0 && <div className="mt-2 flex justify-end"><Button size="sm" variant="secondary" onClick={() => setOpen(true)}><FileMinus2 className="mr-1.5 h-4 w-4" /> Issue credit note</Button></div>}
+      <Modal isOpen={open} onClose={() => setOpen(false)} title="Issue credit note" icon={<FileMinus2 className="h-5 w-5" />}>
+        <form onSubmit={issue} className="space-y-3">
+          <label className="block text-sm"><span className="mb-1 block font-medium text-gray-700">Order *</span>
+            <select required value={form.orderId} onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))} className={field}>
+              <option value="">Choose a delivered order…</option>
+              {delivered.map((o) => <option key={o.id} value={o.id}>{o.orderNumber} · {rwf(o.totalAmount)}</option>)}
+            </select>
+          </label>
+          <label className="block text-sm"><span className="mb-1 block font-medium text-gray-700">Amount (RWF) *</span><input required type="number" min={1} value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className={field} /></label>
+          <label className="block text-sm"><span className="mb-1 block font-medium text-gray-700">Reason *</span><input required value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} className={field} placeholder="e.g. 3 damaged crates returned" /></label>
+          <label className="block text-sm"><span className="mb-1 block font-medium text-gray-700">It first pays off what is still owed on the order. The rest:</span>
+            <select value={form.settlement} onChange={(e) => setForm((f) => ({ ...f, settlement: e.target.value }))} className={field}>
+              {SETTLEMENTS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </select>
+          </label>
+          <div className="flex justify-end"><Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Issue credit note'}</Button></div>
+        </form>
+      </Modal>
+    </DetailSection>
+  );
+}
+
 function AccountDetail({ id, onEdit, onChanged }: { id: number; onEdit: (a: any) => void; onChanged: () => void }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [paying, setPaying] = useState(false);
   const { data, refetch } = useQuery({ queryKey: ['account', id], queryFn: async () => (await call('get', `/accounts/${id}`)).data });
   if (!data) return <p className="text-sm text-gray-500">Loading…</p>;
@@ -130,7 +224,9 @@ function AccountDetail({ id, onEdit, onChanged }: { id: number; onEdit: (a: any)
     <div className="space-y-5">
       <DetailHero avatar={<Building2 className="h-6 w-6" />} title={account.name} subtitle={`${account.accountNumber}${account.tin ? ` · TIN ${account.tin}` : ''}`} badges={<StatusBadge status={account.status} size="md" />} />
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-gray-100 bg-white p-3"><p className="text-xs text-gray-500">Owes</p><p className="text-lg font-bold text-gray-900">{rwf(position.balance)}</p></div>
+        {position.balance < 0
+          ? <div className="rounded-xl border border-success-100 bg-success-50 p-3"><p className="text-xs text-gray-500">In credit</p><p className="text-lg font-bold text-success-700">{rwf(-position.balance)}</p></div>
+          : <div className="rounded-xl border border-gray-100 bg-white p-3"><p className="text-xs text-gray-500">Owes</p><p className="text-lg font-bold text-gray-900">{rwf(position.balance)}</p>{position.credit > 0 && <p className="text-[11px] text-success-700">after {rwf(position.credit)} credit</p>}</div>}
         <div className={`rounded-xl border p-3 ${position.overdue ? 'border-error-100 bg-error-50' : 'border-gray-100 bg-white'}`}><p className="text-xs text-gray-500">Overdue</p><p className={`text-lg font-bold ${position.overdue ? 'text-error-700' : 'text-gray-900'}`}>{rwf(position.overdue)}</p></div>
       </div>
       <DetailSection title="Credit" icon={<ShieldAlert className="h-4 w-4" />}>
@@ -142,6 +238,13 @@ function AccountDetail({ id, onEdit, onChanged }: { id: number; onEdit: (a: any)
         ) : <p className="text-sm text-gray-500">No credit limit set.</p>}
         <p className="mt-2 text-xs text-gray-500">{account.paymentTermsDays ? `Pays within ${account.paymentTermsDays} days of delivery` : 'Pays on delivery'}{position.openOrders ? ` · ${rwf(position.openOrders)} on orders not yet delivered` : ''}</p>
       </DetailSection>
+      <DetailSection title="Pricing" icon={<Tag className="h-4 w-4" />}>
+        <p className="text-sm text-gray-700">
+          {account.priceList ? <>Price list <span className="font-semibold">{account.priceList.name}</span></> : 'Normal prices'}
+          {Number(account.discountPercent) > 0 && <> · <span className="font-semibold">{Number(account.discountPercent)}%</span> extra discount</>}
+        </p>
+      </DetailSection>
+      <CreditNotes accountId={account.id} orders={orders} isAdmin={isAdmin} onChanged={() => { refetch(); onChanged(); }} />
       <DetailSection title="Aging" icon={<Clock className="h-4 w-4" />}>
         <div className="grid grid-cols-5 gap-1.5 text-center">
           {Object.entries(AGING_LABELS).map(([k, label]) => (

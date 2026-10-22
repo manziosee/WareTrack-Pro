@@ -36,6 +36,7 @@ export const BRANCH_SCOPED_MODELS = new Set<string>([
   'StockTransfer', 'PurchaseOrder', 'PurchaseOrderItem', 'InventoryBatch', 'ReturnRequest',
   'Payment', 'Invoice', 'AuditLog', 'SavedFilter', 'SavedReport', 'Driver', 'Vehicle', 'DeliveryProof',
   'CashHandover', 'Expense', 'StockCount', 'StockCountLine', 'ApiKey', 'PushSubscription', 'FeedbackReport', 'UsageEvent',
+  'Trip', 'CreditNote', 'ItemSerial', 'VehicleDocument', 'StoredFile',
 ]);
 
 const models = Prisma.dmmf.datamodel.models;
@@ -58,19 +59,19 @@ const SCOPED_TABLES = new Set(
 
 const hasField = (model: string, field: string) => fieldsOf(model).some((f) => f.name === field);
 
-function scopeFilter(model: string, companyId: number, branchId: number | null) {
+function scopeFilter(model: string, companyId: number, branchId: number | null, allBranches = false) {
   const filter: any[] = [{ companyId }];
-  if (BRANCH_SCOPED_MODELS.has(model)) {
+  if (BRANCH_SCOPED_MODELS.has(model) && !allBranches) {
     filter.push(branchId === null ? { branchId: null } : { OR: [{ branchId: null }, { branchId }] });
   }
   return filter;
 }
 
 /** Add the company (and branch) condition to a where clause, keeping unique fields at the top level. */
-function scopedWhere(where: any, model: string, companyId: number, branchId: number | null) {
+function scopedWhere(where: any, model: string, companyId: number, branchId: number | null, allBranches = false) {
   const next = { ...(where || {}) };
   const prior = next.AND === undefined ? [] : Array.isArray(next.AND) ? next.AND : [next.AND];
-  next.AND = [...prior, ...scopeFilter(model, companyId, branchId)];
+  next.AND = [...prior, ...scopeFilter(model, companyId, branchId, allBranches)];
   return next;
 }
 
@@ -159,9 +160,9 @@ function createClient() {
             checkUnscopedCreate(model, operation, args);
             return query(args);
           }
-          const { companyId, branchId } = tenant;
+          const { companyId, branchId, allBranches } = tenant;
           const next: any = { ...args };
-          if (READ_OR_FILTER_OPS.has(operation)) next.where = scopedWhere(next.where, model, companyId, branchId);
+          if (READ_OR_FILTER_OPS.has(operation)) next.where = scopedWhere(next.where, model, companyId, branchId, allBranches);
           if (operation === 'create') next.data = stamp(next.data, model, companyId, branchId, true);
           if (operation === 'createMany' || operation === 'createManyAndReturn') next.data = stamp(next.data, model, companyId, branchId, true);
           if (operation === 'update' || operation === 'updateMany') next.data = stamp(next.data, model, companyId, branchId, false);

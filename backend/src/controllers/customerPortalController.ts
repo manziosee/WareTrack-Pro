@@ -268,8 +268,10 @@ export class CustomerPortalController {
         orderType: originalOrder.orderType,
         paymentMethod: originalOrder.paymentMethod,
         priority: 'MEDIUM',
-        items: originalOrder.items.map((item) => ({ itemId: item.itemId, quantity: item.quantity, unitPrice: item.unitPrice, unit: item.unit })),
-      }, { createdBy: 1, source: 'ONLINE', trustPrices: true }));
+        // Today's prices for this customer (price list, promotions, discount), not the old ones
+        accountId: originalOrder.accountId ?? undefined,
+        items: originalOrder.items.map((item: any) => ({ itemId: item.itemId, quantity: item.packQuantity || item.quantity, packagingId: item.packagingId || undefined })),
+      }, { createdBy: 1, source: 'ONLINE' }));
 
       res.json({ success: true, data: newOrder });
     } catch (error: any) {

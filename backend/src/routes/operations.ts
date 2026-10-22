@@ -6,7 +6,7 @@ import { nextDocumentNumber } from '../lib/documentNumbers';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { haversineKm, optimizeRouteByRoad, roadDistancesTo, roadLegs, ROAD_FACTOR, type Point } from '../services/routing';
 import { onOrderStatusChanged } from '../services/orderLifecycle';
-import { refreshOrderPayment } from '../services/finance';
+import { issueCreditNote, refreshOrderPayment } from '../services/finance';
 import { emitEvent } from '../services/events';
 import { emitToRoles } from '../services/realtime';
 import { publicTenant } from '../middleware/publicTenant';
@@ -538,7 +538,7 @@ router.get('/returns', ...orderStaff, async (_req, res, next) => {
     const returns = await prisma.returnRequest.findMany({
       orderBy: { createdAt: 'desc' },
       take: 500,
-      include: { order: { select: { id: true, orderNumber: true, customerName: true, totalAmount: true, contactNumber: true, deliveryAddress: true, status: true } } },
+      include: { order: { select: { id: true, orderNumber: true, customerName: true, totalAmount: true, contactNumber: true, deliveryAddress: true, status: true, accountId: true } } },
     });
     res.json({ success: true, data: returns });
   } catch (error) {
@@ -603,9 +603,6 @@ router.post('/returns/:id/status', ...orderStaff, async (req, res, next) => {
         }
         await tx.deliveryOrder.update({ where: { id: ret.orderId }, data: { status: 'RETURNED' } });
       }
-      if (status === 'REFUNDED') {
-        await tx.deliveryOrder.update({ where: { id: ret.orderId }, data: { paymentStatus: 'REFUNDED' } });
-      }
       return tx.returnRequest.update({
         where: { id: ret.id },
         data: {
@@ -616,10 +613,17 @@ router.post('/returns/:id/status', ...orderStaff, async (req, res, next) => {
         },
       });
     });
+    // A refund is a credit note: it settles what is owed, then is kept as credit or paid back in cash
+    let creditNote = null;
+    if (status === 'REFUNDED' && Number(ret.refundAmount) > 0 && !(await prisma.creditNote.findFirst({ where: { returnId: ret.id, status: { not: 'VOID' } } }))) {
+      const refundMethod = req.body?.refundMethod === 'CASH' ? 'CASH_REFUND' : req.body?.refundMethod === 'ACCOUNT_CREDIT' ? 'ACCOUNT_CREDIT' : undefined;
+      creditNote = await issueCreditNote({ orderId: ret.orderId, amount: Number(ret.refundAmount), reason: `Refund for ${ret.returnNumber}: ${ret.reason}`, returnId: ret.id, settlement: refundMethod, userId });
+    }
     await onOrderStatusChanged(ret.orderId, previousOrderStatus);
     emitEvent('return.updated', { id: updated.id, returnNumber: updated.returnNumber, status: updated.status });
-    res.json({ success: true, data: updated });
-  } catch (error) {
+    res.json({ success: true, data: { ...updated, creditNote } });
+  } catch (error: any) {
+    if (error?.status) return bad(res, error.message, error.status);
     next(error);
   }
 });

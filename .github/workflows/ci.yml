@@ -60,7 +60,7 @@ jobs:
       - run: npm run build
 
   e2e:
-    name: Browser tests (order to cash, stock count, packing)
+    name: Browser tests (order to cash, stock count, packing, trips, pricing)
     runs-on: ubuntu-latest
     needs: [backend, frontend]
     services:

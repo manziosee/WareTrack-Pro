@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import * as Sentry from '@sentry/react'
 import './index.css'
 import App from './App.tsx'
+import { Capacitor } from '@capacitor/core'
 
 // If a deployment replaces a lazy-loaded chunk while a tab is open, Vite emits
 // this event. Reload once so the browser gets the current HTML and asset map.
@@ -29,8 +30,9 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   })
 }
 
-// Installable app with an offline shell (production builds only)
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+// Installable app with an offline shell (production builds only). The Android
+// app already ships its files, and a worker there would serve stale bundles.
+if (import.meta.env.PROD && 'serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => undefined)
   })

@@ -18,6 +18,18 @@ function presentBranchStock<T extends { warehouseStock?: { quantity: number }[] 
   return { ...fields, quantity: warehouseStock.reduce((sum, row) => sum + row.quantity, 0) };
 }
 
+
+/** Optional item attributes for load planning, VAT and serial numbers. */
+function itemExtras(body: any) {
+  const num = (v: unknown) => (v === undefined ? undefined : v === null || v === '' ? null : Number(v));
+  return {
+    weightKg: num(body?.weightKg),
+    volumeL: num(body?.volumeL),
+    vatExempt: body?.vatExempt === undefined ? undefined : Boolean(body.vatExempt),
+    trackSerials: body?.trackSerials === undefined ? undefined : Boolean(body.trackSerials),
+  };
+}
+
 export class InventoryController {
   static async getInventory(req: Request, res: Response) {
     try {
@@ -289,6 +301,7 @@ export class InventoryController {
           unitPrice: unitPrice !== undefined ? Number(unitPrice) : undefined,
           supplier,
           description,
+          ...itemExtras(req.body),
           status: 'ACTIVE'
         } });
         if (!item.barcode) {
@@ -427,6 +440,7 @@ export class InventoryController {
           unitPrice: unitPrice !== undefined ? Number(unitPrice) : undefined,
           supplier,
           description,
+          ...itemExtras(req.body),
           status: status as any
         } });
 

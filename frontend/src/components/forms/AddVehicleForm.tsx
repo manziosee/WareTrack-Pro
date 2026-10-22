@@ -12,6 +12,7 @@ const AddVehicleForm = ({ onClose, onSave }: AddVehicleFormProps) => {
     plateNumber: '',
     type: 'Truck',
     capacity: '',
+    volumeL: '',
     vehicleModel: '',
     year: '',
     fuelType: 'Diesel',
@@ -28,6 +29,7 @@ const AddVehicleForm = ({ onClose, onSave }: AddVehicleFormProps) => {
         plateNumber: formData.plateNumber,
         type: formData.type,
         capacity: Number(formData.capacity),
+        volumeL: formData.volumeL ? Number(formData.volumeL) : null,
         vehicleModel: formData.vehicleModel,
         year: Number(formData.year),
         fuelType: formData.fuelType,
@@ -110,6 +112,17 @@ const AddVehicleForm = ({ onClose, onSave }: AddVehicleFormProps) => {
             onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
             placeholder="e.g., 1000"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Load space (litres)</label>
+          <input
+            type="number"
+            min={0}
+            value={formData.volumeL}
+            onChange={(e) => setFormData({ ...formData, volumeL: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="Optional, e.g. 12000"
           />
         </div>
         <div>

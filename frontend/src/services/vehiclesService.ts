@@ -19,6 +19,8 @@ export interface CreateVehicle {
   year?: number;
   fuelType?: string;
   status?: string;
+  /** Load space in litres, used by the trip planner */
+  volumeL?: number | null;
 }
 
 export const vehiclesService = {

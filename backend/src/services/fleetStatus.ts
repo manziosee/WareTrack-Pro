@@ -89,6 +89,15 @@ export async function syncFleetForOrder(orderId: number, extra: { driverIds?: (n
   const vehicleIds = new Set([order.vehicleId, ...(extra.vehicleIds || [])].filter(Boolean) as number[]);
   for (const id of driverIds) await syncDriverStatus(id);
   for (const id of vehicleIds) await syncVehicleStatus(id);
+  await completeTripIfDone(orderId);
+}
+
+/** A sent trip is completed once none of its orders is still open. */
+async function completeTripIfDone(orderId: number) {
+  const order = await prisma.deliveryOrder.findUnique({ where: { id: orderId }, select: { tripId: true } });
+  if (!order?.tripId) return;
+  const open = await prisma.deliveryOrder.count({ where: { tripId: order.tripId, status: { in: [...ACTIVE_ORDER_STATUSES] } } });
+  if (!open) await prisma.trip.updateMany({ where: { id: order.tripId, status: 'DISPATCHED' }, data: { status: 'COMPLETED' } });
 }
 
 /**

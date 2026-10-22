@@ -4,6 +4,7 @@ import Button from '../ui/Button';
 import { CategorySelect } from '@/components/inventory/Categories';
 import { unitCategories } from '../../utils/units';
 import toast from 'react-hot-toast';
+import ItemExtrasFields, { emptyExtras, extrasFromItem, extrasPayload } from '@/components/inventory/ItemExtrasFields';
 
 interface EditInventoryFormProps {
   item: any;
@@ -28,6 +29,8 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
     supplier: '',
     barcode: ''
   });
+
+  const [extras, setExtras] = useState(emptyExtras);
 
   const handleUnitCategoryChange = (category: string) => {
     const firstUnit = unitCategories[category as keyof typeof unitCategories]?.units[0]?.value || 'pcs';
@@ -60,6 +63,7 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
         supplier: item.supplier || '',
         barcode: item.barcode || ''
       });
+      setExtras(extrasFromItem(item));
     }
   }, [item]);
 
@@ -68,9 +72,8 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
     setLoading(true);
     
     try {
-      console.log('Updating inventory item:', formData);
       if (onSave) {
-        await onSave({ ...formData, status: formData.status.toUpperCase() });
+        await onSave({ ...formData, ...extrasPayload(extras), status: formData.status.toUpperCase() });
       }
       // Don't call onClose() here - let the parent handle it after successful save
     } catch (error) {
@@ -215,6 +218,8 @@ export default function EditInventoryForm({ item, onClose, onSave }: EditInvento
         />
       </div>
       
+      <ItemExtrasFields value={extras} onChange={setExtras} unit={formData.unit} />
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
         <textarea

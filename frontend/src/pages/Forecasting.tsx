@@ -9,6 +9,7 @@ import DataTable, { type Column } from '@/components/table/DataTable';
 import FilterChip from '@/components/table/FilterChip';
 import ExportMenu from '@/components/table/ExportMenu';
 import api from '@/services/api';
+import ReorderPoints from '@/components/inventory/ReorderPoints';
 
 const riskLabel: Record<string, string> = { high: 'Order now', medium: 'Order soon', low: 'Healthy', none: 'No demand' };
 
@@ -101,6 +102,8 @@ export default function Forecasting() {
           <ScenarioMetric label="Suggested purchase quantity" value={`${scenarioOrder} ${selected.unit}`} warn={scenarioOrder > 0} />
         </div>
       </section>}
+
+      <ReorderPoints />
 
       <DataTable
         storageKey="forecast"

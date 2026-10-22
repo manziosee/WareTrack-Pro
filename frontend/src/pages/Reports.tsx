@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3, Download, ChevronLeft, ChevronRight, Package, CheckCircle2, Wallet, Clock, Users, AlertTriangle,
-  TrendingUp, PieChart as PieIcon, Boxes, Truck, Star, Gauge, RefreshCw,
+  TrendingUp, PieChart as PieIcon, Boxes, Truck, Star, Gauge, RefreshCw, FileText,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import StatCard from '@/components/ui/StatCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import ExportReportForm from '@/components/forms/ExportReportForm';
+import SummaryReportForm from '@/components/forms/SummaryReportForm';
 import { ChartCard } from '@/components/charts/chartTheme';
 import { TrendChart, BarsChart, DonutChart, BarList, Meter, formatRWF } from '@/components/charts/Widgets';
 import { reportsService } from '@/services/reportsService';
@@ -61,6 +62,7 @@ export default function Reports() {
   const [anchor, setAnchor] = useState(() => new Date());
   const [custom, setCustom] = useState({ startDate: iso(new Date(Date.now() - 29 * DAY)), endDate: iso(new Date()) });
   const [showExport, setShowExport] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   const range = useMemo(() => {
     if (view === 'custom') return custom;
@@ -105,6 +107,7 @@ export default function Reports() {
             <button onClick={() => refetch()} className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50" title="Refresh">
               <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
             </button>
+            <Button size="sm" variant="outline" onClick={() => setShowSummary(true)}><FileText className="mr-1.5 h-4 w-4" /> Summary PDF</Button>
             <Button size="sm" onClick={() => setShowExport(true)} disabled={!data}><Download className="mr-1.5 h-4 w-4" /> Export</Button>
           </>
         }
@@ -208,6 +211,9 @@ export default function Reports() {
 
       <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Export report" subtitle={titleFor(view, start, end)} icon={<Download className="h-5 w-5" />}>
         <ExportReportForm onClose={() => setShowExport(false)} analytics={data} dateRange={range} />
+      </Modal>
+      <Modal isOpen={showSummary} onClose={() => setShowSummary(false)} title="Manager summary" subtitle="One-page PDF for the branch" icon={<FileText className="h-5 w-5" />}>
+        <SummaryReportForm onClose={() => setShowSummary(false)} />
       </Modal>
     </div>
   );

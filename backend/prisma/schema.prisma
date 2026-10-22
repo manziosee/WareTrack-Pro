@@ -158,6 +158,13 @@ model InventoryItem {
   status         InventoryStatus @default(ACTIVE)
   supplier       String?
   description    String?
+  /// Per unit, for vehicle load planning
+  weightKg       Decimal?        @map("weight_kg") @db.Decimal(10, 3)
+  volumeL        Decimal?        @map("volume_l") @db.Decimal(10, 3)
+  /// Sold without VAT (e.g. some foods and medicines)
+  vatExempt      Boolean         @default(false) @map("vat_exempt")
+  /// Every unit has a serial number (electronics)
+  trackSerials   Boolean         @default(false) @map("track_serials")
   lastUpdated    DateTime        @default(now()) @map("last_updated")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
@@ -174,6 +181,9 @@ model InventoryItem {
   packagings       ItemPackaging[]
   countLines       StockCountLine[]
   reservations     StockReservation[]
+  priceListItems   PriceListItem[]
+  promotions       Promotion[]
+  serials          ItemSerial[]
 
   @@unique([companyId, code])
   @@unique([companyId, barcode])
@@ -189,6 +199,8 @@ model Vehicle {
   plateNumber     String        @unique @map("plate_number")
   type            String
   capacity        Int
+  /// Load space in litres (optional; capacity is kg)
+  volumeL         Decimal?      @map("volume_l") @db.Decimal(10, 1)
   status          VehicleStatus @default(AVAILABLE)
   lastMaintenance DateTime?     @map("last_maintenance")
   fuelType        String?       @map("fuel_type")
@@ -205,6 +217,8 @@ model Vehicle {
   maintenanceRecords MaintenanceRecord[]
   healthRecords      VehicleHealth[]
   expenses           Expense[]
+  trips              Trip[]
+  documents          VehicleDocument[]
 
   @@index([companyId, branchId])
   @@map("vehicles")
@@ -248,6 +262,7 @@ model Driver {
   expenses       Expense[]
   leaderboard    DriverLeaderboard[]
   ratings        CustomerRating[]
+  trips          Trip[]
 
   @@index([companyId, branchId])
   @@map("drivers")
@@ -284,6 +299,7 @@ model DeliveryOrder {
   failureReason        String?       @map("failure_reason")
   deliveryAttempts     Int           @default(0) @map("delivery_attempts")
   accountId            Int?          @map("account_id")
+  tripId               Int?          @map("trip_id")
   /// Where the order came from: STAFF, ONLINE (order page), API, IMPORT
   source               String        @default("STAFF")
   /// Cash the driver collected on delivery (cash on delivery)
@@ -312,28 +328,38 @@ model DeliveryOrder {
   reservations     StockReservation[]
   inventoryHistory InventoryHistory[]
   feedbackReports  FeedbackReport[]
+  trip             Trip?              @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  creditNotes      CreditNote[]
 
   @@index([companyId, branchId])
   @@map("delivery_orders")
 }
 
 model OrderItem {
-  companyId      Int      @default(1) @map("company_id")
-  branchId       Int?     @map("branch_id")
-  id             Int      @id @default(autoincrement())
-  orderId        Int      @map("order_id")
-  itemId         Int      @map("item_id")
-  itemName       String   @map("item_name")
-  quantity       Int
-  unit           String
-  unitPrice      Decimal  @map("unit_price")
-  totalPrice     Decimal  @map("total_price")
+  companyId        Int      @default(1) @map("company_id")
+  branchId         Int?     @map("branch_id")
+  id               Int      @id @default(autoincrement())
+  orderId          Int      @map("order_id")
+  itemId           Int      @map("item_id")
+  itemName         String   @map("item_name")
+  quantity         Int
+  unit             String
+  unitPrice        Decimal  @map("unit_price")
+  totalPrice       Decimal  @map("total_price")
   /// Sold in packs: which pack and how many packs (quantity is always in base units)
-  packagingId    Int?     @map("packaging_id")
-  packQuantity   Int?     @map("pack_quantity")
+  packagingId      Int?     @map("packaging_id")
+  packQuantity     Int?     @map("pack_quantity")
   /// Units checked into the parcel while packing
-  packedQuantity Int      @default(0) @map("packed_quantity")
-  createdAt      DateTime @default(now()) @map("created_at")
+  packedQuantity   Int      @default(0) @map("packed_quantity")
+  /// Price before price list / promotion / customer discount
+  listPrice        Decimal? @map("list_price") @db.Decimal(14, 2)
+  discountAmount   Decimal  @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  /// VAT rate used for this line (0 for VAT-exempt items)
+  vatRate          Decimal? @map("vat_rate") @db.Decimal(5, 4)
+  /// Which batches the units came from, earliest expiry first: [{ batchId, batchNumber, expiryDate, quantity }]
+  batchAllocations Json?    @map("batch_allocations")
+  serialNumbers    String[] @default([]) @map("serial_numbers")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   // Relations
   order     DeliveryOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -1227,14 +1253,19 @@ model CustomerAccount {
   creditLimit      Decimal  @default(0) @map("credit_limit") @db.Decimal(14, 2)
   /// Days the customer has to pay after delivery (0 = pay on delivery)
   paymentTermsDays Int      @default(0) @map("payment_terms_days")
+  /// Negotiated prices for this customer, and a discount on top
+  priceListId      Int?     @map("price_list_id")
+  discountPercent  Decimal  @default(0) @map("discount_percent") @db.Decimal(5, 2)
   /// ACTIVE, ON_HOLD (no new credit orders), CLOSED
   status           String   @default("ACTIVE")
   notes            String?
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
 
-  orders   DeliveryOrder[]
-  payments Payment[]
+  orders      DeliveryOrder[]
+  payments    Payment[]
+  priceList   PriceList?      @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  creditNotes CreditNote[]
 
   @@index([name])
   @@index([companyId, branchId])
@@ -1467,4 +1498,152 @@ model TrustedDevice {
 
   @@index([userId])
   @@map("trusted_devices")
+}
+
+/// Several orders loaded on one vehicle and driven as one run.
+model Trip {
+  id          Int      @id @default(autoincrement())
+  companyId   Int      @map("company_id")
+  branchId    Int?     @map("branch_id")
+  tripNumber  String   @unique @map("trip_number")
+  vehicleId   Int      @map("vehicle_id")
+  driverId    Int      @map("driver_id")
+  /// PLANNED, DISPATCHED, COMPLETED, CANCELLED
+  status      String   @default("PLANNED")
+  plannedDate DateTime @map("planned_date")
+  notes       String?
+  createdById Int      @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  vehicle Vehicle         @relation(fields: [vehicleId], references: [id])
+  driver  Driver          @relation(fields: [driverId], references: [id])
+  orders  DeliveryOrder[]
+
+  @@index([companyId, branchId, status])
+  @@map("trips")
+}
+
+/// Money given back to a customer (return, refund, damaged goods). It settles
+/// what the order still owes; anything left is credit on the customer's account.
+model CreditNote {
+  id               Int      @id @default(autoincrement())
+  companyId        Int      @map("company_id")
+  branchId         Int?     @map("branch_id")
+  creditNoteNumber String   @unique @map("credit_note_number")
+  orderId          Int      @map("order_id")
+  accountId        Int?     @map("account_id")
+  returnId         Int?     @map("return_id")
+  amount           Decimal  @db.Decimal(14, 2)
+  /// Part of the amount used against the order's balance
+  appliedAmount    Decimal  @default(0) @map("applied_amount") @db.Decimal(14, 2)
+  reason           String
+  /// ISSUED, VOID
+  status           String   @default("ISSUED")
+  createdById      Int      @map("created_by_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  order   DeliveryOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  account CustomerAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, accountId])
+  @@map("credit_notes")
+}
+
+/// Negotiated prices for a group of customers.
+model PriceList {
+  id          Int      @id @default(autoincrement())
+  companyId   Int      @map("company_id")
+  branchId    Int?     @map("branch_id")
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  items    PriceListItem[]
+  accounts CustomerAccount[]
+
+  @@unique([companyId, name])
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id          Int     @id @default(autoincrement())
+  companyId   Int     @map("company_id")
+  branchId    Int?    @map("branch_id")
+  priceListId Int     @map("price_list_id")
+  itemId      Int     @map("item_id")
+  price       Decimal @db.Decimal(14, 2)
+
+  priceList PriceList     @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([priceListId, itemId])
+  @@map("price_list_items")
+}
+
+/// Time-limited deals: a percentage or amount off an item or a whole category.
+model Promotion {
+  id          Int      @id @default(autoincrement())
+  companyId   Int      @map("company_id")
+  branchId    Int?     @map("branch_id")
+  name        String
+  /// PERCENT or AMOUNT (per unit)
+  type        String
+  value       Decimal  @db.Decimal(14, 2)
+  itemId      Int?     @map("item_id")
+  category    String?
+  minQuantity Int      @default(1) @map("min_quantity")
+  startsAt    DateTime @map("starts_at")
+  endsAt      DateTime @map("ends_at")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  item InventoryItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, active, endsAt])
+  @@map("promotions")
+}
+
+/// One physical unit of a serial-tracked item.
+model ItemSerial {
+  id           Int       @id @default(autoincrement())
+  companyId    Int       @map("company_id")
+  branchId     Int?      @map("branch_id")
+  itemId       Int       @map("item_id")
+  serialNumber String    @map("serial_number")
+  /// IN_STOCK, SOLD, RETURNED, DAMAGED
+  status       String    @default("IN_STOCK")
+  orderId      Int?      @map("order_id")
+  receivedAt   DateTime  @default(now()) @map("received_at")
+  soldAt       DateTime? @map("sold_at")
+
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, serialNumber])
+  @@index([companyId, itemId, status])
+  @@map("item_serials")
+}
+
+/// Insurance, inspection (contrôle technique), registration… with expiry reminders.
+model VehicleDocument {
+  id        Int       @id @default(autoincrement())
+  companyId Int       @map("company_id")
+  branchId  Int?      @map("branch_id")
+  vehicleId Int       @map("vehicle_id")
+  /// INSURANCE, INSPECTION, REGISTRATION, PERMIT, OTHER
+  type      String
+  number    String?
+  provider  String?
+  issuedAt  DateTime? @map("issued_at")
+  expiresAt DateTime  @map("expires_at")
+  fileRef   String?   @map("file_ref")
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, expiresAt])
+  @@map("vehicle_documents")
 }

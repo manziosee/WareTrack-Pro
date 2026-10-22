@@ -14,6 +14,8 @@ interface EmailData {
   time?: string;
   actionPath?: string;
   actionLabel?: string;
+  /** Files sent with the email (Resend and Brevo only; EmailJS cannot attach) */
+  attachments?: { filename: string; content: Buffer }[];
 }
 
 const appUrl = (path: string) => {
@@ -71,7 +73,8 @@ ${action}
   private static async sendViaResend(data: EmailData) {
     const res = await axios.post(
       'https://api.resend.com/emails',
-      { from: process.env.EMAIL_FROM || 'WareTrack Pro <onboarding@resend.dev>', to: [data.email], subject: `WareTrack-Pro: ${data.title}`, html: this.html(data), text: data.message },
+      { from: process.env.EMAIL_FROM || 'WareTrack Pro <onboarding@resend.dev>', to: [data.email], subject: `WareTrack-Pro: ${data.title}`, html: this.html(data), text: data.message,
+        ...(data.attachments?.length ? { attachments: data.attachments.map((a) => ({ filename: a.filename, content: a.content.toString('base64') })) } : {}) },
       { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }, timeout: 15000 }
     );
     return res.status >= 200 && res.status < 300;
@@ -88,6 +91,7 @@ ${action}
         subject: `WareTrack-Pro: ${data.title}`,
         htmlContent: this.html(data),
         textContent: data.message,
+        ...(data.attachments?.length ? { attachment: data.attachments.map((a) => ({ name: a.filename, content: a.content.toString('base64') })) } : {}),
       },
       { headers: { 'api-key': process.env.BREVO_API_KEY!, 'Content-Type': 'application/json' }, timeout: 15000 }
     );

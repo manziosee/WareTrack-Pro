@@ -50,6 +50,8 @@ export default function Returns() {
   const [type, setType] = useState('');
   const [viewId, setViewId] = useState<number | null>(null);
   const [reschedule, setReschedule] = useState<any>(null);
+  const [refunding, setRefunding] = useState<any>(null);
+  const [refundMethod, setRefundMethod] = useState('');
   const [newDate, setNewDate] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ orderId: '', reason: '', notes: '' });
@@ -61,7 +63,8 @@ export default function Returns() {
   const update = async (r: any, next: string, extra: Record<string, unknown> = {}) => {
     const res = await api.post(`/returns/${r.id}/status`, { status: next, ...extra });
     if (res.data?.success) {
-      toast.success(`${r.returnNumber}: ${statusLabel(next).toLowerCase()}`);
+      const note = res.data.data?.creditNote;
+      toast.success(`${r.returnNumber}: ${statusLabel(next).toLowerCase()}${note ? ` · credit note ${note.creditNoteNumber}` : ''}`);
       refresh();
       return true;
     }
@@ -75,6 +78,11 @@ export default function Returns() {
       const tomorrow = new Date(Date.now() + 86400000);
       tomorrow.setHours(10, 0, 0, 0);
       setNewDate(tomorrow.toISOString().slice(0, 16));
+      return;
+    }
+    if (next === 'REFUNDED' && Number(r.refundAmount) > 0) {
+      setRefundMethod(r.order?.accountId ? 'ACCOUNT_CREDIT' : 'CASH');
+      setRefunding(r);
       return;
     }
     update(r, next);
@@ -202,6 +210,25 @@ export default function Returns() {
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={() => setReschedule(null)}>Cancel</Button>
             <Button size="sm" onClick={async () => { if (await update(reschedule, 'RESCHEDULED', { rescheduledDate: new Date(newDate).toISOString() })) setReschedule(null); }}>Reschedule</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={Boolean(refunding)} onClose={() => setRefunding(null)} title="Refund customer" subtitle={refunding ? `${refunding.returnNumber} · ${rwf(refunding.refundAmount)}` : ''} icon={<Banknote className="h-5 w-5" />} size="sm">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">A credit note is issued. It first pays off anything still owed on the order. What about the rest?</p>
+          {[
+            ['ACCOUNT_CREDIT', 'Keep it as account credit', 'They use it on their next orders.'],
+            ['CASH', 'Pay it back in cash', 'You hand the customer the money.'],
+          ].map(([value, label, hint]) => (
+            <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${refundMethod === value ? 'border-primary-300 bg-primary-50' : 'border-gray-200'}`}>
+              <input type="radio" name="refund-method" checked={refundMethod === value} onChange={() => setRefundMethod(value)} className="mt-1" />
+              <span><span className="block text-sm font-medium text-gray-900">{label}</span><span className="text-xs text-gray-500">{hint}</span></span>
+            </label>
+          ))}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setRefunding(null)}>Cancel</Button>
+            <Button size="sm" variant="success" onClick={async () => { if (await update(refunding, 'REFUNDED', { refundMethod })) setRefunding(null); }}>Refund</Button>
           </div>
         </div>
       </Modal>

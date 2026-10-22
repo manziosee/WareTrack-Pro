@@ -300,7 +300,7 @@ const packingInclude = {
   items: {
     orderBy: { id: 'asc' as const },
     include: {
-      item: { select: { id: true, name: true, code: true, barcode: true, legacyBarcodes: true, location: true, unit: true } as any },
+      item: { select: { id: true, name: true, code: true, barcode: true, legacyBarcodes: true, location: true, unit: true, trackSerials: true } as any },
       packaging: { select: { id: true, name: true, unitsPerPack: true, barcode: true } },
     },
   },
@@ -381,6 +381,23 @@ router.post('/orders/:id/packing/scan', ...staff, async (req, res, next) => {
     const order = await packableOrder(Number(req.params.id));
     const code = String(req.body?.code || '').trim().toLowerCase();
     if (!code) return bad(res, 'Scan or type a barcode');
+
+    // Serial-numbered items are packed one unit at a time by their serial number
+    const serial = await prisma.itemSerial.findFirst({ where: { serialNumber: { equals: String(req.body.code).trim(), mode: 'insensitive' } } });
+    if (serial) {
+      const serialLine = (order.items as any[]).find((l) => l.itemId === serial.itemId && l.packedQuantity < l.quantity) || (order.items as any[]).find((l) => l.itemId === serial.itemId);
+      if (!serialLine) return bad(res, 'That item is not in this order', 404);
+      if (serial.status !== 'IN_STOCK') return bad(res, `Serial ${serial.serialNumber} is ${serial.status.toLowerCase().replace('_', ' ')}${serial.orderId ? ' on another order' : ''}`, 409);
+      if (serialLine.packedQuantity >= serialLine.quantity) return bad(res, `Too many: ${serialLine.itemName} needs ${serialLine.quantity}`, 409);
+      await prisma.$transaction([
+        prisma.itemSerial.update({ where: { id: serial.id }, data: { status: 'RESERVED', orderId: order.id } }),
+        prisma.orderItem.update({ where: { id: serialLine.id }, data: { packedQuantity: { increment: 1 }, serialNumbers: { push: serial.serialNumber } } }),
+        ...(order.packingStatus === 'NOT_STARTED' ? [prisma.deliveryOrder.update({ where: { id: order.id }, data: { packingStatus: 'PICKING' } })] : []),
+      ]);
+      const fresh = await prisma.deliveryOrder.findUnique({ where: { id: order.id }, include: packingInclude });
+      return res.json({ success: true, data: { order: fresh, line: `${serialLine.itemName} · ${serial.serialNumber}`, added: 1 } });
+    }
+
     let units = Math.max(1, Math.round(Number(req.body?.quantity) || 1));
     let line = order.items.find((l) => l.packaging?.barcode?.toLowerCase() === code);
     if (line) units *= line.packaging!.unitsPerPack;
@@ -394,6 +411,7 @@ router.post('/orders/:id/packing/scan', ...staff, async (req, res, next) => {
       }
     }
     if (!line) return bad(res, 'That item is not in this order', 404);
+    if ((line as any).item?.trackSerials) return bad(res, `${line.itemName} has serial numbers: scan the serial number of each unit`);
     if (line.packedQuantity + units > line.quantity) return bad(res, `Too many: ${line.itemName} needs ${line.quantity}, already packed ${line.packedQuantity}`, 409);
     await prisma.$transaction([
       prisma.orderItem.update({ where: { id: line.id }, data: { packedQuantity: { increment: units } } }),
@@ -434,6 +452,10 @@ router.post('/orders/:id/packing/complete', ...staff, async (req, res, next) => 
     if (short.length && !(req.body?.force && req.user!.role === 'ADMIN')) {
       return bad(res, `Still missing: ${short.map((l) => `${l.itemName} (${l.quantity - l.packedQuantity})`).join(', ')}`, 409);
     }
+    const missingSerials = (order.items as any[]).filter((l) => l.item?.trackSerials && (l.serialNumbers?.length || 0) < l.quantity);
+    if (missingSerials.length) return bad(res, `Scan the serial numbers of: ${missingSerials.map((l) => l.itemName).join(', ')}`, 409);
+    // Serials packed into this order are now sold
+    await prisma.itemSerial.updateMany({ where: { orderId: order.id, status: 'RESERVED' }, data: { status: 'SOLD', soldAt: new Date() } });
     const updated = await prisma.deliveryOrder.update({
       where: { id: order.id },
       data: { packingStatus: 'PACKED', packedAt: new Date(), packedById: userId(req) },
@@ -450,7 +472,8 @@ router.post('/orders/:id/packing/reset', ...staff, async (req, res, next) => {
   try {
     const order = await packableOrder(Number(req.params.id));
     await prisma.$transaction([
-      prisma.orderItem.updateMany({ where: { orderId: order.id }, data: { packedQuantity: 0 } }),
+      prisma.orderItem.updateMany({ where: { orderId: order.id }, data: { packedQuantity: 0, serialNumbers: [] } }),
+      prisma.itemSerial.updateMany({ where: { orderId: order.id, status: { in: ['RESERVED', 'SOLD'] } }, data: { status: 'IN_STOCK', orderId: null, soldAt: null } }),
       prisma.deliveryOrder.update({ where: { id: order.id }, data: { packingStatus: 'NOT_STARTED', packedAt: null, packedById: null } }),
     ]);
     res.json({ success: true });

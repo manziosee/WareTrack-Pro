@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CategorySelect } from '@/components/inventory/Categories';
 import { unitCategories } from '@/utils/units';
+import ItemExtrasFields, { emptyExtras, extrasPayload } from '@/components/inventory/ItemExtrasFields';
 
 interface AddInventoryFormProps {
   onClose: () => void;
@@ -24,6 +25,8 @@ const AddInventoryForm = ({ onClose, onSave }: AddInventoryFormProps) => {
     barcode: ''
   });
 
+  const [extras, setExtras] = useState(emptyExtras);
+
   const handleUnitCategoryChange = (category: string) => {
     const firstUnit = unitCategories[category as keyof typeof unitCategories]?.units[0]?.value || 'pcs';
     setFormData({ ...formData, unitCategory: category, unit: firstUnit });
@@ -33,6 +36,7 @@ const AddInventoryForm = ({ onClose, onSave }: AddInventoryFormProps) => {
     e.preventDefault();
     const itemData = {
       ...formData,
+      ...extrasPayload(extras),
       quantity: parseInt(formData.quantity),
       minQuantity: parseInt(formData.minQuantity),
       unitPrice: formData.unitPrice,
@@ -188,6 +192,8 @@ const AddInventoryForm = ({ onClose, onSave }: AddInventoryFormProps) => {
         />
       </div>
       
+      <ItemExtrasFields value={extras} onChange={setExtras} unit={formData.unit} />
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
         <textarea

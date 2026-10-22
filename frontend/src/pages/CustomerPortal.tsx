@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import axios from 'axios';
 import { Link, useSearchParams } from 'react-router-dom';
-import { LogOut, MessageSquare, Package, RefreshCw, Save, Truck } from 'lucide-react';
+import { FileText, LogOut, MessageSquare, Package, RefreshCw, Repeat, Save, Smartphone, Truck } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { InvoiceDialog, PayDialog, StatementDialog } from '@/components/portal/PortalExtras';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'https://waretrack-pro.onrender.com/api' });
 const tokenKey = 'waretrack_customer_token';
@@ -33,11 +34,28 @@ export default function CustomerPortal() {
   const [message, setMessage] = useState('');
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<number, string>>({});
   const [feedbackCategory, setFeedbackCategory] = useState<Record<number, string>>({});
+  const [invoiceFor, setInvoiceFor] = useState<number | null>(null);
+  const [payFor, setPayFor] = useState<CustomerOrder | null>(null);
+  const [showStatement, setShowStatement] = useState(false);
+  const [reordering, setReordering] = useState<number | null>(null);
 
-  const request = useCallback((method: 'get' | 'patch', path: string, data?: unknown) => {
+  const request = useCallback((method: 'get' | 'patch' | 'post', path: string, data?: unknown) => {
     const config = { headers: { Authorization: `Bearer ${token}`, 'X-Company-Id': companyId } };
-    return method === 'get' ? api.get(path, config) : api.patch(path, data, config);
+    return method === 'get' ? api.get(path, config) : method === 'post' ? api.post(path, data, config) : api.patch(path, data, config);
   }, [companyId, token]);
+
+  async function orderAgain(order: CustomerOrder) {
+    setReordering(order.id);
+    try {
+      const response = await request('post', `/features/customer/reorder/${order.id}`);
+      setMessage(`New order ${response.data.data.orderNumber} placed with today's prices. We will confirm the delivery time.`);
+      await loadPortal();
+    } catch (error: any) {
+      setMessage(error?.response?.data?.error?.message || 'Could not place the order again.');
+    } finally {
+      setReordering(null);
+    }
+  }
 
   async function submitOrderFeedback(orderId: number) {
     const text = feedbackDrafts[orderId]?.trim() || '';
@@ -156,12 +174,15 @@ export default function CustomerPortal() {
                 </form>
               </section>
               <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold"><Truck className="h-5 w-5 text-primary-600" />Order history and invoices</h2>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 text-lg font-semibold"><Truck className="h-5 w-5 text-primary-600" />Order history and invoices</h2>{accountSummary && accountSummary.accounts.length > 0 && <Button size="sm" variant="secondary" onClick={() => setShowStatement(true)}><FileText className="mr-1.5 h-4 w-4" />Statement</Button>}</div>
                 {accountSummary && accountSummary.accounts.length > 0 && <div className="mb-4 grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-slate-50 p-4"><p className="text-xs text-gray-500">Account balance</p><p className="mt-1 text-lg font-semibold">{Number(accountSummary.balance).toLocaleString()} RWF</p></div><div className="rounded-xl bg-amber-50 p-4"><p className="text-xs text-amber-800">Overdue</p><p className="mt-1 text-lg font-semibold text-amber-900">{Number(accountSummary.overdue).toLocaleString()} RWF</p></div></div>}
-                {orders.length === 0 ? <p className="text-sm text-gray-500">No orders found.</p> : <div className="divide-y divide-gray-100">{orders.map((order) => <article key={order.id} className="grid gap-2 py-4 sm:grid-cols-[1fr_auto] sm:items-center"><div><p className="font-semibold">{order.orderNumber} <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">{order.status.replaceAll('_', ' ')}</span></p><p className="mt-1 text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()} · {order.deliveryAddress}</p>{order.invoice && <p className="mt-1 text-xs text-gray-600">Invoice {order.invoice.invoiceNumber} · {order.invoice.status} · {Number(order.invoice.total).toLocaleString()} RWF</p>}<details className="mt-2"><summary className="flex cursor-pointer items-center gap-1 text-sm text-primary-700"><MessageSquare className="h-4 w-4"/>Report an issue with this order</summary><div className="mt-2 grid gap-2 sm:grid-cols-[160px_1fr_auto]"><select aria-label="Feedback category" className={field} value={feedbackCategory[order.id] || 'DELIVERY'} onChange={(event) => setFeedbackCategory((current) => ({ ...current, [order.id]: event.target.value }))}><option value="DELIVERY">Delivery</option><option value="PRODUCT">Product</option><option value="SERVICE">Service</option><option value="OTHER">Other</option></select><textarea aria-label="Order feedback" className={`${field} min-h-10 py-2`} minLength={5} maxLength={4000} placeholder="Tell us what happened" value={feedbackDrafts[order.id] || ''} onChange={(event) => setFeedbackDrafts((current) => ({ ...current, [order.id]: event.target.value }))}/><Button size="sm" onClick={() => void submitOrderFeedback(order.id)}>Send</Button></div></details></div><div className="text-sm font-semibold">{Number(order.totalAmount).toLocaleString()} RWF</div></article>)}</div>}
+                {orders.length === 0 ? <p className="text-sm text-gray-500">No orders found.</p> : <div className="divide-y divide-gray-100">{orders.map((order) => <article key={order.id} className="grid gap-2 py-4 sm:grid-cols-[1fr_auto] sm:items-center"><div><p className="font-semibold">{order.orderNumber} <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">{order.status.replaceAll('_', ' ')}</span></p><p className="mt-1 text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()} · {order.deliveryAddress}</p>{order.invoice && <p className="mt-1 text-xs text-gray-600">Invoice {order.invoice.invoiceNumber} · {order.invoice.status} · {Number(order.invoice.total).toLocaleString()} RWF</p>}<div className="mt-2 flex flex-wrap gap-2"><Button size="sm" variant="secondary" onClick={() => setInvoiceFor(order.id)}><FileText className="mr-1.5 h-4 w-4" />Invoice</Button>{!['PAID', 'REFUNDED'].includes(order.paymentStatus) && !['CANCELLED', 'RETURNED'].includes(order.status) && <Button size="sm" onClick={() => setPayFor(order)}><Smartphone className="mr-1.5 h-4 w-4" />Pay with MoMo</Button>}<Button size="sm" variant="ghost" onClick={() => void orderAgain(order)} disabled={reordering === order.id}><Repeat className="mr-1.5 h-4 w-4" />{reordering === order.id ? 'Ordering…' : 'Order again'}</Button></div><details className="mt-2"><summary className="flex cursor-pointer items-center gap-1 text-sm text-primary-700"><MessageSquare className="h-4 w-4"/>Report an issue with this order</summary><div className="mt-2 grid gap-2 sm:grid-cols-[160px_1fr_auto]"><select aria-label="Feedback category" className={field} value={feedbackCategory[order.id] || 'DELIVERY'} onChange={(event) => setFeedbackCategory((current) => ({ ...current, [order.id]: event.target.value }))}><option value="DELIVERY">Delivery</option><option value="PRODUCT">Product</option><option value="SERVICE">Service</option><option value="OTHER">Other</option></select><textarea aria-label="Order feedback" className={`${field} min-h-10 py-2`} minLength={5} maxLength={4000} placeholder="Tell us what happened" value={feedbackDrafts[order.id] || ''} onChange={(event) => setFeedbackDrafts((current) => ({ ...current, [order.id]: event.target.value }))}/><Button size="sm" onClick={() => void submitOrderFeedback(order.id)}>Send</Button></div></details></div><div className="text-sm font-semibold">{Number(order.totalAmount).toLocaleString()} RWF</div></article>)}</div>}
               </section>
             </>}
             {message && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
+            <InvoiceDialog orderId={invoiceFor} request={request} onClose={() => setInvoiceFor(null)} />
+            <StatementDialog open={showStatement} request={request} onClose={() => setShowStatement(false)} />
+            <PayDialog order={payFor} defaultPhone={profile?.phone} request={request} onClose={() => setPayFor(null)} onPaid={() => void loadPortal()} />
           </div>
         )}
       </div>

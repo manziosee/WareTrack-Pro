@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Download, FileSpreadsheet, Receipt, Wallet, Building2, Scale, Loader2 } from 'lucide-react';
+import { BookOpen, Download, FileSpreadsheet, Receipt, FileMinus2, Wallet, Building2, Scale, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
 import api from '@/services/api';
@@ -9,10 +9,11 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const EXPORTS = [
   { type: 'sales', title: 'Sales (VAT)', icon: Receipt, text: 'Every delivered order with net, VAT 18% and total, what was paid and what is still owed. For the VAT return.' },
   { type: 'payments', title: 'Payments received', icon: Wallet, text: 'Every payment: cash, MoMo, Airtel, bank, with the order and reference.' },
+  { type: 'credit-notes', title: 'Credit notes', icon: FileMinus2, text: 'Returns and goodwill credits with net and VAT reversed, and whether each was settled, refunded in cash or kept as credit.' },
   { type: 'expenses', title: 'Expenses', icon: FileSpreadsheet, text: 'Fuel, tolls, repairs and other costs with vehicle and driver.' },
   { type: 'receivables', title: 'Who owes what (aging)', icon: Building2, text: 'Balance per customer split into not due, 1–30, 31–60, 61–90 and 90+ days. Ignores the dates (it is today’s position).' },
   { type: 'quickbooks', title: 'QuickBooks invoices', icon: BookOpen, text: 'Ready for QuickBooks Online → Import invoices (one line per item, VAT 18%).' },
-  { type: 'journal', title: 'Journal entries (Odoo / ledger)', icon: Scale, text: 'Double-entry lines: sales, VAT, receipts and expenses. Import into Odoo or any accounting system.' },
+  { type: 'journal', title: 'Journal entries (Odoo / ledger)', icon: Scale, text: 'Double-entry lines: sales, VAT, receipts, credit notes (sales returns) and expenses. Import into Odoo or any accounting system.' },
 ];
 
 /** Download CSV files for the accountant, QuickBooks or Odoo. */

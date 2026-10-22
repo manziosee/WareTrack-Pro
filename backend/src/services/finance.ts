@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { nextDocumentNumber } from '../lib/documentNumbers';
+import { tenantFields } from '../lib/tenantContext';
 
 const DAY = 86400000;
 
@@ -77,9 +78,13 @@ export async function accountPosition(accountId: number, termsDays: number) {
   }
   const aging = Object.fromEntries(AGING_BUCKETS.map((b) => [b, 0])) as Record<AgingBucket, number>;
   for (const i of items) aging[i.bucket] = money(aging[i.bucket] + i.outstanding);
-  const balance = money(items.reduce((s, i) => s + i.outstanding, 0));
+  const owed = money(items.reduce((s, i) => s + i.outstanding, 0));
   const overdue = money(items.filter((i) => i.daysOverdue > 0).reduce((s, i) => s + i.outstanding, 0));
-  return { items, aging, balance, overdue, openOrders: money(openOrders), exposure: money(balance + openOrders) };
+  // Credit notes kept as account credit lower what the customer owes
+  const credits = await prisma.creditNote.findMany({ where: { accountId, status: 'ISSUED' }, select: { amount: true, appliedAmount: true } });
+  const credit = money(credits.reduce((s, c) => s + Number(c.amount) - Number(c.appliedAmount), 0));
+  const balance = money(owed - credit);
+  return { items, aging, owed, credit, balance, overdue, openOrders: money(openOrders), exposure: money(Math.max(0, balance) + openOrders) };
 }
 
 /** Can this account take a new order of `amount` on credit? */
@@ -188,4 +193,102 @@ export async function linkOrdersToAccounts() {
     linked += res.count;
   }
   return { created, linked };
+}
+
+export type CreditSettlement = 'ACCOUNT_CREDIT' | 'CASH_REFUND';
+
+/**
+ * Issue a credit note on an order. It first settles what the order still owes
+ * (recorded as a CREDIT_NOTE payment); what is left either stays as credit on
+ * the customer's account, or is noted as cash handed back.
+ */
+export async function issueCreditNote(input: { orderId: number; amount: number; reason: string; returnId?: number | null; settlement?: CreditSettlement; userId: number }) {
+  const amount = money(input.amount);
+  if (!(amount > 0)) throw Object.assign(new Error('Credit amount must be more than 0'), { status: 400 });
+  const order = await prisma.deliveryOrder.findUnique({ where: { id: input.orderId }, select: { id: true, orderNumber: true, status: true, totalAmount: true, accountId: true } });
+  if (!order) throw Object.assign(new Error('Order not found'), { status: 404 });
+  if (amount > money(Number(order.totalAmount))) throw Object.assign(new Error(`A credit note can't be more than the order total (RWF ${Number(order.totalAmount).toLocaleString()})`), { status: 400 });
+  const issued = await prisma.creditNote.aggregate({ where: { orderId: order.id, status: { not: 'VOID' } }, _sum: { amount: true } });
+  if (money(Number(issued._sum.amount || 0) + amount) > money(Number(order.totalAmount))) {
+    throw Object.assign(new Error('Credit notes on this order would add up to more than its total'), { status: 409 });
+  }
+  // A returned order no longer owes anything, so nothing is applied to it
+  const paid = (await paidByOrder([order.id])).get(order.id) || 0;
+  const outstanding = order.status === 'RETURNED' || order.status === 'CANCELLED' ? 0 : Math.max(0, money(Number(order.totalAmount) - paid));
+  const applied = money(Math.min(outstanding, amount));
+  const settlement: CreditSettlement = input.settlement || (order.accountId ? 'ACCOUNT_CREDIT' : 'CASH_REFUND');
+  const number = await nextDocumentNumber('creditNote', 'CN', 6);
+  const note = await prisma.creditNote.create({
+    data: {
+      ...tenantFields(),
+      creditNoteNumber: number, orderId: order.id, accountId: order.accountId, returnId: input.returnId ?? null, amount, appliedAmount: applied,
+      reason: input.reason.slice(0, 300), createdById: input.userId,
+      // Fully used against the order, or the rest was paid back in cash: nothing left as credit
+      status: applied >= amount || settlement === 'CASH_REFUND' ? 'REFUNDED' : 'ISSUED',
+    },
+  });
+  if (applied > 0) {
+    await prisma.payment.create({
+      data: { orderId: order.id, accountId: order.accountId, provider: 'CREDIT_NOTE', amount: applied, status: 'SUCCESSFUL', externalRef: number, message: input.reason.slice(0, 200), completedAt: new Date(), receivedById: input.userId },
+    });
+    await refreshOrderPayment(order.id);
+  }
+  return { ...note, settlement, remaining: money(amount - applied) };
+}
+
+const KIGALI = 2 * 3600000;
+const dayStart = (v: unknown, fallback: Date) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(new Date(`${v}T00:00:00Z`).getTime() - KIGALI) : fallback);
+const dayEnd = (v: unknown, fallback: Date) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(new Date(`${v}T00:00:00Z`).getTime() - KIGALI + 86400000) : fallback);
+
+/**
+ * Account statement: opening balance, every delivered order (charged), every
+ * payment and credit note (paid), and the running balance. Used by staff and
+ * by the customer portal.
+ */
+export async function buildStatement(account: { id: number; [key: string]: unknown }, fromValue?: unknown, toValue?: unknown) {
+  const to = dayEnd(toValue, new Date());
+  const from = dayStart(fromValue, new Date(to.getTime() - 90 * DAY));
+  const [orders, payments, credits] = await Promise.all([
+    prisma.deliveryOrder.findMany({
+      where: { accountId: account.id, status: 'DELIVERED', paymentStatus: { not: 'REFUNDED' } },
+      select: { id: true, orderNumber: true, totalAmount: true, deliveredAt: true, createdAt: true },
+    }),
+    prisma.payment.findMany({
+      where: { order: { accountId: account.id, status: 'DELIVERED' }, status: 'SUCCESSFUL' },
+      select: { id: true, amount: true, provider: true, externalRef: true, completedAt: true, createdAt: true, order: { select: { orderNumber: true } } },
+    }),
+    // Credit kept on the account (the part of a credit note not used on its own order)
+    prisma.creditNote.findMany({ where: { accountId: account.id, status: 'ISSUED' }, select: { creditNoteNumber: true, amount: true, appliedAmount: true, reason: true, createdAt: true } }),
+  ]);
+  const entries = [
+    ...orders.map((o) => ({ date: o.deliveredAt || o.createdAt, kind: 'ORDER' as const, reference: o.orderNumber, description: `Delivery ${o.orderNumber}`, debit: money(o.totalAmount), credit: 0 })),
+    ...payments.map((p) => ({
+      date: p.completedAt || p.createdAt, kind: 'PAYMENT' as const, reference: p.externalRef || `PAY-${p.id}`,
+      description: p.provider === 'CREDIT_NOTE' ? `Credit note for ${p.order.orderNumber}` : `Payment (${p.provider.replace(/_/g, ' ').toLowerCase()}) for ${p.order.orderNumber}`,
+      debit: 0, credit: money(p.amount),
+    })),
+    ...credits
+      .filter((c) => Number(c.amount) - Number(c.appliedAmount) > 0)
+      .map((c) => ({ date: c.createdAt, kind: 'CREDIT' as const, reference: c.creditNoteNumber, description: `Credit: ${c.reason}`, debit: 0, credit: money(Number(c.amount) - Number(c.appliedAmount)) })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime() || (a.kind === 'ORDER' ? -1 : 1));
+  let opening = 0;
+  const lines = [];
+  let running = 0;
+  for (const e of entries) {
+    if (e.date < from) { opening = money(opening + e.debit - e.credit); continue; }
+    if (e.date >= to) continue;
+    if (!lines.length) running = opening;
+    running = money(running + e.debit - e.credit);
+    lines.push({ ...e, balance: running });
+  }
+  const closing = lines.length ? running : opening;
+  return {
+    account,
+    from: new Date(from.getTime() + KIGALI).toISOString().slice(0, 10),
+    to: new Date(to.getTime() + KIGALI - DAY).toISOString().slice(0, 10),
+    opening, closing,
+    totalDebit: money(lines.reduce((s, l) => s + l.debit, 0)),
+    totalCredit: money(lines.reduce((s, l) => s + l.credit, 0)),
+    lines,
+  };
 }

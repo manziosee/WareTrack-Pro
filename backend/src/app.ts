@@ -30,6 +30,9 @@ import financeRoutes from './routes/finance';
 import warehouseOpsRoutes from './routes/warehouseOps';
 import intakeRoutes from './routes/intake';
 import filesRoutes from './routes/files';
+import commercialRoutes from './routes/commercial';
+import tripsRoutes from './routes/trips';
+import stockFleetRoutes from './routes/stockFleet';
 import { routingProvider } from './services/routing';
 import { storageBackend } from './services/fileStorage';
 import chatRoutes from './routes/chat';
@@ -231,6 +234,9 @@ addUndocumentedRoutes(swaggerSpec, [
   ['/api', 'Stock Counts, Packing & Import', warehouseOpsRoutes],
   ['/api', 'Push, API Keys & Online Ordering', intakeRoutes],
   ['/api/files', 'Files', filesRoutes],
+  ['/api', 'Pricing & Credit Notes', commercialRoutes],
+  ['/api', 'Trips', tripsRoutes],
+  ['/api', 'Serials, Reorder Points & Fleet Care', stockFleetRoutes],
   ['/api/tenancy', 'Tenancy and Permissions', tenancyRoutes],
   ['/api/feedback', 'Feedback', feedbackRoutes],
   ['/api/usage-events', 'Product Analytics', usageEventRoutes],
@@ -280,6 +286,9 @@ app.use('/api', financeRoutes);
 app.use('/api', warehouseOpsRoutes);
 app.use('/api', intakeRoutes);
 app.use('/api/files', filesRoutes);
+app.use('/api', commercialRoutes);
+app.use('/api', tripsRoutes);
+app.use('/api', stockFleetRoutes);
 
 // Unknown routes return JSON instead of Express's HTML page
 app.use((req, res) => {

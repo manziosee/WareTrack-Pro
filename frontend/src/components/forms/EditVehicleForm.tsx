@@ -8,6 +8,7 @@ interface EditVehicleFormProps {
     plateNumber: string;
     type: string;
     capacity: number;
+    volumeL?: number | string | null;
     model?: string;
     year?: number;
     fuelType?: string;
@@ -22,6 +23,7 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
     plateNumber: vehicle.plateNumber || '',
     type: vehicle.type || 'Truck',
     capacity: vehicle.capacity?.toString() || '0',
+    volumeL: vehicle.volumeL != null ? String(Number(vehicle.volumeL)) : '',
     model: vehicle.model || '',
     year: vehicle.year?.toString() || '',
     fuelType: vehicle.fuelType || 'Diesel',
@@ -38,6 +40,7 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
         plateNumber: formData.plateNumber,
         type: formData.type,
         capacity: Number(formData.capacity),
+        volumeL: formData.volumeL ? Number(formData.volumeL) : null,
         vehicleModel: formData.model,
         year: Number(formData.year),
         fuelType: formData.fuelType,
@@ -116,6 +119,17 @@ const EditVehicleForm = ({ vehicle, onClose, onSave }: EditVehicleFormProps) => 
             value={formData.capacity}
             onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Load space (litres)</label>
+          <input
+            type="number"
+            min={0}
+            value={formData.volumeL}
+            onChange={(e) => setFormData({ ...formData, volumeL: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="Optional, e.g. 12000"
           />
         </div>
         <div>

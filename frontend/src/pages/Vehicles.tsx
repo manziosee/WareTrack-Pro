@@ -18,6 +18,7 @@ import AddVehicleForm from '@/components/forms/AddVehicleForm';
 import EditVehicleForm from '@/components/forms/EditVehicleForm';
 import ScheduleMaintenanceForm from '@/components/forms/ScheduleMaintenanceForm';
 import { VehicleUsage } from '@/components/fleet/FleetHistory';
+import { VehicleDocuments, FleetCareOverview } from '@/components/fleet/FleetCare';
 import { vehiclesService } from '@/services/vehiclesService';
 import { useList } from '@/hooks/useList';
 import { undoableAction } from '@/utils/undoableAction';
@@ -152,6 +153,8 @@ export default function Vehicles() {
         <StatCard label="In maintenance" value={rows.filter((v) => v.status === 'MAINTENANCE').length} icon={<Wrench className="h-5 w-5" />} tone="warning" />
       </div>
 
+      {canEdit && <FleetCareOverview onOpenVehicle={setViewId} />}
+
       <DataTable
         storageKey="vehicles"
         rows={filtered}
@@ -208,7 +211,7 @@ export default function Vehicles() {
             />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <DetailStat label="Type" value={viewing.type} icon={<Truck className="h-4 w-4" />} />
-              <DetailStat label="Capacity" value={`${Number(viewing.capacity || 0).toLocaleString()} kg`} icon={<Package className="h-4 w-4" />} tone="accent" />
+              <DetailStat label="Capacity" value={`${Number(viewing.capacity || 0).toLocaleString()} kg${viewing.volumeL ? ` · ${Number(viewing.volumeL).toLocaleString()} L` : ''}`} icon={<Package className="h-4 w-4" />} tone="accent" />
             </div>
             <DetailSection title="Details" icon={<CalendarClock className="h-4 w-4" />}>
               <DetailGrid>
@@ -218,6 +221,7 @@ export default function Vehicles() {
                 <DetailField label="Added">{formatDate(viewing.createdAt)}</DetailField>
               </DetailGrid>
             </DetailSection>
+            <VehicleDocuments vehicleId={viewing.id} canEdit={canEdit} />
             <VehicleUsage vehicleId={viewing.id} />
             <DetailSection title="Maintenance history" icon={<Wrench className="h-4 w-4" />}>
               <MaintenanceHistory vehicleId={viewing.id} />

@@ -4,7 +4,7 @@ import { FileInputError, storeDataUrl } from '../services/fileStorage';
 import { auth, authorizeRoles, ROLES } from '../middleware/auth';
 import { NotificationService } from '../services/notificationService';
 import {
-  accountPosition, allocateAccountPayment, creditCheck, linkOrdersToAccounts, nextNumber, paidByOrder, AGING_BUCKETS,
+  accountPosition, allocateAccountPayment, buildStatement, creditCheck, linkOrdersToAccounts, nextNumber, paidByOrder, AGING_BUCKETS,
 } from '../services/finance';
 
 /**
@@ -44,6 +44,8 @@ function accountData(body: any) {
     creditLimit: num(body.creditLimit) !== undefined ? Math.max(0, Number(body.creditLimit)) : undefined,
     paymentTermsDays: num(body.paymentTermsDays) !== undefined ? Math.max(0, Math.min(365, Math.round(Number(body.paymentTermsDays)))) : undefined,
     status: ['ACTIVE', 'ON_HOLD', 'CLOSED'].includes(body.status) ? body.status : undefined,
+    priceListId: body.priceListId !== undefined ? (body.priceListId ? Number(body.priceListId) : null) : undefined,
+    discountPercent: body.discountPercent !== undefined ? Math.max(0, Math.min(100, Number(body.discountPercent) || 0)) : undefined,
     notes: text(body.notes, 1000),
   };
 }
@@ -85,7 +87,7 @@ router.get('/accounts', ...staff, async (_req, res, next) => {
 
 router.get('/accounts/:id', ...staff, async (req, res, next) => {
   try {
-    const account = await prisma.customerAccount.findUnique({ where: { id: Number(req.params.id) } });
+    const account = await prisma.customerAccount.findUnique({ where: { id: Number(req.params.id) }, include: { priceList: { select: { id: true, name: true } } } });
     if (!account) return bad(res, 'Account not found', 404);
     const [position, payments, orders, deliveredOrders] = await Promise.all([
       accountPosition(account.id, account.paymentTermsDays),
@@ -136,45 +138,7 @@ router.get('/accounts/:id/statement', ...staff, async (req, res, next) => {
   try {
     const account = await prisma.customerAccount.findUnique({ where: { id: Number(req.params.id) } });
     if (!account) return bad(res, 'Account not found', 404);
-    const to = dayEnd(req.query.to, new Date());
-    const from = dayStart(req.query.from, new Date(to.getTime() - 90 * 86400000));
-    const [orders, payments] = await Promise.all([
-      prisma.deliveryOrder.findMany({
-        where: { accountId: account.id, status: 'DELIVERED', paymentStatus: { not: 'REFUNDED' } },
-        select: { id: true, orderNumber: true, totalAmount: true, deliveredAt: true, createdAt: true },
-      }),
-      prisma.payment.findMany({
-        where: { order: { accountId: account.id, status: 'DELIVERED' }, status: 'SUCCESSFUL' },
-        select: { id: true, amount: true, provider: true, externalRef: true, completedAt: true, createdAt: true, order: { select: { orderNumber: true } } },
-      }),
-    ]);
-    const entries = [
-      ...orders.map((o) => ({ date: o.deliveredAt || o.createdAt, kind: 'ORDER' as const, reference: o.orderNumber, description: `Delivery ${o.orderNumber}`, debit: money(o.totalAmount), credit: 0 })),
-      ...payments.map((p) => ({ date: p.completedAt || p.createdAt, kind: 'PAYMENT' as const, reference: p.externalRef || `PAY-${p.id}`, description: `Payment (${p.provider.replace(/_/g, ' ').toLowerCase()}) for ${p.order.orderNumber}`, debit: 0, credit: money(p.amount) })),
-    ].sort((a, b) => a.date.getTime() - b.date.getTime() || (a.kind === 'ORDER' ? -1 : 1));
-    let opening = 0;
-    const lines = [];
-    let running = 0;
-    for (const e of entries) {
-      if (e.date < from) { opening = money(opening + e.debit - e.credit); continue; }
-      if (e.date >= to) continue;
-      if (!lines.length) running = opening;
-      running = money(running + e.debit - e.credit);
-      lines.push({ ...e, balance: running });
-    }
-    const closing = lines.length ? running : opening;
-    res.json({
-      success: true,
-      data: {
-        account,
-        from: new Date(from.getTime() + KIGALI).toISOString().slice(0, 10),
-        to: new Date(to.getTime() + KIGALI - 86400000).toISOString().slice(0, 10),
-        opening, closing,
-        totalDebit: money(lines.reduce((s, l) => s + l.debit, 0)),
-        totalCredit: money(lines.reduce((s, l) => s + l.credit, 0)),
-        lines,
-      },
-    });
+    res.json({ success: true, data: await buildStatement(account, req.query.from, req.query.to) });
   } catch (error) {
     next(error);
   }
@@ -208,8 +172,8 @@ router.put('/accounts/:id', ...staff, async (req, res, next) => {
     const id = Number(req.params.id);
     const data = accountData(req.body || {});
     if (data.name !== undefined && (!data.name || data.name.length < 2)) return bad(res, 'Account name is required');
-    if ((data.creditLimit !== undefined || data.paymentTermsDays !== undefined) && req.user!.role !== 'ADMIN') {
-      return bad(res, 'Only an admin can change credit limits and payment terms', 403);
+    if ((data.creditLimit !== undefined || data.paymentTermsDays !== undefined || data.priceListId !== undefined || data.discountPercent !== undefined) && req.user!.role !== 'ADMIN') {
+      return bad(res, 'Only an admin can change credit limits, payment terms, price lists and discounts', 403);
     }
     const account = await prisma.customerAccount.update({ where: { id }, data: data as any });
     res.json({ success: true, data: account });
@@ -268,7 +232,7 @@ router.post('/accounts/import', ...staff, async (req, res, next) => {
     for (const [i, row] of rows.entries()) {
       const data = accountData(row);
       if (!data.name) { errors.push({ row: i + 2, message: 'Name is missing' }); continue; }
-      if (req.user!.role !== 'ADMIN') { delete (data as any).creditLimit; delete (data as any).paymentTermsDays; }
+      if (req.user!.role !== 'ADMIN') { delete (data as any).creditLimit; delete (data as any).paymentTermsDays; delete (data as any).priceListId; delete (data as any).discountPercent; }
       const existing = await prisma.customerAccount.findFirst({ where: { name: { equals: data.name, mode: 'insensitive' } } });
       if (existing) {
         await prisma.customerAccount.update({ where: { id: existing.id }, data: data as any });
@@ -597,6 +561,21 @@ const vatSplit = (gross: number, taxRate: number) => {
   return { net, vat: money(gross - net) };
 };
 
+/**
+ * @swagger
+ * /api/accounting/export:
+ *   get:
+ *     tags: [Finance]
+ *     summary: CSV export for the accountant
+ *     description: sales (VAT), payments, credit-notes, expenses, receivables (aging), quickbooks (invoice import) or journal (double entry, including sales returns for credit notes).
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: type, schema: { type: string, enum: [sales, payments, credit-notes, expenses, receivables, quickbooks, journal], default: sales } }
+ *       - { in: query, name: from, schema: { type: string, format: date } }
+ *       - { in: query, name: to, schema: { type: string, format: date } }
+ *     responses: { 200: { description: CSV file, content: { text/csv: {} } } }
+ */
+
 router.get('/accounting/export', ...admin, async (req, res, next) => {
   try {
     const type = String(req.query.type || 'sales');
@@ -661,8 +640,9 @@ router.get('/accounting/export', ...admin, async (req, res, next) => {
           rows.push({ Date: d(o.deliveredAt), Journal: 'Sales', Reference: ref, Account: 'Sales', Partner: partner, Debit: 0, Credit: net, Currency: company.currency, Label: `Delivery ${o.orderNumber}` });
           rows.push({ Date: d(o.deliveredAt), Journal: 'Sales', Reference: ref, Account: 'Tax Payable', Partner: partner, Debit: 0, Credit: vat, Currency: company.currency, Label: `${taxLabel} ${percent(rate)}` });
         }
+        // Credit-note settlements are not money received; they are booked below as sales returns
         const payments = await prisma.payment.findMany({
-          where: { status: 'SUCCESSFUL', completedAt: { gte: from, lt: to } },
+          where: { status: 'SUCCESSFUL', provider: { not: 'CREDIT_NOTE' }, completedAt: { gte: from, lt: to } },
           include: { order: { select: { orderNumber: true, customerName: true, account: { select: { name: true } } } } },
         });
         for (const p of payments) {
@@ -670,6 +650,25 @@ router.get('/accounting/export', ...admin, async (req, res, next) => {
           const cashAccount = p.provider === 'CASH' ? 'Cash' : p.provider === 'MTN_MOMO' ? 'MTN MoMo' : p.provider === 'AIRTEL_MONEY' ? 'Airtel Money' : 'Bank';
           rows.push({ Date: d(p.completedAt), Journal: 'Receipts', Reference: p.externalRef || `PAY-${p.id}`, Account: cashAccount, Partner: partner, Debit: money(p.amount), Credit: 0, Currency: company.currency, Label: `Payment ${p.order.orderNumber}` });
           rows.push({ Date: d(p.completedAt), Journal: 'Receipts', Reference: p.externalRef || `PAY-${p.id}`, Account: 'Accounts Receivable', Partner: partner, Debit: 0, Credit: money(p.amount), Currency: company.currency, Label: `Payment ${p.order.orderNumber}` });
+        }
+        // Credit notes reverse part of a sale (and its VAT); a cash refund also pays money out
+        const creditNotes = await prisma.creditNote.findMany({
+          where: { status: { not: 'VOID' }, createdAt: { gte: from, lt: to } },
+          include: { order: { select: { orderNumber: true, customerName: true, invoice: true, account: { select: { name: true } } } } },
+        });
+        for (const c of creditNotes) {
+          const amount = money(c.amount);
+          const { net, vat } = vatSplit(amount, orderTaxRate(c.order.invoice));
+          const partner = c.order.account?.name || c.order.customerName;
+          const base = { Date: d(c.createdAt), Journal: 'Sales Returns', Reference: c.creditNoteNumber, Partner: partner, Currency: company.currency };
+          rows.push({ ...base, Account: 'Sales Returns', Debit: net, Credit: 0, Label: `${c.reason} (${c.order.orderNumber})` });
+          rows.push({ ...base, Account: 'Tax Payable', Debit: vat, Credit: 0, Label: `${taxLabel} reversed` });
+          rows.push({ ...base, Account: 'Accounts Receivable', Debit: 0, Credit: amount, Label: `Credit note ${c.creditNoteNumber}` });
+          const refunded = money(Number(c.amount) - Number(c.appliedAmount));
+          if (c.status === 'REFUNDED' && refunded > 0) {
+            rows.push({ ...base, Account: 'Accounts Receivable', Debit: refunded, Credit: 0, Label: `Cash refund ${c.creditNoteNumber}` });
+            rows.push({ ...base, Account: 'Cash', Debit: 0, Credit: refunded, Label: `Cash refund ${c.creditNoteNumber}` });
+          }
         }
         const expenses = await prisma.expense.findMany({ where: { status: 'APPROVED', spentAt: { gte: from, lt: to } }, include: { vehicle: { select: { plateNumber: true } } } });
         for (const e of expenses) {
@@ -689,6 +688,26 @@ router.get('/accounting/export', ...admin, async (req, res, next) => {
         Date: d(p.completedAt), Receipt: `PAY-${p.id}`, 'Order No': p.order.orderNumber, Customer: p.order.account?.name || p.order.customerName,
         'Account No': p.order.account?.accountNumber || '', Method: p.provider, Reference: p.externalRef || '', [`Amount (${p.currency || company.currency})`]: money(p.amount),
       }));
+    } else if (type === 'credit-notes') {
+      const notes = await prisma.creditNote.findMany({
+        where: { createdAt: { gte: from, lt: to } },
+        orderBy: { createdAt: 'asc' },
+        include: { order: { select: { orderNumber: true, customerName: true, invoice: true, account: { select: { name: true, accountNumber: true, tin: true } } } } },
+      });
+      rows = notes.map((c) => {
+        const rate = orderTaxRate(c.order.invoice);
+        const { net, vat } = vatSplit(money(c.amount), rate);
+        const remaining = money(Number(c.amount) - Number(c.appliedAmount));
+        return {
+          Date: d(c.createdAt), 'Credit note': c.creditNoteNumber, 'Order No': c.order.orderNumber, 'Invoice No': c.order.invoice?.invoiceNumber || '',
+          Customer: c.order.account?.name || c.order.customerName, 'Account No': c.order.account?.accountNumber || '', TIN: c.order.account?.tin || '',
+          Reason: c.reason, [`Net (${company.currency})`]: net, [`${taxLabel} (${percent(rate)}, ${company.currency})`]: vat, [`Total (${company.currency})`]: money(c.amount),
+          [`Settled on order (${company.currency})`]: money(c.appliedAmount),
+          [`Refunded in cash (${company.currency})`]: c.status === 'REFUNDED' ? remaining : 0,
+          [`Kept as credit (${company.currency})`]: c.status === 'ISSUED' ? remaining : 0,
+          Status: c.status,
+        };
+      });
     } else if (type === 'expenses') {
       const expenses = await prisma.expense.findMany({
         where: { spentAt: { gte: from, lt: to }, status: { not: 'REJECTED' } },
@@ -711,7 +730,7 @@ router.get('/accounting/export', ...admin, async (req, res, next) => {
         });
       }
     } else {
-      return bad(res, 'type must be sales, payments, expenses, receivables, quickbooks or journal');
+      return bad(res, 'type must be sales, payments, credit-notes, expenses, receivables, quickbooks or journal');
     }
 
     const filename = `waretrack-${type}-${d(from)}-to-${d(new Date(to.getTime() - 86400000))}.csv`;

@@ -214,7 +214,8 @@ export class VehiclesController {
           status: (status || 'AVAILABLE') as any,
           vehicleModel,
           year: year ? Number(year) : null,
-          fuelType
+          fuelType,
+          volumeL: req.body.volumeL ? Number(req.body.volumeL) : null
         },
         include: {
           manager: true,
@@ -449,7 +450,8 @@ export class VehiclesController {
           status: status as any,
           fuelType,
           vehicleModel,
-          year: year ? Number(year) : undefined
+          year: year ? Number(year) : undefined,
+          volumeL: req.body.volumeL !== undefined ? (req.body.volumeL ? Number(req.body.volumeL) : null) : undefined
         }
       });
 

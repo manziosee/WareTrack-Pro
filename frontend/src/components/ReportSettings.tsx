@@ -113,18 +113,9 @@ const ReportSettingsComponent = ({ onExportClick }: ReportSettingsProps) => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Report Format</label>
-                <select 
-                  value={settings.reportFormat}
-                  onChange={(e) => handleChange('reportFormat', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="pdf">PDF</option>
-                  <option value="csv">CSV</option>
-                  <option value="excel">Excel</option>
-                </select>
-              </div>
+              <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                You get a one-page PDF summary of your branch: daily covers yesterday, weekly arrives on Monday, monthly on the 1st.
+              </p>
 
               <div className="flex items-center justify-between">
                 <div>

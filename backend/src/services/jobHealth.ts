@@ -33,6 +33,8 @@ const FRESHNESS_MS: Record<string, number | null> = {
   'fleet-status': null,
   'auto-restock': 26 * HOUR,
   'daily-briefing': 26 * HOUR,
+  'document-reminders': 26 * HOUR,
+  'summary-reports': 26 * HOUR,
   'scheduled-reports': 2 * HOUR,
 };
 const DEFAULT_FRESHNESS_MS = 45 * 60 * 1000; // jobs that run every 15 minutes

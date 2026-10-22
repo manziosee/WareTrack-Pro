@@ -15,6 +15,8 @@ const SOURCES = {
   handover: { table: 'cash_handovers', column: 'handover_number' },
   expense: { table: 'expenses', column: 'expense_number' },
   stockCount: { table: 'stock_counts', column: 'count_number' },
+  creditNote: { table: 'credit_notes', column: 'credit_note_number' },
+  trip: { table: 'trips', column: 'trip_number' },
 } as const;
 
 export type DocumentKind = keyof typeof SOURCES;

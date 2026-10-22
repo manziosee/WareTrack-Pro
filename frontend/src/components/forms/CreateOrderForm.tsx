@@ -20,7 +20,8 @@ const PAYMENT_METHODS: [string, string][] = [
 const input = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500';
 const rwf = (v: number) => `RWF ${Math.round(Number(v) || 0).toLocaleString()}`;
 
-interface Line { itemId: string; packagingId: string; quantity: number; price: number }
+/** `manual` lines keep the price typed by staff; others are priced by the server (price list, promotion, discount). */
+interface Line { itemId: string; packagingId: string; quantity: number; price: number; manual?: boolean; listPrice?: number; note?: string }
 const emptyLine = (): Line => ({ itemId: '', packagingId: '', quantity: 1, price: 0 });
 
 /** New order: pick or type the customer, choose items (by piece or pack) and how they pay. */
@@ -70,6 +71,29 @@ const CreateOrderForm = ({ onClose, onSave }: CreateOrderFormProps) => {
     return () => clearTimeout(t);
   }, [form.paymentMethod, account, total]);
 
+  // Ask the server what this customer pays (price list, promotions, discount) for lines not priced by hand
+  const pricingKey = JSON.stringify([account?.id ?? null, lines.map((l) => [l.itemId, l.packagingId, l.quantity, Boolean(l.manual)])]);
+  useEffect(() => {
+    const wanted = lines.map((l, index) => ({ l, index })).filter(({ l }) => l.itemId && !l.manual);
+    if (!wanted.length) return;
+    const t = setTimeout(() => {
+      api.post('/pricing/quote', {
+        accountId: account?.id,
+        items: wanted.map(({ l }) => ({ itemId: Number(l.itemId), quantity: l.quantity, packagingId: l.packagingId ? Number(l.packagingId) : undefined })),
+      }).then((r) => {
+        const quoted: any[] = r.data?.data?.lines || [];
+        setLines((list) => list.map((l, i) => {
+          const at = wanted.findIndex((w) => w.index === i);
+          const q = quoted[at];
+          if (at < 0 || !q || l.manual || String(q.itemId) !== l.itemId) return l;
+          const note = [q.appliedPriceList && 'customer price list', q.promotion && `promotion “${q.promotion}”`, q.customerDiscountPercent > 0 && `${q.customerDiscountPercent}% customer discount`].filter(Boolean).join(' · ');
+          return { ...l, price: q.unitPrice, listPrice: q.listPrice, note };
+        }));
+      }).catch(() => undefined);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [pricingKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const suggestions = useMemo(() => {
     const q = form.customerName.trim().toLowerCase();
     if (!q) return accounts.slice(0, 8);
@@ -89,7 +113,7 @@ const CreateOrderForm = ({ onClose, onSave }: CreateOrderFormProps) => {
     setLines((list) => list.map((l, i) => {
       if (i !== index) return l;
       const next = { ...l, ...patch };
-      if ('itemId' in patch) next.packagingId = '';
+      if ('itemId' in patch) { next.packagingId = ''; next.manual = false; next.note = undefined; }
       if ('itemId' in patch || 'packagingId' in patch) {
         const item = inventory.find((it: any) => String(it.id) === next.itemId);
         const pack = item?.packagings?.find((p: any) => String(p.id) === next.packagingId);
@@ -115,7 +139,7 @@ const CreateOrderForm = ({ onClose, onSave }: CreateOrderFormProps) => {
       paymentMethod: form.paymentMethod,
       scheduledDate: form.scheduledDate || undefined,
       deliveryInstructions: form.deliveryInstructions,
-      items: lines.filter((l) => l.itemId).map((l) => ({ itemId: Number(l.itemId), quantity: l.quantity, unitPrice: l.price, packagingId: l.packagingId ? Number(l.packagingId) : undefined })),
+      items: lines.filter((l) => l.itemId).map((l) => ({ itemId: Number(l.itemId), quantity: l.quantity, unitPrice: l.manual ? l.price : undefined, packagingId: l.packagingId ? Number(l.packagingId) : undefined })),
     });
     setSaving(false);
   };
@@ -249,7 +273,7 @@ const CreateOrderForm = ({ onClose, onSave }: CreateOrderFormProps) => {
                   </div>
                   <div className="md:col-span-2">
                     <label className="mb-1 block text-xs font-medium text-gray-700">Price each</label>
-                    <input type="number" min={0} value={line.price} onChange={(e) => updateLine(index, { price: Number(e.target.value) || 0 })} className={input} />
+                    <input type="number" min={0} step="any" value={line.price} onChange={(e) => updateLine(index, { price: Number(e.target.value) || 0, manual: true })} className={`${input} ${line.manual ? 'border-warning-300 bg-warning-50/40' : ''}`} />
                   </div>
                   <div className="flex items-end justify-between gap-2 md:col-span-2">
                     <span className="pb-2 text-sm font-semibold text-gray-900">{rwf(line.price * line.quantity)}</span>
@@ -257,6 +281,8 @@ const CreateOrderForm = ({ onClose, onSave }: CreateOrderFormProps) => {
                   </div>
                   {short && <p className="col-span-2 text-xs font-medium text-error-700 md:col-span-12">Not enough stock: {item?.quantity} {item?.unit} available{packFor(line) ? `, this needs ${unitsFor(line)}` : ''}.</p>}
                   {!short && packFor(line) && <p className="col-span-2 text-xs text-gray-500 md:col-span-12">= {unitsFor(line)} {item?.unit} from stock</p>}
+                  {line.itemId && line.manual && <p className="col-span-2 text-xs text-warning-700 md:col-span-12">Price typed by hand. <button type="button" onClick={() => updateLine(index, { manual: false })} className="font-medium underline">Use the customer's price</button></p>}
+                  {line.itemId && !line.manual && line.note && <p className="col-span-2 text-xs text-success-700 md:col-span-12">Normal price {rwf(line.listPrice || 0)} · {line.note}</p>}
                 </div>
               );
             })}
