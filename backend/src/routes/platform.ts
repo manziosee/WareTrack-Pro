@@ -10,6 +10,7 @@ import { channels } from '../services/messaging';
 import { providerConfigured } from '../services/payments';
 import { EmailService } from '../services/emailService';
 import axios from 'axios';
+import { createSafeWebhookAgents, isSafeWebhookUrl } from '../utils/webhookSecurity';
 
 /** Two-factor sign-in, webhooks, report builder and integration status. Mounted at /api. */
 const router = Router();
@@ -86,19 +87,10 @@ router.get('/webhooks', ...admin, async (_req, res, next) => {
   }
 });
 
-const validUrl = (url: string) => {
-  try {
-    const u = new URL(url);
-    return u.protocol === 'https:' || (process.env.NODE_ENV !== 'production' && u.protocol === 'http:');
-  } catch {
-    return false;
-  }
-};
-
 router.post('/webhooks', ...admin, async (req, res, next) => {
   try {
     const { url, events, description } = req.body || {};
-    if (!validUrl(url)) return bad(res, 'Enter a valid https:// URL');
+    if (!(await isSafeWebhookUrl(url))) return bad(res, 'Enter an HTTPS webhook URL that resolves to a public server');
     const list = (Array.isArray(events) ? events : []).filter((e: string) => (EVENT_TYPES as readonly string[]).includes(e));
     if (!list.length) return bad(res, 'Choose at least one event');
     const secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
@@ -113,7 +105,7 @@ router.post('/webhooks', ...admin, async (req, res, next) => {
 router.put('/webhooks/:id', ...admin, async (req, res, next) => {
   try {
     const { url, events, description, active } = req.body || {};
-    if (url !== undefined && !validUrl(url)) return bad(res, 'Enter a valid https:// URL');
+    if (url !== undefined && !(await isSafeWebhookUrl(url))) return bad(res, 'Enter an HTTPS webhook URL that resolves to a public server');
     const hook = await prisma.webhook.update({
       where: { id: Number(req.params.id) },
       data: {
@@ -145,8 +137,9 @@ router.post('/webhooks/:id/test', ...admin, async (req, res, next) => {
     const body = JSON.stringify(event);
     let status = 0;
     try {
+      if (!(await isSafeWebhookUrl(hook.url))) throw new Error('Webhook URL is no longer safe');
       const r = await axios.post(hook.url, body, {
-        timeout: 8000, validateStatus: () => true,
+        timeout: 8000, maxRedirects: 0, ...createSafeWebhookAgents(), validateStatus: () => true,
         headers: { 'Content-Type': 'application/json', 'X-WareTrack-Event': event.type, 'X-WareTrack-Signature': `sha256=${signPayload(hook.secret, body)}` },
       });
       status = r.status;

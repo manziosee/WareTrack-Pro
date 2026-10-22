@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
 import { emitToRoles } from './realtime';
+import { createSafeWebhookAgents, isSafeWebhookUrl } from '../utils/webhookSecurity';
 
 /**
  * Business events. Each event is:
@@ -42,8 +43,11 @@ async function deliverWebhooks(event: { id: string; type: string; createdAt: str
       const body = JSON.stringify(event);
       let status = 0;
       try {
+        if (!(await isSafeWebhookUrl(hook.url))) throw new Error('Webhook URL is no longer safe');
         const res = await axios.post(hook.url, body, {
           timeout: 8000,
+          maxRedirects: 0,
+          ...createSafeWebhookAgents(),
           headers: {
             'Content-Type': 'application/json',
             'User-Agent': 'WareTrack-Pro-Webhooks/1.0',

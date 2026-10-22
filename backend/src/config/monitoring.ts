@@ -10,8 +10,18 @@ export function initMonitoring() {
     environment: process.env.NODE_ENV || 'development',
     release: `waretrack-api@${process.env.npm_package_version || '2.3.0'}`,
     tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.1),
-    // Never send request bodies (they can contain passwords or codes)
-    sendDefaultPii: false,
+    // Never send request bodies or credentials (they can contain passwords or codes).
+    beforeSend(event) {
+      if (!event.request) return event;
+      const request = { ...event.request };
+      delete request.data;
+      if (request.headers) {
+        request.headers = Object.fromEntries(
+          Object.entries(request.headers).filter(([name]) => !['authorization', 'cookie', 'set-cookie'].includes(name.toLowerCase()))
+        );
+      }
+      return { ...event, request };
+    },
   });
   console.log('🛰️  Sentry error monitoring enabled');
 }

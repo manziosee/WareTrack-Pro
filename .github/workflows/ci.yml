@@ -29,10 +29,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: grep -q '^FROM node:24-alpine' Dockerfile
       - run: npx prisma generate
       - run: npx prisma validate
       - run: npx tsc --noEmit -p .
@@ -51,10 +53,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: grep -q '^FROM node:24-alpine' Dockerfile && grep -q '^FROM node:24-alpine' Dockerfile.prod
       - run: npx tsc -b
       - run: npx vitest run
       - run: npm run build
@@ -86,11 +90,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Start the API on a seeded test database
         working-directory: backend
         run: |
           npm ci
+          npm audit --audit-level=moderate
           npx prisma generate
           npx prisma db push --skip-generate
           npx ts-node --transpile-only -O '{"module":"commonjs"}' prisma/e2e-seed.ts
@@ -103,6 +108,7 @@ jobs:
           VITE_API_URL: http://localhost:5056/api
         run: |
           npm ci
+          npm audit --audit-level=moderate
           npm run build
           nohup npx vite preview --port 3002 --strictPort > preview.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:3002 >/dev/null && break; sleep 1; done

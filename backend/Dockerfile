@@ -1,5 +1,5 @@
 # Multi-stage build for production optimization
-FROM node:18-alpine AS base
+FROM node:24-alpine AS base
 
 # Install system dependencies
 RUN apk add --no-cache curl openssl
@@ -12,7 +12,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Development stage
 FROM base AS development
@@ -30,7 +30,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:24-alpine AS production
 
 # Install system dependencies
 RUN apk add --no-cache curl dumb-init openssl
@@ -44,7 +44,7 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Copy package files and install production dependencies
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built application and prisma files
 COPY --from=builder --chown=waretrack:nodejs /app/dist ./dist

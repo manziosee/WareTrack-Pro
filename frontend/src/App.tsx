@@ -108,7 +108,7 @@ function App() {
       <I18nProvider>
         <AuthProvider>
           <RealtimeProvider>
-            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <BrowserRouter>
               <UsagePageTracker />
               <ErrorBoundary>
               <Routes>
