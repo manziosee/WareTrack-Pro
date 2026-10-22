@@ -273,7 +273,8 @@ model DeliveryOrder {
   branchId             Int?          @map("branch_id")
   id                   Int           @id @default(autoincrement())
   orderNumber          String        @unique @map("order_number")
-  customerId           Int           @map("customer_id")
+  /// Portal customer who placed the order; null for orders taken by staff, API or import
+  customerId           Int?          @map("customer_id")
   customerName         String        @map("customer_name")
   deliveryAddress      String        @map("delivery_address")
   contactNumber        String        @map("contact_number")

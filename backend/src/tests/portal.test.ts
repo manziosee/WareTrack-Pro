@@ -63,4 +63,12 @@ describe('Customer portal', () => {
     const res = await request(app).get(`/api/features/customer/orders/${other.body.data.id}/invoice`).set('Authorization', asCustomer.Authorization);
     expect(res.status).toBe(404);
   });
+
+  it('orders taken by staff belong to no portal customer', async () => {
+    const staff = await request(app).post('/api/orders').set(auth(C)).send({ customerName: 'Walk In', contactNumber: '+250788500500', deliveryAddress: 'Gisozi', items: [{ itemId: C.itemId, quantity: 1 }] });
+    expect((await prisma.deliveryOrder.findUnique({ where: { id: staff.body.data.id } }))?.customerId).toBeNull();
+    const me = await request(app).get('/api/features/customer/me').set('Authorization', asCustomer.Authorization);
+    const list = await request(app).get(`/api/features/customer/${me.body.data.id}/orders`).set('Authorization', asCustomer.Authorization);
+    expect(list.body.data.some((o: any) => o.id === staff.body.data.id)).toBe(false);
+  });
 });

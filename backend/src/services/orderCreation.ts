@@ -224,7 +224,8 @@ export async function createOrderRecord(input: NewOrderInput, options: CreateOpt
     const created = await tx.deliveryOrder.create({
       data: {
         orderNumber: await nextOrderNumber(),
-        customerId: Number(input.customerId) || 1,
+        // Only orders a portal customer placed belong to them; never default to customer #1
+        customerId: Number(input.customerId) || null,
         customerName,
         customerEmail: input.customerEmail || account?.email || null,
         deliveryAddress,
